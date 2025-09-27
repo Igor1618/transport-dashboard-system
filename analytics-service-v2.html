@@ -26,6 +26,17 @@
             margin: 0;
             padding: 16px;
             min-height: calc(100vh - 32px);
+            overflow: hidden; /* Скрываем скроллбары */
+        }
+
+        /* Скрытие всех скроллбаров */
+        * {
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* Internet Explorer 10+ */
+        }
+
+        *::-webkit-scrollbar {
+            display: none; /* WebKit */
         }
 
         .analytics-container {

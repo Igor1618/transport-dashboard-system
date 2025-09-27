@@ -26,6 +26,7 @@
             margin: 0;
             padding: 16px;
             min-height: calc(100vh - 32px);
+            overflow: hidden; /* Скрываем скроллбары */
         }
 
         /* Скрытие всех скроллбаров */
@@ -43,7 +44,8 @@
             grid-template-columns: 1fr 1fr;
             grid-template-rows: 1fr 1fr;
             gap: 16px;
-            min-height: 600px;
+            height: calc(100vh - 32px);
+            overflow: hidden;
         }
 
         .chart-section {
@@ -54,13 +56,13 @@
             border: 1px solid var(--border);
             display: flex;
             flex-direction: column;
-            min-height: 250px;
+            overflow: hidden;
         }
 
         .chart-section.summary {
             grid-column: 1 / -1;
             grid-row: 2;
-            min-height: 150px;
+            max-height: 200px;
         }
 
         .section-header {
