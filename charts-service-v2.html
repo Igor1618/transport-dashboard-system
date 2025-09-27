@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Charts Microservice v2.1</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-blue: #2563eb;
+            --success-green: #10b981;
+            --warning-orange: #f59e0b;
+            --danger-red: #ef4444;
+            --neutral-gray: #6b7280;
+            --background: #f8fafc;
+            --card-bg: #ffffff;
+            --border: #e5e7eb;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 16px;
+            min-height: calc(100vh - 32px);
+        }
+
+        .charts-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 16px;
+            height: calc(100vh - 32px);
+        }
+
+        .chart-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .chart-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .chart-trend {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .trend-up { color: var(--success-green); }
+        .trend-down { color: var(--danger-red); }
+        .trend-stable { color: var(--neutral-gray); }
+
+        .chart-wrapper {
+            flex: 1;
+            position: relative;
+            min-height: 200px;
+        }
+
+        .chart-canvas {
+            max-height: 100%;
+        }
+
+        .export-btn {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            padding: 6px 12px;
+            background: var(--primary-blue);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            opacity: 0.8;
+            transition: opacity 0.2s ease;
+        }
+
+        .export-btn:hover {
+            opacity: 1;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            color: var(--text-secondary);
+        }
+
+        .error {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            color: var(--danger-red);
+            text-align: center;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .charts-container {
+                grid-template-columns: 1fr;
+                grid-template-rows: repeat(4, 300px);
+                height: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="charts-container">
+        <!-- Profit Trend Chart -->
+        <div class="chart-card">
+            <div class="chart-header">
+                <div class="chart-title">📈 Динамика прибыли</div>
+                <div class="chart-trend" id="profitTrend">
+                    <span class="trend-stable">➡</span>
+                    <span>Загрузка...</span>
+                </div>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="profitChart" class="chart-canvas"></canvas>
+                <button class="export-btn" onclick="exportChart('profitChart', 'profit-trend')">📥 PNG</button>
+            </div>
+        </div>
+
+        <!-- Expenses Breakdown Chart -->
+        <div class="chart-card">
+            <div class="chart-header">
+                <div class="chart-title">🥧 Структура расходов</div>
+                <div class="chart-trend" id="expensesTrend">
+                    <span class="trend-stable">➡</span>
+                    <span>Загрузка...</span>
+                </div>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="expensesChart" class="chart-canvas"></canvas>
+                <button class="export-btn" onclick="exportChart('expensesChart', 'expenses-breakdown')">📥 PNG</button>
+            </div>
+        </div>
+
+        <!-- Vehicle Performance Chart -->
+        <div class="chart-card">
+            <div class="chart-header">
+                <div class="chart-title">📊 Эффективность ТС</div>
+                <div class="chart-trend" id="vehiclesTrend">
+                    <span class="trend-stable">➡</span>
+                    <span>Загрузка...</span>
+                </div>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="vehiclesChart" class="chart-canvas"></canvas>
+                <button class="export-btn" onclick="exportChart('vehiclesChart', 'vehicles-performance')">📥 PNG</button>
+            </div>
+        </div>
+
+        <!-- Summary Stats -->
+        <div class="chart-card">
+            <div class="chart-header">
+                <div class="chart-title">📋 Сводка за период</div>
+                <div class="chart-trend" id="summaryPeriod">
+                    <span>Декабрь 2024</span>
+                </div>
+            </div>
+            <div class="chart-wrapper" id="summaryStats">
+                <div class="loading">Загрузка статистики...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class ChartsServiceV2 {
+            constructor() {
+                this.currentPeriod = '2024-12';
+                this.charts = {};
+                this.chartsData = null;
+                this.allowedOrigin = location.origin;
+                this.apiBase = 'enhanced-coordinator-v2.php';
+                
+                this.init();
+            }
+
+            init() {
+                console.log('📈 Charts Service v2.1: Initializing...');
+                
+                this.setupMessageHandling();
+                this.loadChartsData();
+                
+                // Уведомляем родительское окно о готовности
+                this.notifyParent('service_ready', {
+                    service: 'charts',
+                    version: '2.1.0',
+                    capabilities: ['profit_trend', 'expenses_breakdown', 'vehicles_performance', 'export_png', 'real_time_updates']
+                });
+                
+                console.log('📈 Charts Service v2.1: Ready');
+            }
+
+            setupMessageHandling() {
+                window.addEventListener('message', (event) => {
+                    if (event.origin !== this.allowedOrigin) {
+                        console.warn('📈 Charts: Blocked message from untrusted origin:', event.origin);
+                        return;
+                    }
+                    
+                    const { type, payload } = event.data || {};
+                    
+                    switch (type) {
+                        case 'filters_changed':
+                            this.handleFiltersChanged(payload);
+                            break;
+                            
+                        default:
+                            console.log('📈 Charts: Unknown message type:', type);
+                    }
+                });
+            }
+
+            async fetchJson(url, timeoutMs = 5000) {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+                
+                try {
+                    const response = await fetch(url, { signal: controller.signal });
+                    clearTimeout(timeoutId);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    return await response.json();
+                } catch (error) {
+                    clearTimeout(timeoutId);
+                    throw error;
+                }
+            }
+
+            async loadChartsData() {
+                try {
+                    console.log('📈 Charts: Loading data for period', this.currentPeriod);
+                    
+                    const data = await this.fetchJson(`${this.apiBase}?action=charts&month=${this.currentPeriod}`);
+                    
+                    if (!data.ok) {
+                        throw new Error(data.error || 'API returned error');
+                    }
+                    
+                    this.chartsData = data;
+                    this.renderAllCharts();
+                    this.updateSummaryStats();
+                    
+                    // Уведомляем о загрузке данных
+                    this.notifyParent('data_updated', {
+                        service: 'charts',
+                        data: data,
+                        period: this.currentPeriod
+                    });
+                    
+                    console.log('📈 Charts: Data loaded successfully', data);
+                    
+                } catch (error) {
+                    console.error('📈 Charts: Failed to load data', error);
+                    this.showError('Ошибка загрузки данных: ' + error.message);
+                }
+            }
+
+            renderAllCharts() {
+                this.renderProfitChart();
+                this.renderExpensesChart();
+                this.renderVehiclesChart();
+            }
+
+            renderProfitChart() {
+                const ctx = document.getElementById('profitChart').getContext('2d');
+                const { profitTrend } = this.chartsData;
+                
+                if (this.charts.profit) {
+                    this.charts.profit.destroy();
+                }
+                
+                this.charts.profit = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: profitTrend.labels,
+                        datasets: [{
+                            label: 'Прибыль (₽)',
+                            data: profitTrend.data,
+                            borderColor: '#2563eb',
+                            backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointBackgroundColor: '#2563eb',
+                            pointBorderColor: '#ffffff',
+                            pointBorderWidth: 2,
+                            pointRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                ticks: {
+                                    callback: function(value) {
+                                        return new Intl.NumberFormat('ru-RU', {
+                                            style: 'currency',
+                                            currency: 'RUB',
+                                            minimumFractionDigits: 0
+                                        }).format(value);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                // Обновляем тренд
+                this.updateTrend('profitTrend', profitTrend.trend);
+            }
+
+            renderExpensesChart() {
+                const ctx = document.getElementById('expensesChart').getContext('2d');
+                const { expensesBreakdown } = this.chartsData;
+                
+                if (this.charts.expenses) {
+                    this.charts.expenses.destroy();
+                }
+                
+                this.charts.expenses = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: expensesBreakdown.labels,
+                        datasets: [{
+                            data: expensesBreakdown.data,
+                            backgroundColor: [
+                                '#ef4444', // Топливо
+                                '#f59e0b', // Зарплата
+                                '#10b981', // Дороги
+                                '#6b7280'  // Прочее
+                            ],
+                            borderWidth: 2,
+                            borderColor: '#ffffff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    padding: 20,
+                                    usePointStyle: true
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                // Обновляем тренд
+                this.updateTrend('expensesTrend', expensesBreakdown.trend);
+            }
+
+            renderVehiclesChart() {
+                const ctx = document.getElementById('vehiclesChart').getContext('2d');
+                const { vehiclesPerformance } = this.chartsData;
+                
+                if (this.charts.vehicles) {
+                    this.charts.vehicles.destroy();
+                }
+                
+                this.charts.vehicles = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: vehiclesPerformance.labels,
+                        datasets: [{
+                            label: 'Прибыль (₽)',
+                            data: vehiclesPerformance.data,
+                            backgroundColor: vehiclesPerformance.data.map(value => {
+                                if (value > 200000) return '#10b981'; // Зеленый
+                                if (value > 150000) return '#f59e0b'; // Оранжевый
+                                return '#ef4444'; // Красный
+                            }),
+                            borderRadius: 6,
+                            borderSkipped: false
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return new Intl.NumberFormat('ru-RU', {
+                                            style: 'currency',
+                                            currency: 'RUB',
+                                            minimumFractionDigits: 0
+                                        }).format(value);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                // Обновляем тренд
+                this.updateTrend('vehiclesTrend', vehiclesPerformance.trend);
+            }
+
+            updateSummaryStats() {
+                const { summary } = this.chartsData;
+                const container = document.getElementById('summaryStats');
+                
+                container.innerHTML = `
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; height: 100%;">
+                        <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; background: #f9fafb; border-radius: 8px; padding: 16px;">
+                            <div style="font-size: 24px; font-weight: 700; color: #10b981;">${this.formatCurrency(summary.totalRevenue)}</div>
+                            <div style="font-size: 14px; color: #6b7280;">Общая выручка</div>
+                        </div>
+                        <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; background: #f9fafb; border-radius: 8px; padding: 16px;">
+                            <div style="font-size: 24px; font-weight: 700; color: #ef4444;">${this.formatCurrency(summary.totalCosts)}</div>
+                            <div style="font-size: 14px; color: #6b7280;">Общие расходы</div>
+                        </div>
+                        <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; background: #f9fafb; border-radius: 8px; padding: 16px;">
+                            <div style="font-size: 24px; font-weight: 700; color: #2563eb;">${summary.avgMargin}%</div>
+                            <div style="font-size: 14px; color: #6b7280;">Средняя маржа</div>
+                        </div>
+                        <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; background: #f9fafb; border-radius: 8px; padding: 16px;">
+                            <div style="font-size: 24px; font-weight: 700; color: #f59e0b;">${summary.bestVehicle}</div>
+                            <div style="font-size: 14px; color: #6b7280;">Лучшее ТС</div>
+                        </div>
+                    </div>
+                `;
+                
+                // Обновляем период в заголовке
+                document.getElementById('summaryPeriod').innerHTML = `<span>${this.formatPeriodName(this.currentPeriod)}</span>`;
+            }
+
+            updateTrend(elementId, trend) {
+                const element = document.getElementById(elementId);
+                const { type, value } = trend;
+                
+                let icon, className;
+                switch (type) {
+                    case 'up':
+                        icon = '↗';
+                        className = 'trend-up';
+                        break;
+                    case 'down':
+                        icon = '↘';
+                        className = 'trend-down';
+                        break;
+                    default:
+                        icon = '➡';
+                        className = 'trend-stable';
+                }
+                
+                element.innerHTML = `
+                    <span class="${className}">${icon}</span>
+                    <span>${value}</span>
+                `;
+            }
+
+            handleFiltersChanged(payload) {
+                const { month } = payload;
+                
+                if (month !== this.currentPeriod) {
+                    console.log('📈 Charts: Period changed to', month);
+                    this.currentPeriod = month;
+                    this.loadChartsData();
+                }
+            }
+
+            showError(message) {
+                ['profitChart', 'expensesChart', 'vehiclesChart'].forEach(chartId => {
+                    const container = document.getElementById(chartId).parentElement;
+                    container.innerHTML = `<div class="error">${message}</div>`;
+                });
+            }
+
+            notifyParent(type, payload) {
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({ type, payload }, this.allowedOrigin);
+                }
+            }
+
+            formatCurrency(amount) {
+                return new Intl.NumberFormat('ru-RU', {
+                    style: 'currency',
+                    currency: 'RUB',
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0
+                }).format(amount);
+            }
+
+            formatPeriodName(period) {
+                const [year, month] = period.split('-');
+                const monthNames = [
+                    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+                    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+                ];
+                
+                return `${monthNames[parseInt(month) - 1]} ${year}`;
+            }
+        }
+
+        // Глобальная функция для экспорта графиков
+        function exportChart(chartId, filename) {
+            const canvas = document.getElementById(chartId);
+            const link = document.createElement('a');
+            link.download = `${filename}-${new Date().toISOString().slice(0, 10)}.png`;
+            link.href = canvas.toDataURL();
+            link.click();
+            
+            console.log('📈 Charts: Exported chart', filename);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            new ChartsServiceV2();
+        });
+    </script>
+</body>
+</html>

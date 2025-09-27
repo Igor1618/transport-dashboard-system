@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driver Performance Service v2.1</title>
+    <style>
+        :root {
+            --primary-blue: #2563eb;
+            --success-green: #10b981;
+            --warning-orange: #f59e0b;
+            --danger-red: #ef4444;
+            --neutral-gray: #6b7280;
+            --background: #f8fafc;
+            --card-bg: #ffffff;
+            --border: #e5e7eb;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 16px;
+            min-height: calc(100vh - 32px);
+        }
+
+        .drivers-container {
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            gap: 16px;
+            height: calc(100vh - 32px);
+        }
+
+        .top-performers {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .top-three {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .top-driver {
+            background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            position: relative;
+            transition: transform 0.2s ease;
+        }
+
+        .top-driver:hover {
+            transform: translateY(-4px);
+        }
+
+        .top-driver.first {
+            background: linear-gradient(135deg, #fef3c7, #fbbf24);
+            color: #92400e;
+        }
+
+        .top-driver.second {
+            background: linear-gradient(135deg, #e5e7eb, #9ca3af);
+            color: #374151;
+        }
+
+        .top-driver.third {
+            background: linear-gradient(135deg, #fed7aa, #f97316);
+            color: #9a3412;
+        }
+
+        .medal {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .driver-name {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .driver-score {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .filters-section {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--border);
+            background: var(--card-bg);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .filter-btn.active {
+            background: var(--primary-blue);
+            color: white;
+            border-color: var(--primary-blue);
+        }
+
+        .filter-btn:hover:not(.active) {
+            background: #f3f4f6;
+        }
+
+        .drivers-table-section {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .table-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            background: #f9fafb;
+        }
+
+        .drivers-table {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .table th {
+            background: #f9fafb;
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+        }
+
+        .table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            font-size: 14px;
+        }
+
+        .table tr:hover {
+            background: #f9fafb;
+        }
+
+        .driver-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .driver-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--primary-blue);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 12px;
+        }
+
+        .driver-details {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .driver-name-table {
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .driver-experience {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .efficiency-bar {
+            width: 60px;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .efficiency-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .efficiency-excellent { background: var(--success-green); }
+        .efficiency-good { background: var(--warning-orange); }
+        .efficiency-poor { background: var(--danger-red); }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-active {
+            background: #dcfce7;
+            color: #16a34a;
+        }
+
+        .status-attention {
+            background: #fef3c7;
+            color: #d97706;
+        }
+
+        .status-critical {
+            background: #fef2f2;
+            color: #dc2626;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            color: var(--text-secondary);
+        }
+
+        .error {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            color: var(--danger-red);
+            text-align: center;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .top-three {
+                grid-template-columns: 1fr;
+            }
+            
+            .table {
+                font-size: 12px;
+            }
+            
+            .table th,
+            .table td {
+                padding: 8px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="drivers-container">
+        <!-- Top Performers Section -->
+        <div class="top-performers">
+            <div class="section-title">
+                🏆 Топ-3 лучших водителя
+            </div>
+            <div class="top-three" id="topThree">
+                <div class="loading">Загрузка топ водителей...</div>
+            </div>
+        </div>
+
+        <!-- Filters Section -->
+        <div class="filters-section">
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all">Все (<span id="countAll">0</span>)</button>
+                <button class="filter-btn" data-filter="excellent">Отличные (<span id="countExcellent">0</span>)</button>
+                <button class="filter-btn" data-filter="attention">Внимание (<span id="countAttention">0</span>)</button>
+                <button class="filter-btn" data-filter="critical">Критично (<span id="countCritical">0</span>)</button>
+            </div>
+        </div>
+
+        <!-- Drivers Table Section -->
+        <div class="drivers-table-section">
+            <div class="table-header">
+                <div class="section-title">
+                    👨‍💼 Полная таблица водителей
+                </div>
+            </div>
+            <div class="drivers-table">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Водитель</th>
+                            <th>Транспорт</th>
+                            <th>Прибыль</th>
+                            <th>Эффективность</th>
+                            <th>Расход топлива</th>
+                            <th>Безопасность</th>
+                            <th>Статус</th>
+                        </tr>
+                    </thead>
+                    <tbody id="driversTableBody">
+                        <tr>
+                            <td colspan="7">
+                                <div class="loading">Загрузка данных водителей...</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class DriversServiceV2 {
+            constructor() {
+                this.currentPeriod = '2024-12';
+                this.driversData = null;
+                this.currentFilter = 'all';
+                this.allowedOrigin = location.origin;
+                this.apiBase = 'enhanced-coordinator-v2.php';
+                
+                this.init();
+            }
+
+            init() {
+                console.log('👨‍💼 Drivers Service v2.1: Initializing...');
+                
+                this.setupMessageHandling();
+                this.setupFilterButtons();
+                this.loadDriversData();
+                
+                // Уведомляем родительское окно о готовности
+                this.notifyParent('service_ready', {
+                    service: 'drivers',
+                    version: '2.1.0',
+                    capabilities: ['performance_ranking', 'driver_analytics', 'filtering', 'safety_monitoring', 'efficiency_tracking']
+                });
+                
+                console.log('👨‍💼 Drivers Service v2.1: Ready');
+            }
+
+            setupMessageHandling() {
+                window.addEventListener('message', (event) => {
+                    if (event.origin !== this.allowedOrigin) {
+                        console.warn('👨‍💼 Drivers: Blocked message from untrusted origin:', event.origin);
+                        return;
+                    }
+                    
+                    const { type, payload } = event.data || {};
+                    
+                    switch (type) {
+                        case 'filters_changed':
+                            this.handleFiltersChanged(payload);
+                            break;
+                            
+                        default:
+                            console.log('👨‍💼 Drivers: Unknown message type:', type);
+                    }
+                });
+            }
+
+            setupFilterButtons() {
+                document.querySelectorAll('.filter-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const filter = btn.dataset.filter;
+                        this.setActiveFilter(filter);
+                        this.filterDrivers(filter);
+                    });
+                });
+            }
+
+            async fetchJson(url, timeoutMs = 5000) {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+                
+                try {
+                    const response = await fetch(url, { signal: controller.signal });
+                    clearTimeout(timeoutId);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    return await response.json();
+                } catch (error) {
+                    clearTimeout(timeoutId);
+                    throw error;
+                }
+            }
+
+            async loadDriversData() {
+                try {
+                    console.log('👨‍💼 Drivers: Loading data for period', this.currentPeriod);
+                    
+                    const data = await this.fetchJson(`${this.apiBase}?action=drivers&month=${this.currentPeriod}`);
+                    
+                    if (!data.ok) {
+                        throw new Error(data.error || 'API returned error');
+                    }
+                    
+                    this.driversData = data;
+                    this.renderTopPerformers();
+                    this.updateFilterCounts();
+                    this.renderDriversTable();
+                    
+                    // Уведомляем о загрузке данных
+                    this.notifyParent('data_updated', {
+                        service: 'drivers',
+                        data: data,
+                        period: this.currentPeriod
+                    });
+                    
+                    console.log('👨‍💼 Drivers: Data loaded successfully', data);
+                    
+                } catch (error) {
+                    console.error('👨‍💼 Drivers: Failed to load data', error);
+                    this.showError('Ошибка загрузки данных: ' + error.message);
+                }
+            }
+
+            renderTopPerformers() {
+                const { topPerformers } = this.driversData;
+                const container = document.getElementById('topThree');
+                
+                const medals = ['🥇', '🥈', '🥉'];
+                const classes = ['first', 'second', 'third'];
+                
+                container.innerHTML = topPerformers.map((driver, index) => `
+                    <div class="top-driver ${classes[index]}">
+                        <div class="medal">${medals[index]}</div>
+                        <div class="driver-name">${driver.name}</div>
+                        <div class="driver-score">${driver.score} баллов</div>
+                    </div>
+                `).join('');
+            }
+
+            updateFilterCounts() {
+                const { drivers } = this.driversData;
+                
+                const counts = {
+                    all: drivers.length,
+                    excellent: drivers.filter(d => d.status === 'active').length,
+                    attention: drivers.filter(d => d.status === 'attention').length,
+                    critical: drivers.filter(d => d.status === 'critical').length
+                };
+                
+                Object.entries(counts).forEach(([filter, count]) => {
+                    const element = document.getElementById(`count${filter.charAt(0).toUpperCase() + filter.slice(1)}`);
+                    if (element) {
+                        element.textContent = count;
+                    }
+                });
+            }
+
+            renderDriversTable() {
+                const { drivers } = this.driversData;
+                const tbody = document.getElementById('driversTableBody');
+                
+                tbody.innerHTML = drivers.map(driver => `
+                    <tr data-status="${driver.status}">
+                        <td>
+                            <div class="driver-info">
+                                <div class="driver-avatar">${driver.name.split(' ').map(n => n[0]).join('')}</div>
+                                <div class="driver-details">
+                                    <div class="driver-name-table">${driver.name}</div>
+                                    <div class="driver-experience">${driver.experience} лет опыта</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>${driver.vehicle}</td>
+                        <td>${this.formatCurrency(driver.profit)}</td>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div class="efficiency-bar">
+                                    <div class="efficiency-fill ${this.getEfficiencyClass(driver.efficiency)}" 
+                                         style="width: ${driver.efficiency}%"></div>
+                                </div>
+                                <span style="font-size: 12px; color: var(--text-secondary);">${driver.efficiency}%</span>
+                            </div>
+                        </td>
+                        <td>${driver.fuelConsumption} л/100км</td>
+                        <td>${driver.safetyRating}/5 ⭐</td>
+                        <td>
+                            <span class="status-badge status-${driver.status}">
+                                ${this.getStatusText(driver.status)}
+                            </span>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                // Применяем текущий фильтр
+                this.filterDrivers(this.currentFilter);
+            }
+
+            setActiveFilter(filter) {
+                document.querySelectorAll('.filter-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                
+                document.querySelector(`[data-filter="${filter}"]`).classList.add('active');
+                this.currentFilter = filter;
+            }
+
+            filterDrivers(filter) {
+                const rows = document.querySelectorAll('#driversTableBody tr');
+                
+                rows.forEach(row => {
+                    const status = row.dataset.status;
+                    let show = false;
+                    
+                    switch (filter) {
+                        case 'all':
+                            show = true;
+                            break;
+                        case 'excellent':
+                            show = status === 'active';
+                            break;
+                        case 'attention':
+                            show = status === 'attention';
+                            break;
+                        case 'critical':
+                            show = status === 'critical';
+                            break;
+                    }
+                    
+                    row.style.display = show ? '' : 'none';
+                });
+            }
+
+            getEfficiencyClass(efficiency) {
+                if (efficiency >= 80) return 'efficiency-excellent';
+                if (efficiency >= 60) return 'efficiency-good';
+                return 'efficiency-poor';
+            }
+
+            getStatusText(status) {
+                const statusMap = {
+                    'active': 'Активен',
+                    'attention': 'Внимание',
+                    'critical': 'Критично'
+                };
+                
+                return statusMap[status] || status;
+            }
+
+            handleFiltersChanged(payload) {
+                const { month } = payload;
+                
+                if (month !== this.currentPeriod) {
+                    console.log('👨‍💼 Drivers: Period changed to', month);
+                    this.currentPeriod = month;
+                    this.loadDriversData();
+                }
+            }
+
+            showError(message) {
+                document.getElementById('topThree').innerHTML = `<div class="error">${message}</div>`;
+                document.getElementById('driversTableBody').innerHTML = `
+                    <tr><td colspan="7"><div class="error">${message}</div></td></tr>
+                `;
+            }
+
+            notifyParent(type, payload) {
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({ type, payload }, this.allowedOrigin);
+                }
+            }
+
+            formatCurrency(amount) {
+                return new Intl.NumberFormat('ru-RU', {
+                    style: 'currency',
+                    currency: 'RUB',
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0
+                }).format(amount);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            new DriversServiceV2();
+        });
+    </script>
+</body>
+</html>
