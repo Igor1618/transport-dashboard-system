@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vehicles Service v2.0</title>
+    <style>
+        :root {
+            --primary-blue: #2563eb;
+            --success-green: #10b981;
+            --warning-orange: #f59e0b;
+            --danger-red: #ef4444;
+            --neutral-gray: #6b7280;
+            --background: #f8fafc;
+            --card-bg: #ffffff;
+            --border: #e5e7eb;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 16px;
+        }
+
+        .vehicles-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .vehicles-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .controls-group {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .sort-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .sort-btn {
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            background: var(--card-bg);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .sort-btn:hover,
+        .sort-btn.active {
+            background: var(--primary-blue);
+            color: white;
+            border-color: var(--primary-blue);
+        }
+
+        .export-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .export-btn {
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            background: var(--card-bg);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+
+        .export-btn:hover {
+            background: var(--success-green);
+            color: white;
+            border-color: var(--success-green);
+        }
+
+        .vehicles-table {
+            background: var(--card-bg);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+        }
+
+        .table-header {
+            background: #f9fafb;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .pagination-info {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .vehicle-row {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            transition: all 0.2s ease;
+        }
+
+        .vehicle-row:hover {
+            background: #f9fafb;
+        }
+
+        .vehicle-row:last-child {
+            border-bottom: none;
+        }
+
+        .vehicle-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .vehicle-number {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .vehicle-model {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .vehicle-profit {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--success-green);
+        }
+
+        .vehicle-metrics {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .margin-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .margin-badge.high {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success-green);
+        }
+
+        .margin-badge.medium {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning-orange);
+        }
+
+        .margin-badge.low {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger-red);
+        }
+
+        .efficiency-bar {
+            width: 100px;
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .efficiency-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .efficiency-fill.high { background: var(--success-green); }
+        .efficiency-fill.medium { background: var(--warning-orange); }
+        .efficiency-fill.low { background: var(--danger-red); }
+
+        .pagination {
+            padding: 16px;
+            background: #f9fafb;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .pagination-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--border);
+            background: var(--card-bg);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .pagination-btn:hover:not(:disabled) {
+            background: var(--primary-blue);
+            color: white;
+            border-color: var(--primary-blue);
+        }
+
+        .pagination-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .loading-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--border);
+            border-top: 3px solid var(--primary-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger-red);
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            margin: 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .vehicles-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .controls-group {
+                width: 100%;
+                justify-content: space-between;
+            }
+            
+            .pagination {
+                flex-direction: column;
+                gap: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="vehicles-header">
+        <h2 class="vehicles-title">🚗 Транспортные средства</h2>
+        <div class="controls-group">
+            <div class="sort-controls">
+                <button class="sort-btn active" data-sort="profit" data-order="desc">По прибыли ↓</button>
+                <button class="sort-btn" data-sort="marginPct" data-order="desc">По марже ↓</button>
+                <button class="sort-btn" data-sort="plate" data-order="asc">По номеру ↑</button>
+            </div>
+            <div class="export-buttons">
+                <a href="#" class="export-btn" id="exportCsvBtn">📄 CSV</a>
+                <a href="#" class="export-btn" id="exportXlsxBtn">📊 XLSX</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="vehicles-table">
+        <div class="table-header">
+            <span>Транспортные средства и их эффективность</span>
+            <span class="pagination-info" id="paginationInfo">Загрузка...</span>
+        </div>
+        
+        <div id="vehiclesContent">
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                Загрузка данных о транспортных средствах...
+            </div>
+        </div>
+        
+        <div class="pagination" id="paginationControls" style="display: none;">
+            <button class="pagination-btn" id="prevBtn" disabled>← Предыдущая</button>
+            <span id="pageInfo">Страница 1</span>
+            <button class="pagination-btn" id="nextBtn">Следующая →</button>
+        </div>
+    </div>
+
+    <script>
+        let currentPeriod = '2024-12';
+        let currentSort = 'profit';
+        let currentOrder = 'desc';
+        let currentOffset = 0;
+        let currentLimit = 10;
+        let totalVehicles = 0;
+        let vehiclesData = [];
+        
+        const API_BASE = 'enhanced-coordinator-v2.php';
+
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚗 Vehicles Service v2.0: Initializing...');
+            
+            // Setup controls
+            setupSortControls();
+            setupPaginationControls();
+            setupExportButtons();
+            
+            // Load initial data
+            setTimeout(() => {
+                loadVehiclesData();
+            }, 1000);
+            
+            // Notify parent that service is ready
+            notifyServiceReady();
+        });
+
+        function setupSortControls() {
+            document.querySelectorAll('.sort-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    // Remove active class from all buttons
+                    document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+                    
+                    // Add active class to clicked button
+                    this.classList.add('active');
+                    
+                    // Update sort parameters
+                    currentSort = this.dataset.sort;
+                    currentOrder = this.dataset.order;
+                    currentOffset = 0; // Reset to first page
+                    
+                    // Reload data
+                    loadVehiclesData();
+                });
+            });
+        }
+
+        function setupPaginationControls() {
+            document.getElementById('prevBtn').addEventListener('click', function() {
+                if (currentOffset > 0) {
+                    currentOffset = Math.max(0, currentOffset - currentLimit);
+                    loadVehiclesData();
+                }
+            });
+            
+            document.getElementById('nextBtn').addEventListener('click', function() {
+                if (currentOffset + currentLimit < totalVehicles) {
+                    currentOffset += currentLimit;
+                    loadVehiclesData();
+                }
+            });
+        }
+
+        function setupExportButtons() {
+            document.getElementById('exportCsvBtn').addEventListener('click', function(e) {
+                e.preventDefault();
+                exportData('csv');
+            });
+            
+            document.getElementById('exportXlsxBtn').addEventListener('click', function(e) {
+                e.preventDefault();
+                exportData('xlsx');
+            });
+        }
+
+        async function loadVehiclesData() {
+            console.log('🚗 Vehicles Service: Loading data for period', currentPeriod);
+            
+            try {
+                showLoading();
+                
+                const url = `${API_BASE}?action=vehicles&month=${currentPeriod}&sort=${currentSort}&order=${currentOrder}&limit=${currentLimit}&offset=${currentOffset}`;
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.ok) {
+                    throw new Error(data.error || 'API returned error');
+                }
+                
+                vehiclesData = data.vehicles;
+                totalVehicles = data.pagination.total;
+                
+                renderVehicles(data.vehicles);
+                updatePagination(data.pagination);
+                
+                console.log('🚗 Vehicles Service: Data loaded successfully', data);
+                
+            } catch (error) {
+                console.error('🚗 Vehicles Service: Failed to load data', error);
+                showError('Ошибка загрузки данных: ' + error.message);
+            }
+        }
+
+        function showLoading() {
+            const content = document.getElementById('vehiclesContent');
+            content.innerHTML = `
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    Загрузка данных о транспортных средствах...
+                </div>
+            `;
+            
+            document.getElementById('paginationControls').style.display = 'none';
+        }
+
+        function showError(message) {
+            const content = document.getElementById('vehiclesContent');
+            content.innerHTML = `
+                <div class="error-message">
+                    ⚠️ ${message}
+                </div>
+            `;
+            
+            document.getElementById('paginationControls').style.display = 'none';
+        }
+
+        function renderVehicles(vehicles) {
+            console.log('🚗 Vehicles Service: Rendering vehicles data');
+            
+            const content = document.getElementById('vehiclesContent');
+            
+            if (vehicles.length === 0) {
+                content.innerHTML = '<div class="loading">Нет данных о транспортных средствах</div>';
+                return;
+            }
+            
+            content.innerHTML = vehicles.map(vehicle => {
+                const marginClass = vehicle.marginPct >= 50 ? 'high' : vehicle.marginPct >= 35 ? 'medium' : 'low';
+                const efficiencyPercent = Math.min(100, (vehicle.marginPct / 60) * 100);
+                
+                return `
+                    <div class="vehicle-row">
+                        <div class="vehicle-info">
+                            <div>
+                                <div class="vehicle-number">${vehicle.plate}</div>
+                                <div class="vehicle-model">${vehicle.model}</div>
+                            </div>
+                            <div class="vehicle-profit">${formatCurrency(vehicle.profit)}</div>
+                        </div>
+                        <div class="vehicle-metrics">
+                            <span class="margin-badge ${marginClass}">
+                                ${vehicle.marginPct.toFixed(1)}% маржа
+                            </span>
+                            <div class="efficiency-bar">
+                                <div class="efficiency-fill ${marginClass}" style="width: ${efficiencyPercent}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Notify parent about data update
+            if (window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'data_updated',
+                    payload: { service: 'vehicles', data: vehicles }
+                }, '*');
+            }
+        }
+
+        function updatePagination(pagination) {
+            const paginationInfo = document.getElementById('paginationInfo');
+            const paginationControls = document.getElementById('paginationControls');
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const pageInfo = document.getElementById('pageInfo');
+            
+            // Update info
+            const start = pagination.offset + 1;
+            const end = Math.min(pagination.offset + pagination.limit, pagination.total);
+            paginationInfo.textContent = `${start}-${end} из ${pagination.total}`;
+            
+            // Update page info
+            const currentPage = Math.floor(pagination.offset / pagination.limit) + 1;
+            const totalPages = Math.ceil(pagination.total / pagination.limit);
+            pageInfo.textContent = `Страница ${currentPage} из ${totalPages}`;
+            
+            // Update buttons
+            prevBtn.disabled = pagination.offset === 0;
+            nextBtn.disabled = !pagination.hasMore;
+            
+            // Show pagination controls
+            paginationControls.style.display = 'flex';
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('ru-RU', {
+                style: 'currency',
+                currency: 'RUB',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(amount);
+        }
+
+        function exportData(format) {
+            if (format === 'csv') {
+                const url = `export-csv.php?type=vehicles&month=${currentPeriod}`;
+                window.open(url, '_blank');
+            } else if (format === 'xlsx') {
+                // For now, redirect to CSV - XLSX can be implemented later
+                alert('XLSX экспорт будет добавлен в следующей версии. Используйте CSV.');
+                exportData('csv');
+            }
+            
+            console.log('🚗 Vehicles Service: Exported data in', format, 'format');
+        }
+
+        function notifyServiceReady() {
+            if (window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'service_ready',
+                    payload: {
+                        service: 'vehicles',
+                        version: '2.0',
+                        capabilities: ['vehicle_list', 'profit_analysis', 'backend_sorting', 'pagination', 'csv_export']
+                    }
+                }, '*');
+            }
+            
+            console.log('🚗 Vehicles Service v2.0: Ready');
+        }
+
+        // Listen for messages from parent
+        window.addEventListener('message', function(event) {
+            const { type, payload } = event.data;
+            
+            switch (type) {
+                case 'filters_changed':
+                    console.log('🚗 Vehicles Service: Filters changed', payload);
+                    currentPeriod = payload.apiFormat || payload.month;
+                    currentOffset = 0; // Reset to first page
+                    loadVehiclesData();
+                    break;
+                    
+                case 'export_request':
+                    if (payload.service === 'vehicles') {
+                        exportData(payload.format || 'csv');
+                    }
+                    break;
+                    
+                default:
+                    console.log('🚗 Vehicles Service: Unknown message type:', type);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Дашборд Транспортной Компании v2.0</title>
+    <style>
+        :root {
+            --primary-blue: #2563eb;
+            --success-green: #10b981;
+            --warning-orange: #f59e0b;
+            --danger-red: #ef4444;
+            --neutral-gray: #6b7280;
+            --background: #f8fafc;
+            --card-bg: #ffffff;
+            --border: #e5e7eb;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .dashboard-header {
+            background: linear-gradient(135deg, var(--primary-blue), #1d4ed8);
+            color: white;
+            padding: 16px 20px;
+            box-shadow: var(--shadow-lg);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .header-title {
+            font-size: 24px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 24px;
+            align-items: center;
+            font-size: 14px;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .stat-label {
+            opacity: 0.8;
+            font-size: 12px;
+        }
+
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 280px 1fr 320px;
+            grid-template-rows: auto 1fr 1fr;
+            gap: 20px;
+            min-height: calc(100vh - 120px);
+        }
+
+        .filters-section {
+            grid-column: 1 / -1;
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+        }
+
+        .service-frame {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            overflow: hidden;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .service-frame:hover {
+            box-shadow: var(--shadow-lg);
+        }
+
+        .service-header {
+            background: #f9fafb;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .service-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .service-status {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .service-status.loading { background: var(--warning-orange); }
+        .service-status.ready { background: var(--success-green); }
+        .service-status.error { background: var(--danger-red); }
+
+        .service-content {
+            height: calc(100% - 48px);
+            overflow: hidden;
+        }
+
+        .service-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: var(--card-bg);
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border);
+            max-width: 300px;
+            z-index: 1000;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification.success { border-left: 4px solid var(--success-green); }
+        .notification.warning { border-left: 4px solid var(--warning-orange); }
+        .notification.error { border-left: 4px solid var(--danger-red); }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        .loading-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--border);
+            border-top: 3px solid var(--primary-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive design */
+        @media (max-width: 1200px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto auto auto auto;
+            }
+            
+            .filters-section {
+                grid-column: 1 / -1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header-content {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .header-stats {
+                justify-content: center;
+            }
+        }
+
+        /* Export buttons */
+        .export-section {
+            margin-top: 20px;
+            padding: 16px;
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+        }
+
+        .export-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        .export-buttons {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .export-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--border);
+            background: var(--card-bg);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .export-btn:hover {
+            background: var(--success-green);
+            color: white;
+            border-color: var(--success-green);
+        }
+    </style>
+</head>
+<body>
+    <!-- Dashboard Header -->
+    <div class="dashboard-header">
+        <div class="header-content">
+            <div class="header-title">
+                🚛 Дашборд Транспортной Компании v2.0
+            </div>
+            <div class="header-stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="totalProfit">₽2.1M</div>
+                    <div class="stat-label">Общая прибыль</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="totalVehicles">6</div>
+                    <div class="stat-label">Транспортных средств</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="totalDrivers">6</div>
+                    <div class="stat-label">Водителей</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="currentPeriod">2024-12</div>
+                    <div class="stat-label">Текущий период</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Container -->
+    <div class="dashboard-container">
+        <!-- Filters Section -->
+        <div class="filters-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="font-size: 18px; font-weight: 600;">🔧 Фильтры и управление</h3>
+                <div style="display: flex; gap: 12px;">
+                    <select id="periodSelect" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--card-bg);">
+                        <option value="2024-12">Декабрь 2024</option>
+                        <option value="2024-11">Ноябрь 2024</option>
+                        <option value="2024-10">Октябрь 2024</option>
+                        <option value="2024-09">Сентябрь 2024</option>
+                    </select>
+                    <button id="refreshBtn" style="padding: 8px 16px; border: 1px solid var(--border); background: var(--primary-blue); color: white; border-radius: 6px; cursor: pointer;">
+                        🔄 Обновить
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Export Section -->
+            <div class="export-section">
+                <div class="export-title">📊 Экспорт данных</div>
+                <div class="export-buttons">
+                    <a href="#" class="export-btn" id="exportKpiCsv">📄 KPI CSV</a>
+                    <a href="#" class="export-btn" id="exportVehiclesCsv">🚗 Vehicles CSV</a>
+                    <a href="#" class="export-btn" id="exportAllData">📦 Все данные</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Grid -->
+        <div class="dashboard-grid">
+            <!-- KPI Service -->
+            <div class="service-frame">
+                <div class="service-header">
+                    <span class="service-title">💰 KPI</span>
+                    <div class="service-status loading" id="kpi-status"></div>
+                </div>
+                <div class="service-content">
+                    <iframe src="kpi-service-v2.html" class="service-iframe" id="kpi-frame"></iframe>
+                </div>
+            </div>
+
+            <!-- Charts Service -->
+            <div class="service-frame">
+                <div class="service-header">
+                    <span class="service-title">📈 Графики</span>
+                    <div class="service-status loading" id="charts-status"></div>
+                </div>
+                <div class="service-content">
+                    <iframe src="step6-charts.html" class="service-iframe" id="charts-frame"></iframe>
+                </div>
+            </div>
+
+            <!-- Analytics Service -->
+            <div class="service-frame">
+                <div class="service-header">
+                    <span class="service-title">🧠 Аналитика</span>
+                    <div class="service-status loading" id="analytics-status"></div>
+                </div>
+                <div class="service-content">
+                    <iframe src="step7-analytics.html" class="service-iframe" id="analytics-frame"></iframe>
+                </div>
+            </div>
+
+            <!-- Vehicles Service -->
+            <div class="service-frame">
+                <div class="service-header">
+                    <span class="service-title">🚗 Транспорт</span>
+                    <div class="service-status loading" id="vehicles-status"></div>
+                </div>
+                <div class="service-content">
+                    <iframe src="vehicles-service-v2.html" class="service-iframe" id="vehicles-frame"></iframe>
+                </div>
+            </div>
+
+            <!-- Drivers Service -->
+            <div class="service-frame">
+                <div class="service-header">
+                    <span class="service-title">👨‍💼 Водители</span>
+                    <div class="service-status loading" id="drivers-status"></div>
+                </div>
+                <div class="service-content">
+                    <iframe src="step8-drivers.html" class="service-iframe" id="drivers-frame"></iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification -->
+    <div class="notification" id="notification">
+        <div id="notificationContent"></div>
+    </div>
+
+    <script>
+        class DashboardV2 {
+            constructor() {
+                this.currentPeriod = '2024-12';
+                this.services = ['kpi', 'charts', 'analytics', 'vehicles', 'drivers'];
+                this.serviceStates = {};
+                this.apiBase = 'enhanced-coordinator-v2.php';
+                
+                this.init();
+            }
+
+            init() {
+                console.log('🚛 Dashboard v2.0: Initializing...');
+                
+                // Setup event listeners
+                this.setupEventListeners();
+                
+                // Setup message handling
+                this.setupMessageHandling();
+                
+                // Load initial data
+                this.loadDashboardData();
+                
+                console.log('🚛 Dashboard v2.0: Ready');
+            }
+
+            setupEventListeners() {
+                // Period selector
+                document.getElementById('periodSelect').addEventListener('change', (e) => {
+                    this.changePeriod(e.target.value);
+                });
+
+                // Refresh button
+                document.getElementById('refreshBtn').addEventListener('click', () => {
+                    this.refreshAllServices();
+                });
+
+                // Export buttons
+                document.getElementById('exportKpiCsv').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.exportData('kpi', 'csv');
+                });
+
+                document.getElementById('exportVehiclesCsv').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.exportData('vehicles', 'csv');
+                });
+
+                document.getElementById('exportAllData').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.exportAllData();
+                });
+            }
+
+            setupMessageHandling() {
+                window.addEventListener('message', (event) => {
+                    const { type, payload } = event.data;
+                    
+                    switch (type) {
+                        case 'service_ready':
+                            this.handleServiceReady(payload);
+                            break;
+                            
+                        case 'data_updated':
+                            this.handleDataUpdated(payload);
+                            break;
+                            
+                        case 'chart_exported':
+                            this.handleChartExported(payload);
+                            break;
+                            
+                        default:
+                            console.log('🚛 Dashboard: Unknown message type:', type);
+                    }
+                });
+            }
+
+            async loadDashboardData() {
+                try {
+                    const response = await fetch(`${this.apiBase}?action=dashboard&month=${this.currentPeriod}`);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (!data.ok) {
+                        throw new Error(data.error || 'API returned error');
+                    }
+                    
+                    this.updateHeaderStats(data);
+                    
+                    console.log('🚛 Dashboard: Data loaded successfully', data);
+                    
+                } catch (error) {
+                    console.error('🚛 Dashboard: Failed to load data', error);
+                    this.showNotification('Ошибка загрузки данных: ' + error.message, 'error');
+                }
+            }
+
+            updateHeaderStats(data) {
+                const { kpi, vehicles } = data;
+                
+                document.getElementById('totalProfit').textContent = this.formatCurrency(kpi.profit);
+                document.getElementById('totalVehicles').textContent = vehicles.length;
+                document.getElementById('currentPeriod').textContent = this.currentPeriod;
+            }
+
+            changePeriod(newPeriod) {
+                console.log('🚛 Dashboard: Changing period to', newPeriod);
+                
+                this.currentPeriod = newPeriod;
+                document.getElementById('currentPeriod').textContent = newPeriod;
+                
+                // Notify all services
+                this.broadcastToServices({
+                    type: 'filters_changed',
+                    payload: {
+                        month: newPeriod,
+                        apiFormat: newPeriod,
+                        periodName: this.formatPeriodName(newPeriod)
+                    }
+                });
+                
+                // Reload dashboard data
+                this.loadDashboardData();
+                
+                this.showNotification(`Период изменен на ${this.formatPeriodName(newPeriod)}`, 'success');
+            }
+
+            refreshAllServices() {
+                console.log('🚛 Dashboard: Refreshing all services');
+                
+                // Reset service states
+                this.services.forEach(service => {
+                    this.updateServiceStatus(service, 'loading');
+                });
+                
+                // Broadcast refresh message
+                this.broadcastToServices({
+                    type: 'filters_changed',
+                    payload: {
+                        month: this.currentPeriod,
+                        apiFormat: this.currentPeriod,
+                        periodName: this.formatPeriodName(this.currentPeriod)
+                    }
+                });
+                
+                // Reload dashboard data
+                this.loadDashboardData();
+                
+                this.showNotification('Обновление всех сервисов...', 'success');
+            }
+
+            broadcastToServices(message) {
+                this.services.forEach(service => {
+                    const frame = document.getElementById(`${service}-frame`);
+                    if (frame && frame.contentWindow) {
+                        frame.contentWindow.postMessage(message, '*');
+                    }
+                });
+            }
+
+            handleServiceReady(payload) {
+                const { service, version, capabilities } = payload;
+                
+                console.log(`🚛 Dashboard: Service ${service} ready (v${version})`, capabilities);
+                
+                this.serviceStates[service] = {
+                    status: 'ready',
+                    version,
+                    capabilities,
+                    lastUpdate: Date.now()
+                };
+                
+                this.updateServiceStatus(service, 'ready');
+            }
+
+            handleDataUpdated(payload) {
+                const { service, data } = payload;
+                
+                console.log(`🚛 Dashboard: Service ${service} data updated`, data);
+                
+                if (this.serviceStates[service]) {
+                    this.serviceStates[service].lastUpdate = Date.now();
+                }
+                
+                // Update header stats if KPI data
+                if (service === 'kpi' && data) {
+                    document.getElementById('totalProfit').textContent = this.formatCurrency(data.profit);
+                }
+            }
+
+            handleChartExported(payload) {
+                const { success, chartType, period } = payload;
+                
+                if (success) {
+                    this.showNotification(`График "${chartType}" экспортирован для периода ${period}`, 'success');
+                } else {
+                    this.showNotification('Ошибка экспорта графика', 'error');
+                }
+            }
+
+            updateServiceStatus(service, status) {
+                const statusElement = document.getElementById(`${service}-status`);
+                if (statusElement) {
+                    statusElement.className = `service-status ${status}`;
+                }
+            }
+
+            exportData(type, format) {
+                const url = `export-csv.php?type=${type}&month=${this.currentPeriod}`;
+                window.open(url, '_blank');
+                
+                this.showNotification(`Экспорт ${type.toUpperCase()} в ${format.toUpperCase()} формате`, 'success');
+            }
+
+            exportAllData() {
+                // Export both KPI and Vehicles
+                this.exportData('kpi', 'csv');
+                setTimeout(() => {
+                    this.exportData('vehicles', 'csv');
+                }, 500);
+                
+                this.showNotification('Экспорт всех данных запущен', 'success');
+            }
+
+            showNotification(message, type = 'success') {
+                const notification = document.getElementById('notification');
+                const content = document.getElementById('notificationContent');
+                
+                content.textContent = message;
+                notification.className = `notification ${type}`;
+                notification.classList.add('show');
+                
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                }, 3000);
+            }
+
+            formatCurrency(amount) {
+                return new Intl.NumberFormat('ru-RU', {
+                    style: 'currency',
+                    currency: 'RUB',
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0
+                }).format(amount);
+            }
+
+            formatPeriodName(period) {
+                const [year, month] = period.split('-');
+                const monthNames = [
+                    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+                    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+                ];
+                
+                return `${monthNames[parseInt(month) - 1]} ${year}`;
+            }
+        }
+
+        // Initialize dashboard when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            new DashboardV2();
+        });
+    </script>
+</body>
+</html>

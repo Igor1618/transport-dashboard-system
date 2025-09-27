@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KPI Service v2.0</title>
+    <style>
+        :root {
+            --primary-blue: #2563eb;
+            --success-green: #10b981;
+            --warning-orange: #f59e0b;
+            --danger-red: #ef4444;
+            --neutral-gray: #6b7280;
+            --background: #f8fafc;
+            --card-bg: #ffffff;
+            --border: #e5e7eb;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 16px;
+        }
+
+        .kpi-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            max-width: 100%;
+        }
+
+        .kpi-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .kpi-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .export-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .export-btn {
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            background: var(--card-bg);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+
+        .export-btn:hover {
+            background: var(--primary-blue);
+            color: white;
+            border-color: var(--primary-blue);
+        }
+
+        .kpi-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .kpi-card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+        }
+
+        .kpi-card.revenue::before { background: var(--primary-blue); }
+        .kpi-card.costs::before { background: var(--danger-red); }
+        .kpi-card.profit::before { background: var(--success-green); }
+        .kpi-card.margin::before { background: var(--warning-orange); }
+
+        .kpi-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .kpi-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+
+        .kpi-value {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .kpi-card.revenue .kpi-value { color: var(--primary-blue); }
+        .kpi-card.costs .kpi-value { color: var(--danger-red); }
+        .kpi-card.profit .kpi-value { color: var(--success-green); }
+        .kpi-card.margin .kpi-value { color: var(--warning-orange); }
+
+        .kpi-trend {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .trend-up {
+            color: var(--success-green);
+        }
+
+        .trend-down {
+            color: var(--danger-red);
+        }
+
+        .trend-stable {
+            color: var(--neutral-gray);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .loading-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--border);
+            border-top: 3px solid var(--primary-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger-red);
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .kpi-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+            
+            .export-buttons {
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="kpi-container">
+        <div class="kpi-header">
+            <h2 class="kpi-title">💰 Ключевые показатели</h2>
+            <div class="export-buttons">
+                <a href="#" class="export-btn" id="exportCsvBtn">📄 CSV</a>
+                <a href="#" class="export-btn" id="exportXlsxBtn">📊 XLSX</a>
+            </div>
+        </div>
+        
+        <div id="kpiContent">
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                Загрузка KPI данных...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPeriod = '2024-12';
+        let kpiData = null;
+        const API_BASE = 'enhanced-coordinator-v2.php';
+
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('💰 KPI Service v2.0: Initializing...');
+            
+            // Setup export buttons
+            setupExportButtons();
+            
+            // Load initial data
+            setTimeout(() => {
+                loadKpiData(currentPeriod);
+            }, 1000);
+            
+            // Notify parent that service is ready
+            notifyServiceReady();
+        });
+
+        function setupExportButtons() {
+            document.getElementById('exportCsvBtn').addEventListener('click', function(e) {
+                e.preventDefault();
+                exportData('csv');
+            });
+            
+            document.getElementById('exportXlsxBtn').addEventListener('click', function(e) {
+                e.preventDefault();
+                exportData('xlsx');
+            });
+        }
+
+        async function loadKpiData(period) {
+            console.log('💰 KPI Service: Loading data for period', period);
+            
+            try {
+                showLoading();
+                
+                const response = await fetch(`${API_BASE}?action=dashboard&month=${period}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.ok) {
+                    throw new Error(data.error || 'API returned error');
+                }
+                
+                kpiData = data.kpi;
+                renderKpi(data.kpi, period);
+                
+                console.log('💰 KPI Service: Data loaded successfully', data.kpi);
+                
+            } catch (error) {
+                console.error('💰 KPI Service: Failed to load data', error);
+                showError('Ошибка загрузки данных: ' + error.message);
+            }
+        }
+
+        function showLoading() {
+            const content = document.getElementById('kpiContent');
+            content.innerHTML = `
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    Загрузка KPI данных...
+                </div>
+            `;
+        }
+
+        function showError(message) {
+            const content = document.getElementById('kpiContent');
+            content.innerHTML = `
+                <div class="error-message">
+                    ⚠️ ${message}
+                </div>
+            `;
+        }
+
+        function renderKpi(kpi, period) {
+            console.log('💰 KPI Service: Rendering KPI data');
+            
+            const content = document.getElementById('kpiContent');
+            
+            // Calculate trends (mock for now)
+            const trends = {
+                revenue: { type: 'up', value: '+12.5%' },
+                costs: { type: 'up', value: '+8.2%' },
+                profit: { type: 'up', value: '+18.7%' },
+                margin: { type: 'up', value: '+2.1%' }
+            };
+            
+            content.innerHTML = `
+                <div class="kpi-card revenue">
+                    <div class="kpi-icon">💰</div>
+                    <div class="kpi-label">Выручка</div>
+                    <div class="kpi-value">${formatCurrency(kpi.revenue)}</div>
+                    <div class="kpi-trend trend-${trends.revenue.type}">
+                        ${trends.revenue.type === 'up' ? '↗️' : trends.revenue.type === 'down' ? '↘️' : '➡️'} ${trends.revenue.value}
+                    </div>
+                </div>
+                
+                <div class="kpi-card costs">
+                    <div class="kpi-icon">💸</div>
+                    <div class="kpi-label">Расходы</div>
+                    <div class="kpi-value">${formatCurrency(kpi.costs)}</div>
+                    <div class="kpi-trend trend-${trends.costs.type}">
+                        ${trends.costs.type === 'up' ? '↗️' : trends.costs.type === 'down' ? '↘️' : '➡️'} ${trends.costs.value}
+                    </div>
+                </div>
+                
+                <div class="kpi-card profit">
+                    <div class="kpi-icon">📈</div>
+                    <div class="kpi-label">Прибыль</div>
+                    <div class="kpi-value">${formatCurrency(kpi.profit)}</div>
+                    <div class="kpi-trend trend-${trends.profit.type}">
+                        ${trends.profit.type === 'up' ? '↗️' : trends.profit.type === 'down' ? '↘️' : '➡️'} ${trends.profit.value}
+                    </div>
+                </div>
+                
+                <div class="kpi-card margin">
+                    <div class="kpi-icon">📊</div>
+                    <div class="kpi-label">Маржа</div>
+                    <div class="kpi-value">${kpi.marginPct.toFixed(1)}%</div>
+                    <div class="kpi-trend trend-${trends.margin.type}">
+                        ${trends.margin.type === 'up' ? '↗️' : trends.margin.type === 'down' ? '↘️' : '➡️'} ${trends.margin.value}
+                    </div>
+                </div>
+            `;
+            
+            // Notify parent about data update
+            if (window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'data_updated',
+                    payload: { service: 'kpi', data: kpi }
+                }, '*');
+            }
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('ru-RU', {
+                style: 'currency',
+                currency: 'RUB',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(amount);
+        }
+
+        function exportData(format) {
+            if (!kpiData) {
+                alert('Нет данных для экспорта');
+                return;
+            }
+            
+            if (format === 'csv') {
+                const url = `export-csv.php?type=kpi&month=${currentPeriod}`;
+                window.open(url, '_blank');
+            } else if (format === 'xlsx') {
+                // For now, redirect to CSV - XLSX can be implemented later
+                alert('XLSX экспорт будет добавлен в следующей версии. Используйте CSV.');
+                exportData('csv');
+            }
+            
+            console.log('💰 KPI Service: Exported data in', format, 'format');
+        }
+
+        function notifyServiceReady() {
+            if (window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'service_ready',
+                    payload: {
+                        service: 'kpi',
+                        version: '2.0',
+                        capabilities: ['revenue_display', 'profit_calculation', 'margin_analysis', 'csv_export']
+                    }
+                }, '*');
+            }
+            
+            console.log('💰 KPI Service v2.0: Ready');
+        }
+
+        // Listen for messages from parent
+        window.addEventListener('message', function(event) {
+            const { type, payload } = event.data;
+            
+            switch (type) {
+                case 'filters_changed':
+                    console.log('💰 KPI Service: Filters changed', payload);
+                    currentPeriod = payload.apiFormat || payload.month;
+                    loadKpiData(currentPeriod);
+                    break;
+                    
+                case 'export_request':
+                    if (payload.service === 'kpi') {
+                        exportData(payload.format || 'csv');
+                    }
+                    break;
+                    
+                default:
+                    console.log('💰 KPI Service: Unknown message type:', type);
+            }
+        });
+    </script>
+</body>
+</html>

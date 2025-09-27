@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics & Insights Microservice</title>
+    <style>
+        :root {
+            --primary-blue: #2563eb;
+            --success-green: #10b981;
+            --warning-orange: #f59e0b;
+            --danger-red: #ef4444;
+            --neutral-gray: #6b7280;
+            --background: #f8fafc;
+            --card-bg: #ffffff;
+            --border: #e5e7eb;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --gradient-success: linear-gradient(135deg, #10b981, #059669);
+            --gradient-warning: linear-gradient(135deg, #f59e0b, #d97706);
+            --gradient-danger: linear-gradient(135deg, #ef4444, #dc2626);
+            --gradient-primary: linear-gradient(135deg, #2563eb, #1d4ed8);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .analytics-container {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            height: 100vh;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .insights-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .insight-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .insight-card:hover {
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-4px);
+        }
+
+        .insight-card.success {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.05), rgba(5, 150, 105, 0.02));
+            border-left: 4px solid var(--success-green);
+        }
+
+        .insight-card.warning {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.05), rgba(217, 119, 6, 0.02));
+            border-left: 4px solid var(--warning-orange);
+        }
+
+        .insight-card.danger {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.05), rgba(220, 38, 38, 0.02));
+            border-left: 4px solid var(--danger-red);
+        }
+
+        .insight-card.primary {
+            background: linear-gradient(135deg, rgba(37, 99, 235, 0.05), rgba(29, 78, 216, 0.02));
+            border-left: 4px solid var(--primary-blue);
+        }
+
+        .insight-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .insight-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        .insight-icon.success { background: var(--gradient-success); }
+        .insight-icon.warning { background: var(--gradient-warning); }
+        .insight-icon.danger { background: var(--gradient-danger); }
+        .insight-icon.primary { background: var(--gradient-primary); }
+
+        .insight-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .insight-subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .insight-content {
+            margin-bottom: 16px;
+        }
+
+        .insight-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, var(--text-primary), var(--neutral-gray));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .insight-description {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .insight-trend {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 6px;
+            width: fit-content;
+        }
+
+        .insight-trend.up {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success-green);
+        }
+
+        .insight-trend.down {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger-red);
+        }
+
+        .insight-trend.stable {
+            background: rgba(107, 114, 128, 0.1);
+            color: var(--neutral-gray);
+        }
+
+        .recommendations-section {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .recommendations-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .recommendation-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px;
+            background: rgba(37, 99, 235, 0.02);
+            border-radius: 12px;
+            border: 1px solid rgba(37, 99, 235, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .recommendation-item:hover {
+            background: rgba(37, 99, 235, 0.05);
+            transform: translateX(4px);
+        }
+
+        .recommendation-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: var(--gradient-primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .recommendation-content {
+            flex: 1;
+        }
+
+        .recommendation-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .recommendation-description {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .recommendation-impact {
+            font-size: 12px;
+            color: var(--success-green);
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        .alerts-section {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        .alert-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid;
+            transition: all 0.3s ease;
+        }
+
+        .alert-item.critical {
+            background: rgba(239, 68, 68, 0.05);
+            border-color: rgba(239, 68, 68, 0.2);
+            color: var(--danger-red);
+        }
+
+        .alert-item.warning {
+            background: rgba(245, 158, 11, 0.05);
+            border-color: rgba(245, 158, 11, 0.2);
+            color: var(--warning-orange);
+        }
+
+        .alert-item.info {
+            background: rgba(37, 99, 235, 0.05);
+            border-color: rgba(37, 99, 235, 0.2);
+            color: var(--primary-blue);
+        }
+
+        .alert-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .alert-item.critical .alert-icon { background: var(--danger-red); }
+        .alert-item.warning .alert-icon { background: var(--warning-orange); }
+        .alert-item.info .alert-icon { background: var(--primary-blue); }
+
+        .alert-content {
+            flex: 1;
+        }
+
+        .alert-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .alert-description {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .loading-state {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--border);
+            border-top: 4px solid var(--primary-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .insights-section {
+                grid-template-columns: 1fr;
+            }
+            
+            .analytics-container {
+                height: auto;
+                max-height: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="analytics-container">
+        <!-- Key Insights Section -->
+        <div class="insights-section" id="insightsSection">
+            <!-- Dynamic insights will be loaded here -->
+        </div>
+
+        <!-- Recommendations Section -->
+        <div class="recommendations-section">
+            <h2 class="section-title">
+                💡 Рекомендации по оптимизации
+            </h2>
+            <div class="recommendations-list" id="recommendationsList">
+                <!-- Dynamic recommendations will be loaded here -->
+            </div>
+        </div>
+
+        <!-- Alerts Section -->
+        <div class="recommendations-section">
+            <h2 class="section-title">
+                ⚠️ Важные уведомления
+            </h2>
+            <div class="alerts-section" id="alertsSection">
+                <!-- Dynamic alerts will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentFilters = { apiFormat: '2024-12', periodName: '2024 год, Декабрь' };
+        let analyticsData = null;
+
+        // Initialize analytics when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🧠 Analytics: Initializing...');
+            
+            showLoadingState();
+            
+            setTimeout(() => {
+                loadAnalyticsData();
+            }, 1000);
+        });
+
+        // Listen for filter changes from coordinator
+        window.addEventListener('message', function(event) {
+            if (event.data.type === 'filters_changed') {
+                console.log('🧠 Analytics: Filters changed:', event.data.payload);
+                currentFilters = event.data.payload;
+                updateAnalytics();
+            }
+        });
+
+        function showLoadingState() {
+            document.getElementById('insightsSection').innerHTML = `
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                </div>
+            `;
+            document.getElementById('recommendationsList').innerHTML = `
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                </div>
+            `;
+            document.getElementById('alertsSection').innerHTML = `
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                </div>
+            `;
+        }
+
+        async function loadAnalyticsData() {
+            try {
+                console.log('🧠 Analytics: Loading data for period:', currentFilters.apiFormat);
+                
+                // Simulate API call - replace with real endpoint
+                const response = await fetch(`step4-real-coordinator.php?action=analytics&month=${currentFilters.apiFormat}`);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch analytics data');
+                }
+                
+                const data = await response.json();
+                analyticsData = data;
+                renderAnalytics(data);
+                
+            } catch (error) {
+                console.error('🧠 Analytics: Error loading data:', error);
+                // Load mock data for demonstration
+                loadMockAnalytics();
+            }
+        }
+
+        function loadMockAnalytics() {
+            console.log('🧠 Analytics: Loading mock analytics data');
+            
+            const mockData = {
+                insights: [
+                    {
+                        type: 'success',
+                        icon: '🏆',
+                        title: 'Лучшая машина месяца',
+                        subtitle: 'Максимальная прибыльность',
+                        value: 'Г789ЕЖ',
+                        description: 'Принесла ₽780,000 прибыли за месяц',
+                        trend: { type: 'up', value: '+15.2%' }
+                    },
+                    {
+                        type: 'warning',
+                        icon: '⚠️',
+                        title: 'Проблемные ТС',
+                        subtitle: 'Требуют внимания',
+                        value: '2 машины',
+                        description: 'Д012ЗИ и В456ГД показывают низкую эффективность',
+                        trend: { type: 'down', value: '-8.3%' }
+                    },
+                    {
+                        type: 'primary',
+                        icon: '📈',
+                        title: 'Общий тренд',
+                        subtitle: 'Динамика за квартал',
+                        value: '+12.5%',
+                        description: 'Стабильный рост прибыли в течение квартала',
+                        trend: { type: 'up', value: 'Растет' }
+                    },
+                    {
+                        type: 'danger',
+                        icon: '💰',
+                        title: 'Расходы на топливо',
+                        subtitle: 'Превышение бюджета',
+                        value: '+18%',
+                        description: 'Расходы на топливо выше планового на 18%',
+                        trend: { type: 'up', value: 'Критично' }
+                    }
+                ],
+                recommendations: [
+                    {
+                        icon: '🔧',
+                        title: 'Техническое обслуживание',
+                        description: 'Машины Д012ЗИ и В456ГД нуждаются в диагностике. Возможны проблемы с двигателем или трансмиссией.',
+                        impact: 'Потенциальная экономия: ₽150,000/месяц'
+                    },
+                    {
+                        icon: '⛽',
+                        title: 'Оптимизация маршрутов',
+                        description: 'Пересмотреть маршруты для снижения расхода топлива. Использовать GPS-оптимизацию.',
+                        impact: 'Экономия топлива: до 15%'
+                    },
+                    {
+                        icon: '👨‍💼',
+                        title: 'Обучение водителей',
+                        description: 'Провести тренинг по экономичному вождению для водителей проблемных ТС.',
+                        impact: 'Улучшение эффективности: +10-20%'
+                    },
+                    {
+                        icon: '📊',
+                        title: 'Мониторинг в реальном времени',
+                        description: 'Внедрить систему отслеживания расхода топлива и стиля вождения в реальном времени.',
+                        impact: 'Снижение расходов: ₽200,000/месяц'
+                    }
+                ],
+                alerts: [
+                    {
+                        type: 'critical',
+                        icon: '!',
+                        title: 'Критическое превышение расходов',
+                        description: 'Расходы на топливо превысили месячный бюджет на 18%'
+                    },
+                    {
+                        type: 'warning',
+                        icon: '⚠',
+                        title: 'Снижение эффективности',
+                        description: 'Машина В456ГД показывает падение прибыли на 25% за последние 2 недели'
+                    },
+                    {
+                        type: 'info',
+                        icon: 'i',
+                        title: 'Новые возможности',
+                        description: 'Доступны льготы на техническое обслуживание до конца месяца'
+                    }
+                ]
+            };
+            
+            analyticsData = mockData;
+            renderAnalytics(mockData);
+        }
+
+        function renderAnalytics(data) {
+            renderInsights(data.insights);
+            renderRecommendations(data.recommendations);
+            renderAlerts(data.alerts);
+            console.log('🧠 Analytics: All components rendered successfully');
+        }
+
+        function renderInsights(insights) {
+            const container = document.getElementById('insightsSection');
+            
+            container.innerHTML = insights.map(insight => `
+                <div class="insight-card ${insight.type} pulse-animation">
+                    <div class="insight-header">
+                        <div class="insight-icon ${insight.type}">
+                            ${insight.icon}
+                        </div>
+                        <div>
+                            <h3 class="insight-title">${insight.title}</h3>
+                            <p class="insight-subtitle">${insight.subtitle}</p>
+                        </div>
+                    </div>
+                    <div class="insight-content">
+                        <div class="insight-value">${insight.value}</div>
+                        <p class="insight-description">${insight.description}</p>
+                    </div>
+                    <div class="insight-trend ${insight.trend.type}">
+                        ${insight.trend.type === 'up' ? '↗️' : insight.trend.type === 'down' ? '↘️' : '➡️'}
+                        ${insight.trend.value}
+                    </div>
+                </div>
+            `).join('');
+            
+            // Remove animation after initial load
+            setTimeout(() => {
+                document.querySelectorAll('.pulse-animation').forEach(el => {
+                    el.classList.remove('pulse-animation');
+                });
+            }, 2000);
+        }
+
+        function renderRecommendations(recommendations) {
+            const container = document.getElementById('recommendationsList');
+            
+            container.innerHTML = recommendations.map(rec => `
+                <div class="recommendation-item">
+                    <div class="recommendation-icon">
+                        ${rec.icon}
+                    </div>
+                    <div class="recommendation-content">
+                        <h4 class="recommendation-title">${rec.title}</h4>
+                        <p class="recommendation-description">${rec.description}</p>
+                        <div class="recommendation-impact">${rec.impact}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderAlerts(alerts) {
+            const container = document.getElementById('alertsSection');
+            
+            container.innerHTML = alerts.map(alert => `
+                <div class="alert-item ${alert.type}">
+                    <div class="alert-icon">
+                        ${alert.icon}
+                    </div>
+                    <div class="alert-content">
+                        <div class="alert-title">${alert.title}</div>
+                        <div class="alert-description">${alert.description}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateAnalytics() {
+            console.log('🧠 Analytics: Updating for new filters:', currentFilters);
+            showLoadingState();
+            
+            setTimeout(() => {
+                loadAnalyticsData();
+            }, 500);
+        }
+
+        // Notify parent that analytics service is ready
+        window.addEventListener('load', function() {
+            window.parent.postMessage({
+                type: 'service_ready',
+                payload: {
+                    service: 'analytics',
+                    capabilities: ['insights', 'recommendations', 'alerts', 'trend_analysis']
+                }
+            }, '*');
+        });
+    </script>
+</body>
+</html>

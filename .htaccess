@@ -1,0 +1,133 @@
+# Transport Dashboard System v2.0 - Apache Configuration
+
+# Enable rewrite engine
+RewriteEngine On
+
+# Security Headers
+<IfModule mod_headers.c>
+    # HTTPS Security
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    
+    # Content Security Policy
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com; connect-src 'self'"
+    
+    # XSS Protection
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-XSS-Protection "1; mode=block"
+    
+    # Referrer Policy
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    
+    # Feature Policy
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+</IfModule>
+
+# MIME Types
+<IfModule mod_mime.c>
+    AddType application/json .json
+    AddType text/csv .csv
+    AddType application/vnd.ms-excel .xlsx
+</IfModule>
+
+# Compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/plain
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE text/xml
+    AddOutputFilterByType DEFLATE text/css
+    AddOutputFilterByType DEFLATE application/xml
+    AddOutputFilterByType DEFLATE application/xhtml+xml
+    AddOutputFilterByType DEFLATE application/rss+xml
+    AddOutputFilterByType DEFLATE application/javascript
+    AddOutputFilterByType DEFLATE application/x-javascript
+    AddOutputFilterByType DEFLATE application/json
+</IfModule>
+
+# Browser Caching
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/jpg "access plus 1 month"
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/gif "access plus 1 month"
+    ExpiresByType image/svg+xml "access plus 1 month"
+    ExpiresByType application/json "access plus 1 hour"
+    ExpiresByType text/csv "access plus 1 hour"
+</IfModule>
+
+# Error Pages
+ErrorDocument 404 /index.html
+ErrorDocument 500 /index.html
+
+# Directory Protection
+Options -Indexes
+
+# Protect sensitive files
+<Files "*.log">
+    Order allow,deny
+    Deny from all
+</Files>
+
+<Files ".htaccess">
+    Order allow,deny
+    Deny from all
+</Files>
+
+# API Rate Limiting (if mod_evasive is available)
+<IfModule mod_evasive24.c>
+    DOSHashTableSize    2048
+    DOSPageCount        10
+    DOSPageInterval     1
+    DOSSiteCount        50
+    DOSSiteInterval     1
+    DOSBlockingPeriod   600
+</IfModule>
+
+# PHP Configuration
+<IfModule mod_php.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 10M
+    php_value memory_limit 128M
+    php_value max_execution_time 30
+    php_flag display_errors Off
+    php_flag log_errors On
+    php_value error_log /tmp/php_errors.log
+</IfModule>
+
+# CORS for API endpoints
+<IfModule mod_headers.c>
+    <FilesMatch "\.(php)$">
+        Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+        Header set Access-Control-Allow-Headers "Content-Type, X-API-Key"
+        Header set Access-Control-Max-Age "3600"
+    </FilesMatch>
+</IfModule>
+
+# Redirect HTTP to HTTPS (uncomment for production)
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Pretty URLs
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^dashboard/?$ dashboard-v2.html [L]
+RewriteRule ^kpi/?$ kpi-service-v2.html [L]
+RewriteRule ^vehicles/?$ vehicles-service-v2.html [L]
+RewriteRule ^charts/?$ step6-charts.html [L]
+RewriteRule ^analytics/?$ step7-analytics.html [L]
+RewriteRule ^drivers/?$ step8-drivers.html [L]
+
+# API endpoints
+RewriteRule ^api/health/?$ enhanced-coordinator-v2.php?action=health [L,QSA]
+RewriteRule ^api/dashboard/?$ enhanced-coordinator-v2.php?action=dashboard [L,QSA]
+RewriteRule ^api/vehicles/?$ enhanced-coordinator-v2.php?action=vehicles [L,QSA]
+RewriteRule ^api/charts/?$ enhanced-coordinator-v2.php?action=charts [L,QSA]
+RewriteRule ^api/analytics/?$ enhanced-coordinator-v2.php?action=analytics [L,QSA]
+RewriteRule ^api/drivers/?$ enhanced-coordinator-v2.php?action=drivers [L,QSA]
+
+# Export endpoints
+RewriteRule ^export/kpi/?$ export-csv.php?type=kpi [L,QSA]
+RewriteRule ^export/vehicles/?$ export-csv.php?type=vehicles [L,QSA]

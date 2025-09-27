@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Charts Microservice</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        :root {
+            --primary-blue: #2563eb;
+            --success-green: #10b981;
+            --warning-orange: #f59e0b;
+            --danger-red: #ef4444;
+            --neutral-gray: #6b7280;
+            --background: #f8fafc;
+            --card-bg: #ffffff;
+            --border: #e5e7eb;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .charts-container {
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 20px;
+            height: 100vh;
+            max-height: 600px;
+        }
+
+        .chart-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .chart-card:hover {
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-2px);
+        }
+
+        .chart-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-blue), var(--success-green));
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .chart-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .chart-subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .export-btn {
+            background: var(--primary-blue);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .export-btn:hover {
+            background: #1d4ed8;
+            transform: translateY(-1px);
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: calc(100% - 80px);
+            min-height: 200px;
+        }
+
+        .profit-trend {
+            grid-column: 1;
+            grid-row: 1;
+        }
+
+        .expenses-pie {
+            grid-column: 2;
+            grid-row: 1;
+        }
+
+        .vehicles-bar {
+            grid-column: 1 / 3;
+            grid-row: 2;
+        }
+
+        .loading-spinner {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--border);
+            border-top: 4px solid var(--primary-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .chart-stats {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            background: rgba(37, 99, 235, 0.1);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: var(--primary-blue);
+            font-weight: 600;
+        }
+
+        .error-message {
+            color: var(--danger-red);
+            text-align: center;
+            padding: 20px;
+            font-size: 14px;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .charts-container {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto auto;
+                height: auto;
+                max-height: none;
+            }
+            
+            .profit-trend,
+            .expenses-pie,
+            .vehicles-bar {
+                grid-column: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="charts-container">
+        <!-- Profit Trend Chart -->
+        <div class="chart-card profit-trend">
+            <div class="chart-header">
+                <div>
+                    <h3 class="chart-title">📈 Динамика прибыли</h3>
+                    <p class="chart-subtitle">Тренд по месяцам за текущий год</p>
+                </div>
+                <button class="export-btn" onclick="exportChart('profitChart', 'profit_trend')">
+                    💾 Экспорт
+                </button>
+            </div>
+            <div class="chart-stats" id="profitStats">+12.5%</div>
+            <div class="chart-wrapper">
+                <canvas id="profitChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Expenses Pie Chart -->
+        <div class="chart-card expenses-pie">
+            <div class="chart-header">
+                <div>
+                    <h3 class="chart-title">🥧 Структура расходов</h3>
+                    <p class="chart-subtitle">Распределение затрат</p>
+                </div>
+                <button class="export-btn" onclick="exportChart('expensesChart', 'expenses_pie')">
+                    💾 Экспорт
+                </button>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="expensesChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Vehicles Performance Bar Chart -->
+        <div class="chart-card vehicles-bar">
+            <div class="chart-header">
+                <div>
+                    <h3 class="chart-title">📊 Эффективность транспортных средств</h3>
+                    <p class="chart-subtitle">Прибыль по каждому ТС за выбранный период</p>
+                </div>
+                <button class="export-btn" onclick="exportChart('vehiclesChart', 'vehicles_performance')">
+                    💾 Экспорт
+                </button>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="vehiclesChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let profitChart, expensesChart, vehiclesChart;
+        let currentFilters = { apiFormat: '2024-12', periodName: '2024 год, Декабрь' };
+
+        // Chart.js default configuration
+        Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        Chart.defaults.color = '#6b7280';
+        Chart.defaults.borderColor = '#e5e7eb';
+
+        // Initialize charts when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('📊 Charts Microservice: Initializing...');
+            
+            // Show loading state
+            showLoadingState();
+            
+            // Initialize charts after short delay
+            setTimeout(() => {
+                initializeCharts();
+                loadChartsData();
+            }, 1000);
+        });
+
+        // Listen for filter changes from coordinator
+        window.addEventListener('message', function(event) {
+            if (event.data.type === 'filters_changed') {
+                console.log('📊 Charts: Filters changed:', event.data.payload);
+                currentFilters = event.data.payload;
+                updateChartsData();
+            }
+        });
+
+        function showLoadingState() {
+            const chartWrappers = document.querySelectorAll('.chart-wrapper');
+            chartWrappers.forEach(wrapper => {
+                wrapper.innerHTML = `
+                    <div class="loading-spinner">
+                        <div class="spinner"></div>
+                    </div>
+                `;
+            });
+        }
+
+        function initializeCharts() {
+            // Profit Trend Line Chart
+            const profitCtx = document.getElementById('profitChart').getContext('2d');
+            profitChart = new Chart(profitCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Прибыль (₽)',
+                        data: [],
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: '#10b981',
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 6,
+                        pointHoverRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '₽' + (value / 1000000).toFixed(1) + 'M';
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(229, 231, 235, 0.5)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    }
+                }
+            });
+
+            // Expenses Pie Chart
+            const expensesCtx = document.getElementById('expensesChart').getContext('2d');
+            expensesChart = new Chart(expensesCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Топливо', 'Зарплата', 'Дороги', 'Прочее'],
+                    datasets: [{
+                        data: [],
+                        backgroundColor: [
+                            '#ef4444',
+                            '#f59e0b', 
+                            '#2563eb',
+                            '#6b7280'
+                        ],
+                        borderWidth: 0,
+                        hoverBorderWidth: 4,
+                        hoverBorderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true,
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        }
+                    },
+                    cutout: '60%'
+                }
+            });
+
+            // Vehicles Performance Bar Chart
+            const vehiclesCtx = document.getElementById('vehiclesChart').getContext('2d');
+            vehiclesChart = new Chart(vehiclesCtx, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Прибыль (₽)',
+                        data: [],
+                        backgroundColor: function(context) {
+                            const value = context.parsed.y;
+                            if (value > 500000) return '#10b981';
+                            if (value > 200000) return '#f59e0b';
+                            return '#ef4444';
+                        },
+                        borderRadius: 6,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '₽' + (value / 1000).toFixed(0) + 'K';
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(229, 231, 235, 0.5)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                maxRotation: 45
+                            }
+                        }
+                    }
+                }
+            });
+
+            console.log('📊 Charts: All charts initialized successfully');
+        }
+
+        async function loadChartsData() {
+            try {
+                console.log('📊 Charts: Loading data for period:', currentFilters.apiFormat);
+                
+                // Simulate API call - replace with real endpoint
+                const response = await fetch(`step4-real-coordinator.php?action=charts&month=${currentFilters.apiFormat}`);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch charts data');
+                }
+                
+                const data = await response.json();
+                updateChartsWithData(data);
+                
+            } catch (error) {
+                console.error('📊 Charts: Error loading data:', error);
+                // Load mock data for demonstration
+                loadMockData();
+            }
+        }
+
+        function loadMockData() {
+            console.log('📊 Charts: Loading mock data for demonstration');
+            
+            const mockData = {
+                profitTrend: {
+                    labels: ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'],
+                    data: [1200000, 1350000, 1100000, 1450000, 1600000, 1750000, 1650000, 1800000, 1900000, 1750000, 1850000, 2000000]
+                },
+                expenses: {
+                    labels: ['Топливо', 'Зарплата', 'Дороги', 'Прочее'],
+                    data: [450000, 320000, 180000, 150000]
+                },
+                vehicles: {
+                    labels: ['А123БВ', 'В456ГД', 'Г789ЕЖ', 'Д012ЗИ', 'Е345КЛ', 'Ж678МН'],
+                    data: [650000, 420000, 780000, 320000, 590000, 710000]
+                }
+            };
+            
+            updateChartsWithData(mockData);
+        }
+
+        function updateChartsWithData(data) {
+            // Update Profit Trend Chart
+            if (data.profitTrend) {
+                profitChart.data.labels = data.profitTrend.labels;
+                profitChart.data.datasets[0].data = data.profitTrend.data;
+                profitChart.update('active');
+                
+                // Update profit stats
+                const currentProfit = data.profitTrend.data[data.profitTrend.data.length - 1];
+                const previousProfit = data.profitTrend.data[data.profitTrend.data.length - 2];
+                const growth = ((currentProfit - previousProfit) / previousProfit * 100).toFixed(1);
+                document.getElementById('profitStats').textContent = `${growth > 0 ? '+' : ''}${growth}%`;
+            }
+            
+            // Update Expenses Pie Chart
+            if (data.expenses) {
+                expensesChart.data.labels = data.expenses.labels;
+                expensesChart.data.datasets[0].data = data.expenses.data;
+                expensesChart.update('active');
+            }
+            
+            // Update Vehicles Bar Chart
+            if (data.vehicles) {
+                vehiclesChart.data.labels = data.vehicles.labels;
+                vehiclesChart.data.datasets[0].data = data.vehicles.data;
+                vehiclesChart.update('active');
+            }
+            
+            console.log('📊 Charts: All charts updated with new data');
+        }
+
+        function updateChartsData() {
+            console.log('📊 Charts: Updating data for new filters:', currentFilters);
+            showLoadingState();
+            
+            setTimeout(() => {
+                initializeCharts();
+                loadChartsData();
+            }, 500);
+        }
+
+        function exportChart(chartId, filename) {
+            console.log('📊 Charts: Exporting chart:', filename);
+            
+            const canvas = document.getElementById(chartId);
+            const url = canvas.toDataURL('image/png');
+            
+            // Create download link
+            const link = document.createElement('a');
+            link.download = `${filename}_${currentFilters.apiFormat}.png`;
+            link.href = url;
+            link.click();
+            
+            // Notify parent about export
+            window.parent.postMessage({
+                type: 'chart_exported',
+                payload: {
+                    chartType: filename,
+                    period: currentFilters.apiFormat,
+                    success: true
+                }
+            }, '*');
+            
+            console.log('📊 Charts: Chart exported successfully');
+        }
+
+        // Notify parent that charts service is ready
+        window.addEventListener('load', function() {
+            window.parent.postMessage({
+                type: 'service_ready',
+                payload: {
+                    service: 'charts',
+                    capabilities: ['profit_trend', 'expenses_breakdown', 'vehicles_performance', 'export']
+                }
+            }, '*');
+        });
+    </script>
+</body>
+</html>

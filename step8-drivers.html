@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driver Performance Microservice</title>
+    <style>
+        :root {
+            --primary-blue: #2563eb;
+            --success-green: #10b981;
+            --warning-orange: #f59e0b;
+            --danger-red: #ef4444;
+            --neutral-gray: #6b7280;
+            --background: #f8fafc;
+            --card-bg: #ffffff;
+            --border: #e5e7eb;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --gradient-gold: linear-gradient(135deg, #fbbf24, #f59e0b);
+            --gradient-silver: linear-gradient(135deg, #9ca3af, #6b7280);
+            --gradient-bronze: linear-gradient(135deg, #d97706, #b45309);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .drivers-container {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            height: 100vh;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .top-performers {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .performer-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            text-align: center;
+        }
+
+        .performer-card:hover {
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-4px);
+        }
+
+        .performer-card.gold {
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(245, 158, 11, 0.05));
+            border: 2px solid #fbbf24;
+        }
+
+        .performer-card.silver {
+            background: linear-gradient(135deg, rgba(156, 163, 175, 0.1), rgba(107, 114, 128, 0.05));
+            border: 2px solid #9ca3af;
+        }
+
+        .performer-card.bronze {
+            background: linear-gradient(135deg, rgba(217, 119, 6, 0.1), rgba(180, 83, 9, 0.05));
+            border: 2px solid #d97706;
+        }
+
+        .performer-rank {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            font-weight: bold;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .performer-rank.gold { background: var(--gradient-gold); }
+        .performer-rank.silver { background: var(--gradient-silver); }
+        .performer-rank.bronze { background: var(--gradient-bronze); }
+
+        .performer-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-blue), var(--success-green));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            color: white;
+            margin: 0 auto 16px;
+            box-shadow: var(--shadow);
+        }
+
+        .performer-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .performer-vehicle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .performer-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .performer-score {
+            background: linear-gradient(135deg, var(--success-green), #059669);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .drivers-table-section {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .filter-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--border);
+            background: var(--card-bg);
+            color: var(--text-secondary);
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .filter-btn:hover,
+        .filter-btn.active {
+            background: var(--primary-blue);
+            color: white;
+            border-color: var(--primary-blue);
+        }
+
+        .drivers-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+
+        .drivers-table th,
+        .drivers-table td {
+            padding: 16px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .drivers-table th {
+            background: rgba(37, 99, 235, 0.05);
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 14px;
+            position: sticky;
+            top: 0;
+        }
+
+        .drivers-table td {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .drivers-table tr:hover {
+            background: rgba(37, 99, 235, 0.02);
+        }
+
+        .driver-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .driver-avatar-small {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-blue), var(--success-green));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: white;
+            font-weight: 600;
+        }
+
+        .driver-details {
+            flex: 1;
+        }
+
+        .driver-name-table {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .driver-experience {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .performance-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .performance-bar {
+            width: 60px;
+            height: 8px;
+            background: var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .performance-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .performance-fill.excellent { background: var(--success-green); }
+        .performance-fill.good { background: var(--warning-orange); }
+        .performance-fill.poor { background: var(--danger-red); }
+
+        .performance-score-table {
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .performance-score-table.excellent { color: var(--success-green); }
+        .performance-score-table.good { color: var(--warning-orange); }
+        .performance-score-table.poor { color: var(--danger-red); }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-badge.active {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success-green);
+        }
+
+        .status-badge.attention {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning-orange);
+        }
+
+        .status-badge.critical {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger-red);
+        }
+
+        .loading-state {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--border);
+            border-top: 4px solid var(--primary-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .top-performers {
+                grid-template-columns: 1fr;
+            }
+            
+            .drivers-container {
+                height: auto;
+                max-height: none;
+            }
+            
+            .drivers-table {
+                font-size: 12px;
+            }
+            
+            .drivers-table th,
+            .drivers-table td {
+                padding: 12px 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="drivers-container">
+        <!-- Top Performers Section -->
+        <div class="top-performers" id="topPerformers">
+            <!-- Dynamic top performers will be loaded here -->
+        </div>
+
+        <!-- Drivers Table Section -->
+        <div class="drivers-table-section">
+            <div class="section-header">
+                <h2 class="section-title">
+                    👨‍💼 Все водители
+                </h2>
+                <div class="filter-buttons">
+                    <button class="filter-btn active" onclick="filterDrivers('all')">Все</button>
+                    <button class="filter-btn" onclick="filterDrivers('excellent')">Отличные</button>
+                    <button class="filter-btn" onclick="filterDrivers('attention')">Внимание</button>
+                    <button class="filter-btn" onclick="filterDrivers('critical')">Критично</button>
+                </div>
+            </div>
+            
+            <table class="drivers-table" id="driversTable">
+                <thead>
+                    <tr>
+                        <th>Водитель</th>
+                        <th>Транспорт</th>
+                        <th>Прибыль</th>
+                        <th>Эффективность</th>
+                        <th>Расход топлива</th>
+                        <th>Безопасность</th>
+                        <th>Статус</th>
+                    </tr>
+                </thead>
+                <tbody id="driversTableBody">
+                    <!-- Dynamic drivers data will be loaded here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentFilters = { apiFormat: '2024-12', periodName: '2024 год, Декабрь' };
+        let driversData = null;
+        let currentFilter = 'all';
+
+        // Initialize drivers module when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('👨‍💼 Drivers: Initializing...');
+            
+            showLoadingState();
+            
+            setTimeout(() => {
+                loadDriversData();
+            }, 1000);
+        });
+
+        // Listen for filter changes from coordinator
+        window.addEventListener('message', function(event) {
+            if (event.data.type === 'filters_changed') {
+                console.log('👨‍💼 Drivers: Filters changed:', event.data.payload);
+                currentFilters = event.data.payload;
+                updateDriversData();
+            }
+        });
+
+        function showLoadingState() {
+            document.getElementById('topPerformers').innerHTML = `
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                </div>
+            `;
+            document.getElementById('driversTableBody').innerHTML = `
+                <tr><td colspan="7" style="text-align: center; padding: 40px;">
+                    <div class="spinner"></div>
+                </td></tr>
+            `;
+        }
+
+        async function loadDriversData() {
+            try {
+                console.log('👨‍💼 Drivers: Loading data for period:', currentFilters.apiFormat);
+                
+                // Simulate API call - replace with real endpoint
+                const response = await fetch(`step4-real-coordinator.php?action=drivers&month=${currentFilters.apiFormat}`);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch drivers data');
+                }
+                
+                const data = await response.json();
+                driversData = data;
+                renderDriversData(data);
+                
+            } catch (error) {
+                console.error('👨‍💼 Drivers: Error loading data:', error);
+                // Load mock data for demonstration
+                loadMockDriversData();
+            }
+        }
+
+        function loadMockDriversData() {
+            console.log('👨‍💼 Drivers: Loading mock drivers data');
+            
+            const mockData = {
+                topPerformers: [
+                    {
+                        rank: 1,
+                        name: 'Иванов А.С.',
+                        vehicle: 'Г789ЕЖ',
+                        avatar: 'И',
+                        profit: 780000,
+                        efficiency: 95,
+                        fuelEfficiency: 8.2,
+                        safetyRating: 4.9,
+                        score: 95
+                    },
+                    {
+                        rank: 2,
+                        name: 'Петров В.М.',
+                        vehicle: 'Ж678МН',
+                        avatar: 'П',
+                        profit: 710000,
+                        efficiency: 89,
+                        fuelEfficiency: 8.8,
+                        safetyRating: 4.7,
+                        score: 89
+                    },
+                    {
+                        rank: 3,
+                        name: 'Сидоров К.И.',
+                        vehicle: 'А123БВ',
+                        avatar: 'С',
+                        profit: 650000,
+                        efficiency: 82,
+                        fuelEfficiency: 9.1,
+                        safetyRating: 4.5,
+                        score: 82
+                    }
+                ],
+                allDrivers: [
+                    {
+                        name: 'Иванов А.С.',
+                        vehicle: 'Г789ЕЖ',
+                        avatar: 'И',
+                        experience: '8 лет',
+                        profit: 780000,
+                        efficiency: 95,
+                        fuelConsumption: 8.2,
+                        safetyRating: 4.9,
+                        status: 'active',
+                        category: 'excellent'
+                    },
+                    {
+                        name: 'Петров В.М.',
+                        vehicle: 'Ж678МН',
+                        avatar: 'П',
+                        experience: '5 лет',
+                        profit: 710000,
+                        efficiency: 89,
+                        fuelConsumption: 8.8,
+                        safetyRating: 4.7,
+                        status: 'active',
+                        category: 'excellent'
+                    },
+                    {
+                        name: 'Сидоров К.И.',
+                        vehicle: 'А123БВ',
+                        avatar: 'С',
+                        experience: '12 лет',
+                        profit: 650000,
+                        efficiency: 82,
+                        fuelConsumption: 9.1,
+                        safetyRating: 4.5,
+                        status: 'active',
+                        category: 'excellent'
+                    },
+                    {
+                        name: 'Козлов Д.А.',
+                        vehicle: 'Е345КЛ',
+                        avatar: 'К',
+                        experience: '3 года',
+                        profit: 590000,
+                        efficiency: 75,
+                        fuelConsumption: 9.8,
+                        safetyRating: 4.2,
+                        status: 'attention',
+                        category: 'attention'
+                    },
+                    {
+                        name: 'Морозов И.П.',
+                        vehicle: 'В456ГД',
+                        avatar: 'М',
+                        experience: '2 года',
+                        profit: 420000,
+                        efficiency: 65,
+                        fuelConsumption: 11.2,
+                        safetyRating: 3.8,
+                        status: 'attention',
+                        category: 'attention'
+                    },
+                    {
+                        name: 'Волков С.Н.',
+                        vehicle: 'Д012ЗИ',
+                        avatar: 'В',
+                        experience: '1 год',
+                        profit: 320000,
+                        efficiency: 45,
+                        fuelConsumption: 12.5,
+                        safetyRating: 3.2,
+                        status: 'critical',
+                        category: 'critical'
+                    }
+                ]
+            };
+            
+            driversData = mockData;
+            renderDriversData(mockData);
+        }
+
+        function renderDriversData(data) {
+            renderTopPerformers(data.topPerformers);
+            renderDriversTable(data.allDrivers);
+            console.log('👨‍💼 Drivers: All components rendered successfully');
+        }
+
+        function renderTopPerformers(performers) {
+            const container = document.getElementById('topPerformers');
+            const rankClasses = ['gold', 'silver', 'bronze'];
+            const rankEmojis = ['🥇', '🥈', '🥉'];
+            
+            container.innerHTML = performers.map((performer, index) => `
+                <div class="performer-card ${rankClasses[index]}">
+                    <div class="performer-rank ${rankClasses[index]}">
+                        ${rankEmojis[index]}
+                    </div>
+                    <div class="performer-avatar">
+                        ${performer.avatar}
+                    </div>
+                    <div class="performer-name">${performer.name}</div>
+                    <div class="performer-vehicle">${performer.vehicle}</div>
+                    <div class="performer-stats">
+                        <div class="stat-item">
+                            <div class="stat-value">₽${(performer.profit / 1000).toFixed(0)}K</div>
+                            <div class="stat-label">Прибыль</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${performer.fuelEfficiency}</div>
+                            <div class="stat-label">л/100км</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${performer.safetyRating}</div>
+                            <div class="stat-label">Безопасность</div>
+                        </div>
+                    </div>
+                    <div class="performer-score">${performer.score} баллов</div>
+                </div>
+            `).join('');
+        }
+
+        function renderDriversTable(drivers) {
+            const tbody = document.getElementById('driversTableBody');
+            
+            const filteredDrivers = currentFilter === 'all' 
+                ? drivers 
+                : drivers.filter(driver => driver.category === currentFilter);
+            
+            tbody.innerHTML = filteredDrivers.map(driver => {
+                const efficiencyClass = driver.efficiency >= 80 ? 'excellent' : 
+                                      driver.efficiency >= 60 ? 'good' : 'poor';
+                
+                return `
+                    <tr>
+                        <td>
+                            <div class="driver-info">
+                                <div class="driver-avatar-small">
+                                    ${driver.avatar}
+                                </div>
+                                <div class="driver-details">
+                                    <div class="driver-name-table">${driver.name}</div>
+                                    <div class="driver-experience">${driver.experience} опыта</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>${driver.vehicle}</td>
+                        <td>₽${(driver.profit / 1000).toFixed(0)}K</td>
+                        <td>
+                            <div class="performance-indicator">
+                                <div class="performance-bar">
+                                    <div class="performance-fill ${efficiencyClass}" 
+                                         style="width: ${driver.efficiency}%"></div>
+                                </div>
+                                <span class="performance-score-table ${efficiencyClass}">
+                                    ${driver.efficiency}%
+                                </span>
+                            </div>
+                        </td>
+                        <td>${driver.fuelConsumption} л/100км</td>
+                        <td>⭐ ${driver.safetyRating}/5.0</td>
+                        <td>
+                            <span class="status-badge ${driver.status}">
+                                ${driver.status === 'active' ? 'Активен' : 
+                                  driver.status === 'attention' ? 'Внимание' : 'Критично'}
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function filterDrivers(filter) {
+            currentFilter = filter;
+            
+            // Update active button
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Re-render table with filter
+            if (driversData) {
+                renderDriversTable(driversData.allDrivers);
+            }
+            
+            console.log('👨‍💼 Drivers: Applied filter:', filter);
+        }
+
+        function updateDriversData() {
+            console.log('👨‍💼 Drivers: Updating for new filters:', currentFilters);
+            showLoadingState();
+            
+            setTimeout(() => {
+                loadDriversData();
+            }, 500);
+        }
+
+        // Notify parent that drivers service is ready
+        window.addEventListener('load', function() {
+            window.parent.postMessage({
+                type: 'service_ready',
+                payload: {
+                    service: 'drivers',
+                    capabilities: ['performance_ranking', 'driver_analytics', 'filtering', 'safety_monitoring']
+                }
+            }, '*');
+        });
+    </script>
+</body>
+</html>
