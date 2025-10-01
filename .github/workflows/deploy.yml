@@ -1,0 +1,22 @@
+name: Auto Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: 195.26.226.37
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /var/www/html
+            git pull origin main
+            chown -R www-data:www-data /var/www/html
+            systemctl reload nginx
+            echo "Deploy completed at $(date)"
