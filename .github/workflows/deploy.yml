@@ -15,8 +15,22 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            echo "🚀 Starting deployment..."
             cd /var/www/html
+
+            # Обновление кода
+            git fetch origin
+            git reset --hard origin/main
             git pull origin main
-            chown -R www-data:www-data /var/www/html
-            systemctl reload nginx
-            echo "Deploy completed at $(date)"
+
+            # Запуск скрипта деплоя
+            if [ -f deploy.sh ]; then
+              chmod +x deploy.sh
+              bash deploy.sh
+            else
+              echo "⚠️ deploy.sh not found, using basic deployment"
+              chown -R www-data:www-data /var/www/html
+              systemctl reload nginx
+            fi
+
+            echo "✅ Deploy completed at $(date)"
