@@ -15,18 +15,18 @@
         }
 
         :root {
-            --bg-primary: #0f172a;
-            --bg-secondary: #1e293b;
-            --bg-tertiary: #334155;
-            --text-primary: #f1f5f9;
-            --text-secondary: #94a3b8;
-            --text-tertiary: #64748b;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-tertiary: #f1f5f9;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-tertiary: #94a3b8;
             --accent-primary: #3b82f6;
             --accent-secondary: #06b6d4;
             --success: #10b981;
             --warning: #f59e0b;
             --danger: #ef4444;
-            --border-color: #334155;
+            --border-color: #e2e8f0;
         }
 
         body {
@@ -40,13 +40,14 @@
         /* Sidebar */
         .sidebar {
             width: 280px;
-            background: var(--bg-secondary);
+            background: var(--bg-primary);
             border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
             position: fixed;
             height: 100vh;
             overflow-y: auto;
+            box-shadow: 2px 0 8px rgba(0,0,0,0.05);
         }
 
         .sidebar-header {
@@ -124,7 +125,7 @@
         }
 
         .topbar {
-            background: var(--bg-secondary);
+            background: var(--bg-primary);
             border-bottom: 1px solid var(--border-color);
             padding: 16px 32px;
             display: flex;
@@ -133,6 +134,7 @@
             position: sticky;
             top: 0;
             z-index: 10;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
 
         .topbar-left {
@@ -196,6 +198,7 @@
             flex: 1;
             padding: 32px;
             overflow-y: auto;
+            background: var(--bg-secondary);
         }
 
         .page-header {
@@ -223,16 +226,18 @@
         }
 
         .kpi-card {
-            background: var(--bg-secondary);
+            background: var(--bg-primary);
             border: 1px solid var(--border-color);
             border-radius: 12px;
             padding: 20px;
             transition: all 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
 
         .kpi-card:hover {
             border-color: var(--accent-primary);
             transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
         }
 
         .kpi-header {
@@ -309,10 +314,11 @@
         }
 
         .card {
-            background: var(--bg-secondary);
+            background: var(--bg-primary);
             border: 1px solid var(--border-color);
             border-radius: 12px;
             padding: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
 
         .card-header {
@@ -371,7 +377,7 @@
         thead {
             position: sticky;
             top: 0;
-            background: var(--bg-secondary);
+            background: var(--bg-tertiary);
             z-index: 5;
         }
 
@@ -398,7 +404,7 @@
         }
 
         tbody tr:hover {
-            background: var(--bg-tertiary);
+            background: var(--bg-secondary);
         }
 
         .vehicle-info {
@@ -449,7 +455,7 @@
         }
 
         .top-item {
-            background: var(--bg-tertiary);
+            background: var(--bg-secondary);
             border: 1px solid var(--border-color);
             border-radius: 10px;
             padding: 16px;
@@ -461,6 +467,7 @@
 
         .top-item:hover {
             border-color: var(--accent-primary);
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
         }
 
         .top-rank {
@@ -779,9 +786,9 @@
                     <div class="card-header">
                         <h2 class="card-title">Транспортные средства</h2>
                         <div class="card-actions">
-                            <button class="btn active" onclick="filterTable('all')">Все</button>
-                            <button class="btn" onclick="filterTable('profitable')">Прибыльные</button>
-                            <button class="btn" onclick="filterTable('problematic')">Проблемные</button>
+                            <button class="btn active" onclick="filterTable('all'); return false;">Все</button>
+                            <button class="btn" onclick="filterTable('profitable'); return false;">Прибыльные</button>
+                            <button class="btn" onclick="filterTable('problematic'); return false;">Проблемные</button>
                         </div>
                     </div>
 
@@ -1013,7 +1020,9 @@
 
         function filterTable(filter) {
             currentFilter = filter;
-            document.querySelectorAll('.btn').forEach(btn => btn.classList.remove('active'));
+            // Убираем active у всех кнопок
+            document.querySelectorAll('.card-actions .btn').forEach(btn => btn.classList.remove('active'));
+            // Добавляем active к нажатой кнопке
             event.target.classList.add('active');
             updateTable();
         }
