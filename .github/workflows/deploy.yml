@@ -2,7 +2,9 @@ name: Auto Deploy to Production
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - 'claude/**'
 
 jobs:
   deploy:
@@ -18,10 +20,13 @@ jobs:
             echo "🚀 Starting deployment..."
             cd /var/www/html
 
-            # Обновление кода
+            # Обновление кода (определяем текущую ветку автоматически)
+            BRANCH="${GITHUB_REF#refs/heads/}"
+            echo "Deploying branch: $BRANCH"
             git fetch origin
-            git reset --hard origin/main
-            git pull origin main
+            git checkout "$BRANCH" || git checkout -b "$BRANCH" origin/"$BRANCH"
+            git reset --hard origin/"$BRANCH"
+            git pull origin "$BRANCH"
 
             # Запуск скрипта деплоя
             if [ -f deploy.sh ]; then
