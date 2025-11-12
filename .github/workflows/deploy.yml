@@ -18,15 +18,30 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             echo "🚀 Starting deployment..."
-            cd /var/www/html
+
+            # Создаем директорию для дашборда если её нет
+            mkdir -p /var/www/html/dashboard
+            cd /var/www/html/dashboard
 
             # Обновление кода (определяем текущую ветку автоматически)
             BRANCH="${GITHUB_REF#refs/heads/}"
-            echo "Deploying branch: $BRANCH"
-            git fetch origin
-            git checkout "$BRANCH" || git checkout -b "$BRANCH" origin/"$BRANCH"
-            git reset --hard origin/"$BRANCH"
-            git pull origin "$BRANCH"
+            echo "Deploying branch: $BRANCH to /dashboard"
+
+            # Клонируем или обновляем репозиторий
+            if [ ! -d ".git" ]; then
+              echo "Клонируем репозиторий..."
+              cd /var/www/html
+              rm -rf dashboard
+              git clone https://github.com/Igor1618/transport-dashboard-system.git dashboard
+              cd dashboard
+              git checkout "$BRANCH"
+            else
+              echo "Обновляем репозиторий..."
+              git fetch origin
+              git checkout "$BRANCH" || git checkout -b "$BRANCH" origin/"$BRANCH"
+              git reset --hard origin/"$BRANCH"
+              git pull origin "$BRANCH"
+            fi
 
             # Запуск скрипта деплоя
             if [ -f deploy.sh ]; then
