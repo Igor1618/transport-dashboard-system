@@ -938,19 +938,25 @@
                     <div class="kpi-card">
                         <div class="kpi-header">
                             <div>
-                                <div class="kpi-label">Средняя прибыль на машину</div>
-                                <div class="kpi-value" id="avgProfitPerVehicle">0 ₽</div>
+                                <div class="kpi-label">Медианная прибыль</div>
+                                <div class="kpi-value" id="medianProfitValue">0 ₽</div>
+                                <div class="kpi-change" style="color: var(--text-tertiary); font-size: 12px;">
+                                    <span>Среднее значение по парку</span>
+                                </div>
                             </div>
                             <div class="kpi-icon green">
-                                <i class="fas fa-truck"></i>
+                                <i class="fas fa-chart-line"></i>
                             </div>
                         </div>
                     </div>
                     <div class="kpi-card">
                         <div class="kpi-header">
                             <div>
-                                <div class="kpi-label">Средняя эффективность</div>
-                                <div class="kpi-value" id="avgEfficiency">0%</div>
+                                <div class="kpi-label">Медианная эффективность</div>
+                                <div class="kpi-value" id="medianEfficiencyValue">0%</div>
+                                <div class="kpi-change" style="color: var(--text-tertiary); font-size: 12px;">
+                                    <span>Базовый показатель</span>
+                                </div>
                             </div>
                             <div class="kpi-icon blue">
                                 <i class="fas fa-chart-bar"></i>
@@ -960,10 +966,29 @@
                     <div class="kpi-card">
                         <div class="kpi-header">
                             <div>
-                                <div class="kpi-label">Лучшая машина</div>
-                                <div class="kpi-value" id="topVehicle" style="font-size: 20px;">-</div>
+                                <div class="kpi-label">Выше медианы</div>
+                                <div class="kpi-value" id="aboveMedianCount">0</div>
+                                <div class="kpi-change positive">
+                                    <span id="aboveMedianPercent">0%</span>
+                                    <span style="margin-left: 4px;">машин</span>
+                                </div>
                             </div>
                             <div class="kpi-icon cyan">
+                                <i class="fas fa-arrow-up"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <div>
+                                <div class="kpi-label">Лучшая машина</div>
+                                <div class="kpi-value" id="topVehicle" style="font-size: 20px;">-</div>
+                                <div class="kpi-change positive">
+                                    <span id="topVehicleDeviation">+0 ₽</span>
+                                    <span style="margin-left: 4px;">от медианы</span>
+                                </div>
+                            </div>
+                            <div class="kpi-icon orange">
                                 <i class="fas fa-trophy"></i>
                             </div>
                         </div>
@@ -974,10 +999,10 @@
                 <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; margin-bottom: 24px;">
                     <div class="card">
                         <div class="card-header">
-                            <h2 class="card-title">Распределение доходов</h2>
+                            <h2 class="card-title">Отклонение от медианы прибыли</h2>
                         </div>
                         <div class="chart-container" style="height: 300px;">
-                            <canvas id="incomeChart"></canvas>
+                            <canvas id="deviationChart"></canvas>
                         </div>
                     </div>
                     <div class="card">
@@ -1133,6 +1158,31 @@
         let currentFilter = 'all';
         let profitChart;
         let vehiclesData = [];
+
+        // Utility function to calculate median
+        function calculateMedian(values) {
+            if (values.length === 0) return 0;
+            const sorted = [...values].sort((a, b) => a - b);
+            const mid = Math.floor(sorted.length / 2);
+            return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        }
+
+        // Calculate statistics including median
+        function calculateStats(vehiclesData) {
+            const profits = vehiclesData.map(v => v.profit);
+            const incomes = vehiclesData.map(v => v.income);
+            const expenses = vehiclesData.map(v => v.expenses);
+            const efficiencies = vehiclesData.map(v => v.efficiency);
+
+            return {
+                medianProfit: calculateMedian(profits),
+                medianIncome: calculateMedian(incomes),
+                medianExpenses: calculateMedian(expenses),
+                medianEfficiency: calculateMedian(efficiencies),
+                avgProfit: profits.reduce((a, b) => a + b, 0) / profits.length,
+                avgEfficiency: efficiencies.reduce((a, b) => a + b, 0) / efficiencies.length
+            };
+        }
 
         function formatNumber(num) {
             return Math.round(num).toLocaleString('ru-RU') + ' ₽';
@@ -1397,8 +1447,16 @@
         function loadVehiclesSection() {
             const grid = document.getElementById('vehiclesGrid');
             const vehicles = getMockData();
+            const stats = calculateStats(vehicles);
 
-            grid.innerHTML = vehicles.map(v => `
+            grid.innerHTML = vehicles.map(v => {
+                const profitDeviation = v.profit - stats.medianProfit;
+                const efficiencyDeviation = v.efficiency - stats.medianEfficiency;
+                const deviationColor = profitDeviation >= 0 ? 'var(--success)' : 'var(--danger)';
+                const deviationIcon = profitDeviation >= 0 ? 'fa-arrow-up' : 'fa-arrow-down';
+                const deviationText = profitDeviation >= 0 ? '+' : '';
+
+                return `
                 <div class="data-card">
                     <div class="data-card-header">
                         <div>
@@ -1411,20 +1469,31 @@
                     </div>
                     <div class="data-card-body">
                         <div class="data-row">
-                            <span class="data-label">Доход</span>
-                            <span class="data-value" style="color: var(--success);">${formatNumber(v.income)}</span>
-                        </div>
-                        <div class="data-row">
-                            <span class="data-label">Расход</span>
-                            <span class="data-value" style="color: var(--danger);">${formatNumber(v.expenses)}</span>
-                        </div>
-                        <div class="data-row">
                             <span class="data-label">Прибыль</span>
                             <span class="data-value" style="color: ${v.profit > 0 ? 'var(--success)' : 'var(--danger)'}; font-weight: 700;">${formatNumber(v.profit)}</span>
                         </div>
+                        <div class="data-row" style="background: ${profitDeviation >= 0 ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)'}; margin: 0 -8px; padding: 8px;">
+                            <span class="data-label" style="display: flex; align-items: center; gap: 4px;">
+                                <i class="fas ${deviationIcon}" style="font-size: 10px; color: ${deviationColor};"></i>
+                                Отклонение от медианы
+                            </span>
+                            <span class="data-value" style="color: ${deviationColor}; font-weight: 700;">
+                                ${deviationText}${formatNumber(Math.abs(profitDeviation))}
+                            </span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">Доход</span>
+                            <span class="data-value" style="color: var(--text-primary);">${formatNumber(v.income)}</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">Расход</span>
+                            <span class="data-value" style="color: var(--text-secondary);">${formatNumber(v.expenses)}</span>
+                        </div>
                         <div class="data-row">
                             <span class="data-label">Эффективность</span>
-                            <span class="data-value">${v.efficiency}%</span>
+                            <span class="data-value" style="color: ${efficiencyDeviation >= 0 ? 'var(--success)' : 'var(--warning)'};">
+                                ${v.efficiency}% ${efficiencyDeviation >= 0 ? '↑' : '↓'}
+                            </span>
                         </div>
                         <div class="data-row">
                             <span class="data-label">Рейсов</span>
@@ -1432,7 +1501,7 @@
                         </div>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
         }
 
         // Mock data for drivers section
@@ -1480,50 +1549,77 @@
         }
 
         // Analytics charts
-        let incomeChartInstance = null;
+        let deviationChartInstance = null;
         let efficiencyChartInstance = null;
         let comparisonChartInstance = null;
 
         function loadAnalyticsSection() {
             const vehicles = getMockData();
+            const stats = calculateStats(vehicles);
 
             // Calculate analytics KPIs
-            const totalProfit = vehicles.reduce((sum, v) => sum + v.profit, 0);
-            const avgProfit = totalProfit / vehicles.length;
-            const avgEff = vehicles.reduce((sum, v) => sum + v.efficiency, 0) / vehicles.length;
-            const topVehicle = vehicles.sort((a, b) => b.profit - a.profit)[0];
+            const sortedVehicles = [...vehicles].sort((a, b) => b.profit - a.profit);
+            const topVehicle = sortedVehicles[0];
+            const aboveMedianCount = vehicles.filter(v => v.profit >= stats.medianProfit).length;
+            const aboveMedianPercent = Math.round((aboveMedianCount / vehicles.length) * 100);
 
-            document.getElementById('avgProfitPerVehicle').textContent = formatNumber(avgProfit);
-            document.getElementById('avgEfficiency').textContent = Math.round(avgEff) + '%';
+            document.getElementById('medianProfitValue').textContent = formatNumber(stats.medianProfit);
+            document.getElementById('medianEfficiencyValue').textContent = Math.round(stats.medianEfficiency) + '%';
+            document.getElementById('aboveMedianCount').textContent = aboveMedianCount + ' из ' + vehicles.length;
+            document.getElementById('aboveMedianPercent').textContent = aboveMedianPercent + '%';
             document.getElementById('topVehicle').textContent = topVehicle.number;
+            document.getElementById('topVehicleDeviation').textContent = '+' + formatNumber(topVehicle.profit - stats.medianProfit);
 
-            // Income Distribution Chart (Pie)
-            const incomeCtx = document.getElementById('incomeChart').getContext('2d');
-            if (incomeChartInstance) incomeChartInstance.destroy();
-            incomeChartInstance = new Chart(incomeCtx, {
-                type: 'doughnut',
+            // Deviation Chart (Bar with positive/negative)
+            const deviationCtx = document.getElementById('deviationChart').getContext('2d');
+            if (deviationChartInstance) deviationChartInstance.destroy();
+
+            const deviations = vehicles.map(v => v.profit - stats.medianProfit);
+            const deviationColors = deviations.map(d => d >= 0 ? 'rgba(16, 185, 129, 0.8)' : 'rgba(239, 68, 68, 0.8)');
+
+            deviationChartInstance = new Chart(deviationCtx, {
+                type: 'bar',
                 data: {
                     labels: vehicles.map(v => v.number),
                     datasets: [{
-                        data: vehicles.map(v => v.income),
-                        backgroundColor: [
-                            'rgba(59, 130, 246, 0.8)',
-                            'rgba(16, 185, 129, 0.8)',
-                            'rgba(245, 158, 11, 0.8)',
-                            'rgba(239, 68, 68, 0.8)',
-                            'rgba(139, 92, 246, 0.8)'
-                        ],
-                        borderWidth: 2,
-                        borderColor: '#ffffff'
+                        label: 'Отклонение от медианы',
+                        data: deviations,
+                        backgroundColor: deviationColors,
+                        borderColor: deviationColors.map(c => c.replace('0.8', '1')),
+                        borderWidth: 2
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: { color: '#64748b', padding: 15 }
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed.y;
+                                    return (value >= 0 ? '+' : '') + formatNumber(value);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                color: '#64748b',
+                                callback: function(value) {
+                                    return (value >= 0 ? '+' : '') + (value / 1000).toFixed(0) + 'k';
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(226, 232, 240, 0.5)',
+                                drawBorder: false
+                            }
+                        },
+                        x: {
+                            ticks: { color: '#64748b' },
+                            grid: { color: 'rgba(226, 232, 240, 0.5)' }
                         }
                     }
                 }
