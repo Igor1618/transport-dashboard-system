@@ -1295,7 +1295,7 @@
         document.getElementById('searchInput').addEventListener('input', updateTable);
 
         // Navigation
-        function showSection(sectionId) {
+        function showSection(sectionId, clickedElement) {
             // Hide all sections
             document.querySelectorAll('.page-section').forEach(section => {
                 section.classList.remove('active');
@@ -1311,7 +1311,9 @@
             document.querySelectorAll('.nav-item').forEach(item => {
                 item.classList.remove('active');
             });
-            event.currentTarget.classList.add('active');
+            if (clickedElement) {
+                clickedElement.classList.add('active');
+            }
 
             // Load data for specific sections
             if (sectionId === 'vehicles') {
@@ -1324,7 +1326,10 @@
         // Initialize navigation
         document.querySelectorAll('.nav-item').forEach((item, index) => {
             const sections = ['dashboard', 'analytics', 'reports', 'vehicles', 'drivers', 'routes', 'contracts', 'settings', 'users'];
-            item.addEventListener('click', () => showSection(sections[index]));
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                showSection(sections[index], this);
+            });
         });
 
         // Mock data for vehicles section
