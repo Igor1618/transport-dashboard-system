@@ -1606,7 +1606,6 @@
                     },
                     scales: {
                         y: {
-                            beginAtZero: true,
                             ticks: {
                                 color: '#64748b',
                                 callback: function(value) {
@@ -1614,7 +1613,18 @@
                                 }
                             },
                             grid: {
-                                color: 'rgba(226, 232, 240, 0.5)',
+                                color: function(context) {
+                                    if (context.tick.value === 0) {
+                                        return '#64748b'; // Darker line at zero
+                                    }
+                                    return 'rgba(226, 232, 240, 0.5)';
+                                },
+                                lineWidth: function(context) {
+                                    if (context.tick.value === 0) {
+                                        return 2; // Thicker line at zero
+                                    }
+                                    return 1;
+                                },
                                 drawBorder: false
                             }
                         },
