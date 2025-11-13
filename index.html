@@ -1560,7 +1560,8 @@
             // Calculate analytics KPIs
             const sortedVehicles = [...vehicles].sort((a, b) => b.profit - a.profit);
             const topVehicle = sortedVehicles[0];
-            const aboveMedianCount = vehicles.filter(v => v.profit >= stats.medianProfit).length;
+            const aboveMedianCount = vehicles.filter(v => v.profit > stats.medianProfit).length;
+            const belowMedianCount = vehicles.filter(v => v.profit < stats.medianProfit).length;
             const aboveMedianPercent = Math.round((aboveMedianCount / vehicles.length) * 100);
 
             document.getElementById('medianProfitValue').textContent = formatNumber(stats.medianProfit);
