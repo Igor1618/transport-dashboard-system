@@ -557,6 +557,96 @@
             min-width: 40px;
         }
 
+        /* Page Sections */
+        .page-section {
+            display: none;
+        }
+
+        .page-section.active {
+            display: block;
+        }
+
+        /* Data Grid for lists */
+        .data-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        .data-card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .data-card:hover {
+            border-color: var(--accent-primary);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .data-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 16px;
+        }
+
+        .data-card-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .data-card-subtitle {
+            font-size: 13px;
+            color: var(--text-tertiary);
+        }
+
+        .data-card-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .data-card-body {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .data-row:last-child {
+            border-bottom: none;
+        }
+
+        .data-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .data-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
         /* Responsive */
         @media (max-width: 1024px) {
             .main-grid {
@@ -673,12 +763,14 @@
 
         <!-- Content -->
         <div class="content">
-            <div class="page-header">
-                <h1 class="page-title">Обзор показателей</h1>
-                <p class="page-subtitle">Мониторинг ключевых метрик транспортной компании</p>
-            </div>
+            <!-- Dashboard Section -->
+            <div id="dashboard-section" class="page-section active">
+                <div class="page-header">
+                    <h1 class="page-title">Обзор показателей</h1>
+                    <p class="page-subtitle">Мониторинг ключевых метрик транспортной компании</p>
+                </div>
 
-            <div id="errorContainer"></div>
+                <div id="errorContainer"></div>
 
             <!-- KPI Cards -->
             <div class="kpi-grid">
@@ -829,6 +921,135 @@
                             <canvas id="profitChart"></canvas>
                         </div>
                     </div>
+                </div>
+            </div>
+            </div>
+            <!-- End Dashboard Section -->
+
+            <!-- Analytics Section -->
+            <div id="analytics-section" class="page-section">
+                <div class="page-header">
+                    <h1 class="page-title">Аналитика</h1>
+                    <p class="page-subtitle">Детальный анализ эффективности транспорта</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Аналитические показатели</h2>
+                    </div>
+                    <p style="color: var(--text-secondary); padding: 20px;">Раздел находится в разработке. Здесь будут представлены детальные графики и диаграммы эффективности транспортных средств.</p>
+                </div>
+            </div>
+
+            <!-- Reports Section -->
+            <div id="reports-section" class="page-section">
+                <div class="page-header">
+                    <h1 class="page-title">Отчеты</h1>
+                    <p class="page-subtitle">Генерация и просмотр отчетов</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Доступные отчеты</h2>
+                    </div>
+                    <p style="color: var(--text-secondary); padding: 20px;">Раздел находится в разработке. Здесь можно будет формировать различные отчеты по работе транспорта.</p>
+                </div>
+            </div>
+
+            <!-- Vehicles Section -->
+            <div id="vehicles-section" class="page-section">
+                <div class="page-header">
+                    <h1 class="page-title">Транспорт</h1>
+                    <p class="page-subtitle">Управление транспортными средствами</p>
+                </div>
+
+                <div class="data-grid" id="vehiclesGrid">
+                    <!-- Vehicles will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Drivers Section -->
+            <div id="drivers-section" class="page-section">
+                <div class="page-header">
+                    <h1 class="page-title">Водители</h1>
+                    <p class="page-subtitle">Управление персоналом водителей</p>
+                </div>
+
+                <div class="data-grid" id="driversGrid">
+                    <!-- Drivers will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Routes Section -->
+            <div id="routes-section" class="page-section">
+                <div class="page-header">
+                    <h1 class="page-title">Маршруты</h1>
+                    <p class="page-subtitle">Планирование и контроль маршрутов</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Активные маршруты</h2>
+                    </div>
+                    <p style="color: var(--text-secondary); padding: 20px;">Раздел находится в разработке. Здесь будет отображаться информация о маршрутах.</p>
+                </div>
+            </div>
+
+            <!-- Contracts Section -->
+            <div id="contracts-section" class="page-section">
+                <div class="page-header">
+                    <h1 class="page-title">Договоры</h1>
+                    <p class="page-subtitle">Управление договорами и контрактами</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Активные договоры</h2>
+                    </div>
+                    <p style="color: var(--text-secondary); padding: 20px;">Раздел находится в разработке. Здесь будет список всех договоров компании.</p>
+                </div>
+            </div>
+
+            <!-- Settings Section -->
+            <div id="settings-section" class="page-section">
+                <div class="page-header">
+                    <h1 class="page-title">Параметры</h1>
+                    <p class="page-subtitle">Настройки системы</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Настройки системы</h2>
+                    </div>
+                    <div style="padding: 20px;">
+                        <div class="data-row">
+                            <span class="data-label">Supabase URL</span>
+                            <span class="data-value">http://195.26.226.37:8000</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">API Version</span>
+                            <span class="data-value">v1.0</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">Статус подключения</span>
+                            <span class="data-value" style="color: var(--success);">Активно</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Section -->
+            <div id="users-section" class="page-section">
+                <div class="page-header">
+                    <h1 class="page-title">Пользователи</h1>
+                    <p class="page-subtitle">Управление пользователями системы</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Пользователи системы</h2>
+                    </div>
+                    <p style="color: var(--text-secondary); padding: 20px;">Раздел находится в разработке. Здесь можно будет управлять пользователями системы.</p>
                 </div>
             </div>
         </div>
@@ -1072,6 +1293,125 @@
         }
 
         document.getElementById('searchInput').addEventListener('input', updateTable);
+
+        // Navigation
+        function showSection(sectionId) {
+            // Hide all sections
+            document.querySelectorAll('.page-section').forEach(section => {
+                section.classList.remove('active');
+            });
+
+            // Show selected section
+            const targetSection = document.getElementById(sectionId + '-section');
+            if (targetSection) {
+                targetSection.classList.add('active');
+            }
+
+            // Update active nav item
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+
+            // Load data for specific sections
+            if (sectionId === 'vehicles') {
+                loadVehiclesSection();
+            } else if (sectionId === 'drivers') {
+                loadDriversSection();
+            }
+        }
+
+        // Initialize navigation
+        document.querySelectorAll('.nav-item').forEach((item, index) => {
+            const sections = ['dashboard', 'analytics', 'reports', 'vehicles', 'drivers', 'routes', 'contracts', 'settings', 'users'];
+            item.addEventListener('click', () => showSection(sections[index]));
+        });
+
+        // Mock data for vehicles section
+        function loadVehiclesSection() {
+            const grid = document.getElementById('vehiclesGrid');
+            const vehicles = getMockData();
+
+            grid.innerHTML = vehicles.map(v => `
+                <div class="data-card">
+                    <div class="data-card-header">
+                        <div>
+                            <div class="data-card-title">${v.number}</div>
+                            <div class="data-card-subtitle">${v.model}</div>
+                        </div>
+                        <div class="data-card-icon blue">
+                            <i class="fas fa-truck"></i>
+                        </div>
+                    </div>
+                    <div class="data-card-body">
+                        <div class="data-row">
+                            <span class="data-label">Доход</span>
+                            <span class="data-value" style="color: var(--success);">${formatNumber(v.income)}</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">Расход</span>
+                            <span class="data-value" style="color: var(--danger);">${formatNumber(v.expenses)}</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">Прибыль</span>
+                            <span class="data-value" style="color: ${v.profit > 0 ? 'var(--success)' : 'var(--danger)'}; font-weight: 700;">${formatNumber(v.profit)}</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">Эффективность</span>
+                            <span class="data-value">${v.efficiency}%</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">Рейсов</span>
+                            <span class="data-value">${v.trips}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Mock data for drivers section
+        function getMockDrivers() {
+            return [
+                { id: 1, name: 'Иванов Иван Иванович', vehicle: 'А123БВ77', trips: 28, rating: 4.8, status: 'active' },
+                { id: 2, name: 'Петров Петр Петрович', vehicle: 'В456ГД78', trips: 25, rating: 4.5, status: 'active' },
+                { id: 3, name: 'Сидоров Алексей Михайлович', vehicle: 'С789ЕЖ50', trips: 27, rating: 4.7, status: 'active' },
+                { id: 4, name: 'Козлов Дмитрий Сергеевич', vehicle: 'Е012ИЙ99', trips: 26, rating: 4.6, status: 'active' },
+                { id: 5, name: 'Смирнов Андрей Владимирович', vehicle: 'К345ЛМ77', trips: 24, rating: 4.4, status: 'vacation' }
+            ];
+        }
+
+        function loadDriversSection() {
+            const grid = document.getElementById('driversGrid');
+            const drivers = getMockDrivers();
+
+            grid.innerHTML = drivers.map(d => `
+                <div class="data-card">
+                    <div class="data-card-header">
+                        <div>
+                            <div class="data-card-title">${d.name}</div>
+                            <div class="data-card-subtitle">Транспорт: ${d.vehicle}</div>
+                        </div>
+                        <div class="data-card-icon ${d.status === 'active' ? 'green' : 'orange'}">
+                            <i class="fas fa-user-tie"></i>
+                        </div>
+                    </div>
+                    <div class="data-card-body">
+                        <div class="data-row">
+                            <span class="data-label">Статус</span>
+                            <span class="badge ${d.status === 'active' ? 'success' : 'warning'}">${d.status === 'active' ? 'Активен' : 'В отпуске'}</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">Рейсов в месяце</span>
+                            <span class="data-value">${d.trips}</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">Рейтинг</span>
+                            <span class="data-value" style="color: var(--success);">${d.rating} <i class="fas fa-star" style="font-size: 12px;"></i></span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
 
         window.addEventListener('load', () => {
             const ctx = document.getElementById('profitChart').getContext('2d');
