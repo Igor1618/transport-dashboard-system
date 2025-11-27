@@ -1,0 +1,191 @@
+const express = require('express');
+const router = express.Router();
+const multer = require('multer');
+const xlsx = require('xlsx');
+const pool = require('../config/database');
+const path = require('path');
+
+// Настройка multer для загрузки файлов
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  },
+});
+
+const upload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext !== '.xlsx' && ext !== '.xls') {
+      return cb(new Error('Только Excel файлы разрешены'));
+    }
+    cb(null, true);
+  },
+});
+
+// POST /api/upload
+router.post('/', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'Файл не загружен' });
+    }
+
+    const filePath = req.file.path;
+    const filename = req.file.originalname;
+
+    // Чтение Excel файла
+    const workbook = xlsx.readFile(filePath);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const data = xlsx.utils.sheet_to_json(worksheet);
+
+    let rowsImported = 0;
+    let rowsSkipped = 0;
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      // Создание записи в import_log
+      const importLogResult = await client.query(
+        'INSERT INTO import_log (filename, rows_imported, rows_skipped, status) VALUES ($1, 0, 0, $2) RETURNING id',
+        [filename, 'processing']
+      );
+      const importBatchId = importLogResult.rows[0].id;
+
+      // Обработка каждой строки
+      for (const row of data) {
+        try {
+          // Маппинг колонок (предполагаем, что заголовки соответствуют ТЗ)
+          const wbTripNumber = row['№ рейса WB'] || row['№ рейса'] || '';
+          const loadingDate = parseDate(row['Дата погрузки']);
+          const unloadingDate = parseDate(row['Дата выгрузки']);
+          const vehicleNumber = row['Номер машины'] || '';
+          const driverName = row['ФИО водителя'] || '';
+          const routeName = row['Маршрут'] || '';
+          const tripAmount = parseFloat(row['Сумма рейса']) || 0;
+          const distanceKm = parseInt(row['Километраж']) || 0;
+          const hasPenalty = (row['Штраф'] === 'есть' || row['Штраф'] === 'Да' || row['Штраф'] === 'да');
+          const penaltyAmount = parseFloat(row['Сумма штрафа']) || 0;
+          const containersCount = parseInt(row['Контейнеры']) || 0;
+          const distributionCenter = row['РЦ'] || '';
+
+          // Проверка обязательных полей
+          if (!wbTripNumber || !loadingDate || !driverName) {
+            rowsSkipped++;
+            continue;
+          }
+
+          // Проверка на дубликаты
+          const existingTrip = await client.query(
+            'SELECT id FROM trips WHERE wb_trip_number = $1',
+            [wbTripNumber]
+          );
+
+          if (existingTrip.rows.length > 0) {
+            rowsSkipped++;
+            continue;
+          }
+
+          // Вставка данных
+          await client.query(
+            `INSERT INTO trips (
+              wb_trip_number, loading_date, unloading_date, vehicle_number,
+              driver_name, route_name, trip_amount, distance_km,
+              has_penalty, penalty_amount, containers_count, distribution_center, import_batch_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+            [
+              wbTripNumber,
+              loadingDate,
+              unloadingDate,
+              vehicleNumber,
+              driverName,
+              routeName,
+              tripAmount,
+              distanceKm,
+              hasPenalty,
+              penaltyAmount,
+              containersCount,
+              distributionCenter,
+              importBatchId,
+            ]
+          );
+
+          rowsImported++;
+        } catch (err) {
+          console.error('Ошибка обработки строки:', err);
+          rowsSkipped++;
+        }
+      }
+
+      // Обновление import_log
+      await client.query(
+        'UPDATE import_log SET rows_imported = $1, rows_skipped = $2, status = $3 WHERE id = $4',
+        [rowsImported, rowsSkipped, 'success', importBatchId]
+      );
+
+      await client.query('COMMIT');
+
+      res.json({
+        success: true,
+        message: 'Файл успешно загружен',
+        rowsImported,
+        rowsSkipped,
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    // Удаление временного файла
+    const fs = require('fs');
+    fs.unlinkSync(filePath);
+  } catch (error) {
+    console.error('Ошибка загрузки файла:', error);
+    res.status(500).json({ message: error.message || 'Ошибка загрузки файла' });
+  }
+});
+
+// Функция парсинга даты
+function parseDate(dateValue) {
+  if (!dateValue) return null;
+
+  // Если дата в формате Excel (число)
+  if (typeof dateValue === 'number') {
+    const excelEpoch = new Date(1899, 11, 30);
+    const date = new Date(excelEpoch.getTime() + dateValue * 86400000);
+    return date.toISOString().split('T')[0];
+  }
+
+  // Если дата в формате строки
+  if (typeof dateValue === 'string') {
+    // Попытка парсинга различных форматов
+    const formats = [
+      /(\d{2})\.(\d{2})\.(\d{4})/, // DD.MM.YYYY
+      /(\d{4})-(\d{2})-(\d{2})/, // YYYY-MM-DD
+    ];
+
+    for (const format of formats) {
+      const match = dateValue.match(format);
+      if (match) {
+        if (format.source.startsWith('(\\d{2})')) {
+          // DD.MM.YYYY
+          return `${match[3]}-${match[2]}-${match[1]}`;
+        } else {
+          // YYYY-MM-DD
+          return dateValue;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+module.exports = router;
