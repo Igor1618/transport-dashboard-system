@@ -33,18 +33,18 @@ const Layout: React.FC = () => {
   const filteredMenuItems = menuItems.filter((item) => hasPermission(item.permission));
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen">
       {/* Sidebar */}
       <aside
-        className={`bg-indigo-900 text-white transition-all duration-300 ${
+        className={`bg-white/10 backdrop-blur-lg text-white border-r border-white/20 transition-all duration-300 ${
           isSidebarOpen ? 'w-64' : 'w-20'
         }`}
       >
-        <div className="flex items-center justify-between p-4 border-b border-indigo-800">
-          {isSidebarOpen && <h1 className="text-xl font-bold">TL196</h1>}
+        <div className="flex items-center justify-between p-4 border-b border-white/20">
+          {isSidebarOpen && <h1 className="text-2xl font-bold drop-shadow-lg">🚛 TL196</h1>}
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-2 rounded hover:bg-indigo-800"
+            className="p-2 rounded-lg hover:bg-white/20 transition-colors"
           >
             {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
@@ -57,7 +57,7 @@ const Layout: React.FC = () => {
               <Link
                 key={item.path}
                 to={item.path}
-                className="flex items-center px-4 py-3 hover:bg-indigo-800 transition-colors"
+                className="flex items-center px-4 py-3 hover:bg-white/20 rounded-lg mx-2 transition-all hover:translate-x-1"
               >
                 <Icon size={20} />
                 {isSidebarOpen && <span className="ml-3">{item.name}</span>}
@@ -66,16 +66,16 @@ const Layout: React.FC = () => {
           })}
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-indigo-800">
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/20">
           {isSidebarOpen && user && (
             <div className="mb-4">
-              <p className="text-sm font-medium">{user.full_name}</p>
-              <p className="text-xs text-indigo-300">{user.role_display}</p>
+              <p className="text-sm font-medium drop-shadow">{user.full_name}</p>
+              <p className="text-xs text-white/70">{user.role_display}</p>
             </div>
           )}
           <button
             onClick={handleLogout}
-            className="flex items-center w-full px-4 py-2 hover:bg-indigo-800 rounded transition-colors"
+            className="flex items-center w-full px-4 py-2 hover:bg-white/20 rounded-lg transition-colors"
           >
             <LogOut size={20} />
             {isSidebarOpen && <span className="ml-3">Выход</span>}
