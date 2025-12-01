@@ -36,7 +36,7 @@ const Layout: React.FC = () => {
     <div className="flex h-screen">
       {/* Sidebar */}
       <aside
-        className={`bg-white/10 backdrop-blur-lg text-white border-r border-white/20 transition-all duration-300 ${
+        className={`bg-gradient-to-b from-indigo-600 to-purple-700 text-white border-r border-white/20 transition-all duration-300 ${
           isSidebarOpen ? 'w-64' : 'w-20'
         }`}
       >
