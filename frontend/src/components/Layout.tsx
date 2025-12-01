@@ -36,9 +36,8 @@ const Layout: React.FC = () => {
     <div className="flex h-screen">
       {/* Sidebar */}
       <aside
-        className={`bg-gradient-to-b from-indigo-600 to-purple-700 text-white border-r border-white/20 transition-all duration-300 ${
-          isSidebarOpen ? 'w-64' : 'w-20'
-        }`}
+        className={`bg-gradient-to-b from-indigo-600 to-purple-700 text-white border-r border-white/20 transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'
+          }`}
       >
         <div className="flex items-center justify-between p-4 border-b border-white/20">
           {isSidebarOpen && <h1 className="text-2xl font-bold drop-shadow-lg">🚛 TL196</h1>}
@@ -71,6 +70,7 @@ const Layout: React.FC = () => {
             <div className="mb-4">
               <p className="text-sm font-medium drop-shadow">{user.full_name}</p>
               <p className="text-xs text-white/70">{user.role_display}</p>
+              <p className="text-[10px] text-white/50 mt-1">v1.1 (Gradient Update)</p>
             </div>
           )}
           <button
