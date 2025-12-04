@@ -67,6 +67,8 @@ export interface UploadResponse {
   message: string;
   rowsImported: number;
   rowsSkipped: number;
+  skipReasons?: string[];
+  totalRows?: number;
 }
 
 // Роли пользователей
