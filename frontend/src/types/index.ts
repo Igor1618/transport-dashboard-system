@@ -69,6 +69,7 @@ export interface UploadResponse {
   rowsSkipped: number;
   skipReasons?: string[];
   totalRows?: number;
+  availableColumns?: string[];
 }
 
 // Роли пользователей
