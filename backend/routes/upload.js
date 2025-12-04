@@ -46,11 +46,12 @@ router.post('/', upload.single('file'), async (req, res) => {
     let rowsImported = 0;
     let rowsSkipped = 0;
     const skipReasons = [];
+    const availableColumns = data.length > 0 ? Object.keys(data[0]) : [];
     const client = await pool.connect();
 
     // Логируем названия колонок для отладки
     if (data.length > 0) {
-      console.log('Доступные колонки в Excel:', Object.keys(data[0]));
+      console.log('Доступные колонки в Excel:', availableColumns);
       console.log('Первая строка данных:', data[0]);
     }
 
@@ -157,6 +158,7 @@ router.post('/', upload.single('file'), async (req, res) => {
         rowsSkipped,
         skipReasons: skipReasons.slice(0, 20), // Возвращаем первые 20 причин
         totalRows: data.length,
+        availableColumns: availableColumns, // Показываем доступные колонки
       });
     } catch (error) {
       await client.query('ROLLBACK');

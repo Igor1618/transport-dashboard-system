@@ -13,6 +13,7 @@ const UploadPage: React.FC = () => {
     rowsSkipped?: number;
     skipReasons?: string[];
     totalRows?: number;
+    availableColumns?: string[];
   } | null>(null);
   const [history, setHistory] = useState<ImportLog[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -52,6 +53,7 @@ const UploadPage: React.FC = () => {
         rowsSkipped: result.rowsSkipped,
         skipReasons: result.skipReasons,
         totalRows: result.totalRows,
+        availableColumns: result.availableColumns,
       });
       setFile(null);
       if (fileInputRef.current) {
@@ -144,10 +146,24 @@ const UploadPage: React.FC = () => {
                     <p className="text-sm mt-1">
                       Всего строк: {uploadResult.totalRows} | Импортировано: {uploadResult.rowsImported} | Пропущено: {uploadResult.rowsSkipped}
                     </p>
+
+                    {uploadResult.availableColumns && uploadResult.availableColumns.length > 0 && (
+                      <details className="mt-3 bg-blue-50 p-3 rounded">
+                        <summary className="cursor-pointer text-sm font-semibold text-blue-900 hover:underline">
+                          📋 Колонки в вашем Excel файле ({uploadResult.availableColumns.length})
+                        </summary>
+                        <ul className="mt-2 text-sm space-y-1 max-h-48 overflow-y-auto text-blue-800">
+                          {uploadResult.availableColumns.map((col, idx) => (
+                            <li key={idx} className="pl-4 font-mono">• {col}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+
                     {uploadResult.skipReasons && uploadResult.skipReasons.length > 0 && (
                       <details className="mt-3">
                         <summary className="cursor-pointer text-sm font-medium hover:underline">
-                          Показать причины пропуска ({uploadResult.skipReasons.length})
+                          ⚠️ Показать причины пропуска ({uploadResult.skipReasons.length})
                         </summary>
                         <ul className="mt-2 text-sm space-y-1 max-h-48 overflow-y-auto">
                           {uploadResult.skipReasons.map((reason, idx) => (
