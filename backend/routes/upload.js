@@ -45,7 +45,14 @@ router.post('/', upload.single('file'), async (req, res) => {
 
     let rowsImported = 0;
     let rowsSkipped = 0;
+    const skipReasons = [];
     const client = await pool.connect();
+
+    // Логируем названия колонок для отладки
+    if (data.length > 0) {
+      console.log('Доступные колонки в Excel:', Object.keys(data[0]));
+      console.log('Первая строка данных:', data[0]);
+    }
 
     try {
       await client.query('BEGIN');
@@ -58,7 +65,8 @@ router.post('/', upload.single('file'), async (req, res) => {
       const importBatchId = importLogResult.rows[0].id;
 
       // Обработка каждой строки
-      for (const row of data) {
+      for (let i = 0; i < data.length; i++) {
+        const row = data[i];
         try {
           // Маппинг колонок (предполагаем, что заголовки соответствуют ТЗ)
           const wbTripNumber = row['№ рейса WB'] || row['№ рейса'] || '';
@@ -77,6 +85,11 @@ router.post('/', upload.single('file'), async (req, res) => {
           // Проверка обязательных полей
           if (!wbTripNumber || !loadingDate || !driverName) {
             rowsSkipped++;
+            const missingFields = [];
+            if (!wbTripNumber) missingFields.push('№ рейса WB');
+            if (!loadingDate) missingFields.push('Дата погрузки');
+            if (!driverName) missingFields.push('ФИО водителя');
+            skipReasons.push(`Строка ${i + 2}: отсутствуют поля ${missingFields.join(', ')}`);
             continue;
           }
 
@@ -88,6 +101,7 @@ router.post('/', upload.single('file'), async (req, res) => {
 
           if (existingTrip.rows.length > 0) {
             rowsSkipped++;
+            skipReasons.push(`Строка ${i + 2}: дубликат рейса ${wbTripNumber}`);
             continue;
           }
 
@@ -119,6 +133,7 @@ router.post('/', upload.single('file'), async (req, res) => {
         } catch (err) {
           console.error('Ошибка обработки строки:', err);
           rowsSkipped++;
+          skipReasons.push(`Строка ${i + 2}: ошибка - ${err.message}`);
         }
       }
 
@@ -130,11 +145,18 @@ router.post('/', upload.single('file'), async (req, res) => {
 
       await client.query('COMMIT');
 
+      // Логируем первые 10 причин пропуска для отладки
+      if (skipReasons.length > 0) {
+        console.log('Первые причины пропуска строк:', skipReasons.slice(0, 10));
+      }
+
       res.json({
         success: true,
-        message: 'Файл успешно загружен',
+        message: `Файл обработан: импортировано ${rowsImported}, пропущено ${rowsSkipped}`,
         rowsImported,
         rowsSkipped,
+        skipReasons: skipReasons.slice(0, 20), // Возвращаем первые 20 причин
+        totalRows: data.length,
       });
     } catch (error) {
       await client.query('ROLLBACK');

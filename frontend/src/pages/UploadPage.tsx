@@ -11,6 +11,8 @@ const UploadPage: React.FC = () => {
     message: string;
     rowsImported?: number;
     rowsSkipped?: number;
+    skipReasons?: string[];
+    totalRows?: number;
   } | null>(null);
   const [history, setHistory] = useState<ImportLog[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -48,6 +50,8 @@ const UploadPage: React.FC = () => {
         message: result.message,
         rowsImported: result.rowsImported,
         rowsSkipped: result.rowsSkipped,
+        skipReasons: result.skipReasons,
+        totalRows: result.totalRows,
       });
       setFile(null);
       if (fileInputRef.current) {
@@ -133,12 +137,26 @@ const UploadPage: React.FC = () => {
               ) : (
                 <XCircle size={24} className="mr-3" />
               )}
-              <div>
+              <div className="flex-1">
                 <p className="font-medium">{uploadResult.message}</p>
                 {uploadResult.success && (
-                  <p className="text-sm mt-1">
-                    Импортировано: {uploadResult.rowsImported} | Пропущено: {uploadResult.rowsSkipped}
-                  </p>
+                  <>
+                    <p className="text-sm mt-1">
+                      Всего строк: {uploadResult.totalRows} | Импортировано: {uploadResult.rowsImported} | Пропущено: {uploadResult.rowsSkipped}
+                    </p>
+                    {uploadResult.skipReasons && uploadResult.skipReasons.length > 0 && (
+                      <details className="mt-3">
+                        <summary className="cursor-pointer text-sm font-medium hover:underline">
+                          Показать причины пропуска ({uploadResult.skipReasons.length})
+                        </summary>
+                        <ul className="mt-2 text-sm space-y-1 max-h-48 overflow-y-auto">
+                          {uploadResult.skipReasons.map((reason, idx) => (
+                            <li key={idx} className="pl-4">• {reason}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                  </>
                 )}
               </div>
             </div>
