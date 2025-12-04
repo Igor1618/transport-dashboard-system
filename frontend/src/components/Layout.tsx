@@ -36,10 +36,10 @@ const Layout: React.FC = () => {
     <div className="flex h-screen">
       {/* Sidebar */}
       <aside
-        className={`bg-gradient-to-b from-indigo-600 to-purple-700 text-white border-r border-white/20 transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'
+        className={`bg-[#1e1e2d] text-white transition-all duration-300 flex flex-col shadow-xl ${isSidebarOpen ? 'w-64' : 'w-20'
           }`}
       >
-        <div className="flex items-center justify-between p-4 border-b border-white/20">
+        <div className="flex items-center justify-between p-4 border-b border-gray-700">
           {isSidebarOpen && <h1 className="text-2xl font-bold drop-shadow-lg">🚛 TL196</h1>}
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -56,7 +56,7 @@ const Layout: React.FC = () => {
               <Link
                 key={item.path}
                 to={item.path}
-                className="flex items-center px-4 py-3 hover:bg-white/20 rounded-lg mx-2 transition-all hover:translate-x-1"
+                className="flex items-center px-4 py-3 hover:bg-white/10 rounded-lg mx-2 transition-all hover:translate-x-1 text-gray-300 hover:text-white"
               >
                 <Icon size={20} />
                 {isSidebarOpen && <span className="ml-3">{item.name}</span>}
@@ -65,17 +65,17 @@ const Layout: React.FC = () => {
           })}
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/20">
+        <div className="mt-auto p-4 border-t border-gray-700">
           {isSidebarOpen && user && (
             <div className="mb-4">
               <p className="text-sm font-medium drop-shadow">{user.full_name}</p>
               <p className="text-xs text-white/70">{user.role_display}</p>
-              <p className="text-[10px] text-white/50 mt-1">v1.1 (Gradient Update)</p>
+              <p className="text-[10px] text-gray-500 mt-1">v2.0 (Clean Design)</p>
             </div>
           )}
           <button
             onClick={handleLogout}
-            className="flex items-center w-full px-4 py-2 hover:bg-white/20 rounded-lg transition-colors"
+            className="flex items-center w-full px-4 py-2 hover:bg-white/10 rounded-lg transition-colors text-gray-300 hover:text-white"
           >
             <LogOut size={20} />
             {isSidebarOpen && <span className="ml-3">Выход</span>}
