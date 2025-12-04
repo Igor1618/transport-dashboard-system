@@ -49,7 +49,17 @@ export interface SalaryData {
   total_distance: number;
   total_revenue: number;
   total_penalties: number;
+  gross_salary: number;
   net_salary: number;
+}
+
+export interface RouteRate {
+  id: number;
+  route_name: string;
+  rate_per_trip: number;
+  is_active: boolean;
+  trips_count: number;
+  drivers_count: number;
 }
 
 export interface ImportLog {

@@ -9,25 +9,27 @@ router.get('/', async (req, res) => {
 
     let query = `
       SELECT
-        driver_name,
-        COUNT(*) as trips_count,
-        COALESCE(SUM(distance_km), 0) as total_distance,
-        COALESCE(SUM(trip_amount), 0) as total_revenue,
-        COALESCE(SUM(penalty_amount), 0) as total_penalties,
-        COALESCE(SUM(trip_amount) - SUM(penalty_amount), 0) as net_salary
-      FROM trips
+        t.driver_name,
+        COUNT(t.id) as trips_count,
+        COALESCE(SUM(t.distance_km), 0) as total_distance,
+        COALESCE(SUM(t.trip_amount), 0) as total_revenue,
+        COALESCE(SUM(t.penalty_amount), 0) as total_penalties,
+        COALESCE(SUM(COALESCE(rr.rate_per_trip, 0)), 0) as gross_salary,
+        COALESCE(SUM(COALESCE(rr.rate_per_trip, 0)) - SUM(t.penalty_amount), 0) as net_salary
+      FROM trips t
+      LEFT JOIN route_rates rr ON t.route_name = rr.route_name AND rr.is_active = true
     `;
 
     const params = [];
 
     // Фильтр по месяцу
     if (month) {
-      query += ` WHERE DATE_TRUNC('month', loading_date) = DATE_TRUNC('month', $1::date)`;
+      query += ` WHERE DATE_TRUNC('month', t.loading_date) = DATE_TRUNC('month', $1::date)`;
       params.push(`${month}-01`);
     }
 
     query += `
-      GROUP BY driver_name
+      GROUP BY t.driver_name
       ORDER BY net_salary DESC
     `;
 

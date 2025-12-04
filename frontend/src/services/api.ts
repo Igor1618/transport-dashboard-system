@@ -7,6 +7,7 @@ import type {
   SalaryData,
   ImportLog,
   UploadResponse,
+  RouteRate,
 } from '../types';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
@@ -60,6 +61,35 @@ export const getSalary = async (month?: string): Promise<SalaryData[]> => {
 export const getImportHistory = async (): Promise<ImportLog[]> => {
   const response = await api.get<ImportLog[]>('/import-history');
   return response.data;
+};
+
+// Получение списка маршрутов с тарифами
+export const getRoutes = async (): Promise<RouteRate[]> => {
+  const response = await api.get<RouteRate[]>('/routes');
+  return response.data;
+};
+
+// Обновление тарифа маршрута
+export const updateRoute = async (
+  id: number,
+  data: { rate_per_trip?: number; is_active?: boolean }
+): Promise<RouteRate> => {
+  const response = await api.put<RouteRate>(`/routes/${id}`, data);
+  return response.data;
+};
+
+// Создание нового маршрута с тарифом
+export const createRoute = async (data: {
+  route_name: string;
+  rate_per_trip: number;
+}): Promise<RouteRate> => {
+  const response = await api.post<RouteRate>('/routes', data);
+  return response.data;
+};
+
+// Удаление маршрута
+export const deleteRoute = async (id: number): Promise<void> => {
+  await api.delete(`/routes/${id}`);
 };
 
 export default api;

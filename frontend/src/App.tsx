@@ -7,6 +7,7 @@ import DashboardPage from './pages/DashboardPage';
 import TripsPage from './pages/TripsPage';
 import SalaryPage from './pages/SalaryPage';
 import UploadPage from './pages/UploadPage';
+import RoutesPage from './pages/RoutesPage';
 
 // Компонент для защищенных маршрутов
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -34,6 +35,7 @@ const App: React.FC = () => {
             <Route index element={<DashboardPage />} />
             <Route path="trips" element={<TripsPage />} />
             <Route path="salary" element={<SalaryPage />} />
+            <Route path="routes" element={<RoutesPage />} />
             <Route path="upload" element={<UploadPage />} />
           </Route>
 

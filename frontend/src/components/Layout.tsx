@@ -10,6 +10,7 @@ import {
   LogOut,
   Menu,
   X,
+  Map,
 } from 'lucide-react';
 
 const Layout: React.FC = () => {
@@ -26,6 +27,7 @@ const Layout: React.FC = () => {
     { name: 'Дашборд', path: '/', icon: LayoutDashboard, permission: 'dashboard' },
     { name: 'Рейсы', path: '/trips', icon: Truck, permission: 'trips' },
     { name: 'Зарплаты', path: '/salary', icon: DollarSign, permission: 'salary' },
+    { name: 'Тарифы', path: '/routes', icon: Map, permission: 'salary' },
     { name: 'Водители', path: '/drivers', icon: Users, permission: 'drivers' },
     { name: 'Загрузка', path: '/upload', icon: Upload, permission: 'upload' },
   ];
