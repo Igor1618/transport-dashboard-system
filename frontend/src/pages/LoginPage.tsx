@@ -83,11 +83,6 @@ const LoginPage: React.FC = () => {
             {isLoading ? 'Вход...' : 'Войти'}
           </button>
         </form>
-
-        <div className="mt-6 text-center text-sm text-gray-600">
-          <p>Тестовый доступ:</p>
-          <p className="font-mono mt-1">IgorL / Director123!</p>
-        </div>
       </div>
     </div>
   );
