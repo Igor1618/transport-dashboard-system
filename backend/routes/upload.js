@@ -69,17 +69,17 @@ router.post('/', upload.single('file'), async (req, res) => {
       for (let i = 0; i < data.length; i++) {
         const row = data[i];
         try {
-          // Маппинг колонок (предполагаем, что заголовки соответствуют ТЗ)
-          const wbTripNumber = row['№ рейса WB'] || row['№ рейса'] || '';
-          const loadingDate = parseDate(row['Дата погрузки']);
-          const unloadingDate = parseDate(row['Дата выгрузки']);
-          const vehicleNumber = row['Номер машины'] || '';
-          const driverName = row['ФИО водителя'] || '';
+          // Маппинг колонок для файла Wildberries
+          const wbTripNumber = String(row['№'] || '');  // Номер рейса (в Excel число)
+          const loadingDate = parseDate(row['Дата открытия']);  // Формат: DD-MM-YYYY HH:MM
+          const unloadingDate = parseDate(row['Дата закрытия']);
+          const vehicleNumber = row['Номер ТС'] || '';
+          const driverName = row['ФИО Водителя'] || '';  // С заглавной В!
           const routeName = row['Маршрут'] || '';
-          const tripAmount = parseFloat(row['Сумма рейса']) || 0;
+          const tripAmount = parseFloat(row['Сумма путевого листа']) || 0;
           const distanceKm = parseInt(row['Километраж']) || 0;
-          const hasPenalty = (row['Штраф'] === 'есть' || row['Штраф'] === 'Да' || row['Штраф'] === 'да');
-          const penaltyAmount = parseFloat(row['Сумма штрафа']) || 0;
+          const hasPenalty = (String(row['Штраф'] || '').trim().toLowerCase() === 'да');
+          const penaltyAmount = parseFloat(row['Сумма штрафов']) || 0;
           const containersCount = parseInt(row['Контейнеры']) || 0;
           const distributionCenter = row['РЦ'] || '';
 
@@ -87,9 +87,9 @@ router.post('/', upload.single('file'), async (req, res) => {
           if (!wbTripNumber || !loadingDate || !driverName) {
             rowsSkipped++;
             const missingFields = [];
-            if (!wbTripNumber) missingFields.push('№ рейса WB');
-            if (!loadingDate) missingFields.push('Дата погрузки');
-            if (!driverName) missingFields.push('ФИО водителя');
+            if (!wbTripNumber) missingFields.push('№');
+            if (!loadingDate) missingFields.push('Дата открытия');
+            if (!driverName) missingFields.push('ФИО Водителя');
             skipReasons.push(`Строка ${i + 2}: отсутствуют поля ${missingFields.join(', ')}`);
             continue;
           }
@@ -191,6 +191,7 @@ function parseDate(dateValue) {
   if (typeof dateValue === 'string') {
     // Попытка парсинга различных форматов
     const formats = [
+      /(\d{2})-(\d{2})-(\d{4})\s+\d{2}:\d{2}/, // DD-MM-YYYY HH:MM (Wildberries)
       /(\d{2})\.(\d{2})\.(\d{4})/, // DD.MM.YYYY
       /(\d{4})-(\d{2})-(\d{2})/, // YYYY-MM-DD
     ];
@@ -198,12 +199,15 @@ function parseDate(dateValue) {
     for (const format of formats) {
       const match = dateValue.match(format);
       if (match) {
-        if (format.source.startsWith('(\\d{2})')) {
-          // DD.MM.YYYY
+        if (format.source.startsWith('(\\d{2})-(\\d{2})-(\\d{4})')) {
+          // DD-MM-YYYY HH:MM → YYYY-MM-DD
+          return `${match[3]}-${match[2]}-${match[1]}`;
+        } else if (format.source.startsWith('(\\d{2})')) {
+          // DD.MM.YYYY → YYYY-MM-DD
           return `${match[3]}-${match[2]}-${match[1]}`;
         } else {
-          // YYYY-MM-DD
-          return dateValue;
+          // YYYY-MM-DD (уже в правильном формате)
+          return match[0].split(' ')[0]; // убираем время если есть
         }
       }
     }

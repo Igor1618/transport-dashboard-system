@@ -247,24 +247,31 @@ const UploadPage: React.FC = () => {
 
       {/* Инструкция */}
       <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-        <h3 className="text-lg font-bold text-blue-900 mb-3">Формат файла</h3>
+        <h3 className="text-lg font-bold text-blue-900 mb-3">Формат файла Wildberries</h3>
         <p className="text-blue-800 mb-3">
-          Excel файл должен содержать следующие колонки:
+          Excel файл от Wildberries должен содержать следующие колонки:
         </p>
-        <ul className="list-disc list-inside text-blue-800 space-y-1">
-          <li>№ рейса WB</li>
-          <li>Дата погрузки</li>
-          <li>Дата выгрузки</li>
-          <li>Номер машины</li>
-          <li>ФИО водителя</li>
-          <li>Маршрут</li>
-          <li>Сумма рейса</li>
-          <li>Километраж</li>
-          <li>Штраф (есть/нет)</li>
-          <li>Сумма штрафа</li>
-          <li>Контейнеры</li>
-          <li>РЦ (распределительный центр)</li>
-        </ul>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <ul className="list-disc list-inside text-blue-800 space-y-1">
+            <li><code className="bg-blue-100 px-1 rounded">№</code> - номер рейса WB</li>
+            <li><code className="bg-blue-100 px-1 rounded">Дата открытия</code> - дата погрузки</li>
+            <li><code className="bg-blue-100 px-1 rounded">Дата закрытия</code> - дата выгрузки</li>
+            <li><code className="bg-blue-100 px-1 rounded">Номер ТС</code> - госномер машины</li>
+            <li><code className="bg-blue-100 px-1 rounded">ФИО Водителя</code> - полное ФИО</li>
+            <li><code className="bg-blue-100 px-1 rounded">Маршрут</code> - название маршрута</li>
+          </ul>
+          <ul className="list-disc list-inside text-blue-800 space-y-1">
+            <li><code className="bg-blue-100 px-1 rounded">Сумма путевого листа</code> - сумма в рублях</li>
+            <li><code className="bg-blue-100 px-1 rounded">Километраж</code> - количество км</li>
+            <li><code className="bg-blue-100 px-1 rounded">Штраф</code> - "Да" или пусто</li>
+            <li><code className="bg-blue-100 px-1 rounded">Сумма штрафов</code> - сумма штрафа</li>
+            <li><code className="bg-blue-100 px-1 rounded">Контейнеры</code> - количество</li>
+            <li><code className="bg-blue-100 px-1 rounded">РЦ</code> - распределительный центр</li>
+          </ul>
+        </div>
+        <p className="text-sm text-blue-700 mt-3">
+          💡 Файл автоматически определяет колонки по названию. Формат дат: DD-MM-YYYY HH:MM
+        </p>
       </div>
     </div>
   );
