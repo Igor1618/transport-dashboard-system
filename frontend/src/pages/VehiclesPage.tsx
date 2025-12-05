@@ -57,9 +57,11 @@ const VehiclesPage: React.FC = () => {
   };
 
   const totalRevenue = vehicleStats.reduce((sum, item) => sum + (Number(item.total_revenue) || 0), 0);
+  const totalRevenueWithVat = vehicleStats.reduce((sum, item) => sum + (Number(item.total_revenue_with_vat) || 0), 0);
   const totalDistance = vehicleStats.reduce((sum, item) => sum + (Number(item.total_distance) || 0), 0);
   const totalTrips = vehicleStats.reduce((sum, item) => sum + (Number(item.trips_count) || 0), 0);
   const avgRevenuePerKm = totalDistance > 0 ? totalRevenue / totalDistance : 0;
+  const avgRevenuePerKmWithVat = totalDistance > 0 ? totalRevenueWithVat / totalDistance : 0;
 
   if (isLoading) {
     return (
@@ -98,17 +100,32 @@ const VehiclesPage: React.FC = () => {
       </div>
 
       {/* Общая статистика */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center">
             <div className="bg-green-100 p-3 rounded-lg">
               <TrendingUp className="text-green-600" size={24} />
             </div>
             <div className="ml-4">
-              <p className="text-sm text-gray-600">Общая выручка</p>
+              <p className="text-sm text-gray-600">Выручка без НДС</p>
               <p className="text-2xl font-bold text-gray-900">
                 {totalRevenue.toLocaleString('ru-RU')} ₽
               </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="bg-emerald-100 p-3 rounded-lg">
+              <TrendingUp className="text-emerald-600" size={24} />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-600">Выручка с НДС</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {totalRevenueWithVat.toLocaleString('ru-RU')} ₽
+              </p>
+              <p className="text-xs text-gray-500">НДС 20%</p>
             </div>
           </div>
         </div>
@@ -148,8 +165,11 @@ const VehiclesPage: React.FC = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm text-gray-600">Выручка/км</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-xl font-bold text-gray-900">
                 {avgRevenuePerKm.toFixed(2)} ₽
+              </p>
+              <p className="text-sm text-emerald-600 font-medium">
+                {avgRevenuePerKmWithVat.toFixed(2)} ₽ с НДС
               </p>
             </div>
           </div>
@@ -174,7 +194,10 @@ const VehiclesPage: React.FC = () => {
                   Км
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Выручка
+                  Без НДС
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  С НДС
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Водителей
@@ -183,7 +206,10 @@ const VehiclesPage: React.FC = () => {
                   Раб. дней
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  ₽/км
+                  ₽/км без НДС
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  ₽/км с НДС
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Рейсов/день
@@ -193,7 +219,7 @@ const VehiclesPage: React.FC = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {vehicleStats.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-4 text-center text-gray-500">
+                  <td colSpan={11} className="px-6 py-4 text-center text-gray-500">
                     Нет данных за выбранный период
                   </td>
                 </tr>
@@ -220,6 +246,9 @@ const VehiclesPage: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
                         {Number(vehicle.total_revenue || 0).toLocaleString('ru-RU')} ₽
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-emerald-600">
+                        {Number(vehicle.total_revenue_with_vat || 0).toLocaleString('ru-RU')} ₽
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {Number(vehicle.drivers_count) || 0}
                       </td>
@@ -229,13 +258,16 @@ const VehiclesPage: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium">
                         {Number(vehicle.revenue_per_km || 0).toFixed(2)} ₽
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-indigo-600 font-medium">
+                        {Number(vehicle.revenue_per_km_with_vat || 0).toFixed(2)} ₽
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-purple-600 font-medium">
                         {Number(vehicle.trips_per_day || 0).toFixed(1)}
                       </td>
                     </tr>
                     {expandedVehicle === vehicle.vehicle_number && (
                       <tr>
-                        <td colSpan={9} className="px-6 py-4 bg-gray-50">
+                        <td colSpan={11} className="px-6 py-4 bg-gray-50">
                           {loadingTrips === vehicle.vehicle_number ? (
                             <div className="flex items-center justify-center py-4">
                               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
@@ -252,7 +284,8 @@ const VehiclesPage: React.FC = () => {
                                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Водитель</th>
                                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Маршрут</th>
                                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Км</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Выручка</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Без НДС</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">С НДС</th>
                                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Штраф</th>
                                   </tr>
                                 </thead>
@@ -265,6 +298,7 @@ const VehiclesPage: React.FC = () => {
                                       <td className="px-4 py-2 text-gray-900">{trip.route_name}</td>
                                       <td className="px-4 py-2 text-gray-600">{Number(trip.distance_km || 0).toLocaleString('ru-RU')}</td>
                                       <td className="px-4 py-2 text-green-600 font-medium">{Number(trip.revenue || 0).toLocaleString('ru-RU')} ₽</td>
+                                      <td className="px-4 py-2 text-emerald-600 font-medium">{Number(trip.revenue_with_vat || 0).toLocaleString('ru-RU')} ₽</td>
                                       <td className="px-4 py-2 text-red-600">
                                         {Number(trip.penalty_amount) > 0 ? `${Number(trip.penalty_amount).toLocaleString('ru-RU')} ₽` : '—'}
                                       </td>
