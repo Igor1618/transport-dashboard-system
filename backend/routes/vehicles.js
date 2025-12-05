@@ -13,9 +13,11 @@ router.get('/stats', async (req, res) => {
         COUNT(t.id)::integer as trips_count,
         COALESCE(SUM(t.distance_km), 0)::numeric as total_distance,
         COALESCE(SUM(t.trip_amount), 0)::numeric as total_revenue,
+        COALESCE(SUM(t.trip_amount * 1.2), 0)::numeric as total_revenue_with_vat,
         COUNT(DISTINCT t.driver_name)::integer as drivers_count,
         COUNT(DISTINCT DATE_TRUNC('day', t.loading_date))::integer as working_days,
         COALESCE(ROUND(SUM(t.trip_amount)::numeric / NULLIF(SUM(t.distance_km), 0), 2), 0)::numeric as revenue_per_km,
+        COALESCE(ROUND(SUM(t.trip_amount * 1.2)::numeric / NULLIF(SUM(t.distance_km), 0), 2), 0)::numeric as revenue_per_km_with_vat,
         COALESCE(ROUND(COUNT(t.id)::numeric / NULLIF(COUNT(DISTINCT DATE_TRUNC('day', t.loading_date)), 0), 2), 0)::numeric as trips_per_day
       FROM trips t
     `;
@@ -57,6 +59,7 @@ router.get('/:vehicleNumber/trips', async (req, res) => {
         t.route_name,
         t.distance_km,
         t.trip_amount as revenue,
+        (t.trip_amount * 1.2) as revenue_with_vat,
         t.penalty_amount
       FROM trips t
       WHERE t.vehicle_number = $1

@@ -20,6 +20,7 @@ export interface LoginResponse {
 export interface Stats {
   totalTrips: number;
   totalRevenue: number;
+  totalRevenueWithVat: number;
   totalDrivers: number;
   totalVehicles: number;
   totalPenalties: number;
@@ -35,6 +36,7 @@ export interface Trip {
   driver_name: string;
   route_name: string;
   trip_amount: number;
+  trip_amount_with_vat: number;
   distance_km: number;
   has_penalty: boolean;
   penalty_amount: number;
@@ -48,6 +50,7 @@ export interface SalaryData {
   trips_count: number;
   total_distance: number;
   total_revenue: number;
+  total_revenue_with_vat: number;
   total_penalties: number;
   gross_salary: number;
   net_salary: number;
@@ -69,6 +72,7 @@ export interface DriverTripDetail {
   route_name: string;
   distance_km: number;
   revenue: number;
+  revenue_with_vat: number;
   penalty_amount: number;
   driver_rate: number;
 }
@@ -78,9 +82,11 @@ export interface VehicleStats {
   trips_count: number;
   total_distance: number;
   total_revenue: number;
+  total_revenue_with_vat: number;
   drivers_count: number;
   working_days: number;
   revenue_per_km: number;
+  revenue_per_km_with_vat: number;
   trips_per_day: number;
 }
 
@@ -92,6 +98,7 @@ export interface VehicleTripDetail {
   route_name: string;
   distance_km: number;
   revenue: number;
+  revenue_with_vat: number;
   penalty_amount: number;
 }
 

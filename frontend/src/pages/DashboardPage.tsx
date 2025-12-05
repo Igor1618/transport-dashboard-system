@@ -49,7 +49,7 @@ const DashboardPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Общая выручка */}
+        {/* Общая выручка без НДС */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center">
@@ -57,13 +57,31 @@ const DashboardPage: React.FC = () => {
                 <DollarSign className="text-green-600" size={24} />
               </div>
               <div className="ml-4">
-                <p className="text-sm text-gray-600">Общая выручка</p>
+                <p className="text-sm text-gray-600">Выручка без НДС</p>
                 <p className="text-2xl font-bold text-gray-900">
                   {stats?.totalRevenue.toLocaleString('ru-RU')} ₽
                 </p>
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Общая выручка с НДС */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center">
+              <div className="bg-emerald-100 p-3 rounded-lg">
+                <TrendingUp className="text-emerald-600" size={24} />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm text-gray-600">Выручка с НДС</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {stats?.totalRevenueWithVat.toLocaleString('ru-RU')} ₽
+                </p>
+              </div>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500">НДС 20%</p>
         </div>
 
         {/* Всего рейсов */}

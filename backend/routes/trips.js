@@ -15,6 +15,7 @@ router.get('/', async (req, res) => {
         driver_name,
         route_name,
         trip_amount,
+        (trip_amount * 1.2) as trip_amount_with_vat,
         distance_km,
         has_penalty,
         penalty_amount,

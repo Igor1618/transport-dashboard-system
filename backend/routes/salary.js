@@ -13,6 +13,7 @@ router.get('/', async (req, res) => {
         COUNT(t.id) as trips_count,
         COALESCE(SUM(t.distance_km), 0) as total_distance,
         COALESCE(SUM(t.trip_amount), 0) as total_revenue,
+        COALESCE(SUM(t.trip_amount * 1.2), 0) as total_revenue_with_vat,
         COALESCE(SUM(t.penalty_amount), 0) as total_penalties,
         COALESCE(SUM(COALESCE(rr.rate_per_trip, 0)), 0) as gross_salary,
         COALESCE(SUM(COALESCE(rr.rate_per_trip, 0)), 0) as net_salary
@@ -56,6 +57,7 @@ router.get('/driver/:driverName/trips', async (req, res) => {
         t.route_name,
         t.distance_km,
         t.trip_amount as revenue,
+        (t.trip_amount * 1.2) as revenue_with_vat,
         t.penalty_amount,
         COALESCE(rr.rate_per_trip, 0) as driver_rate
       FROM trips t

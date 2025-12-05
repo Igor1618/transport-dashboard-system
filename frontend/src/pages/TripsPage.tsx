@@ -114,7 +114,10 @@ const TripsPage: React.FC = () => {
                   Км
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Сумма
+                  Без НДС
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  С НДС
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Штраф
@@ -124,7 +127,7 @@ const TripsPage: React.FC = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredTrips.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-4 text-center text-gray-500">
+                  <td colSpan={9} className="px-6 py-4 text-center text-gray-500">
                     {searchTerm ? 'Рейсы не найдены' : 'Нет рейсов для отображения'}
                   </td>
                 </tr>
@@ -149,6 +152,9 @@ const TripsPage: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {trip.trip_amount.toLocaleString('ru-RU')} ₽
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-700 font-medium">
+                      {trip.trip_amount_with_vat.toLocaleString('ru-RU')} ₽
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       {trip.has_penalty ? (
