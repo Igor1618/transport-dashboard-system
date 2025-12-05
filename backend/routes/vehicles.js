@@ -1,0 +1,84 @@
+const express = require('express');
+const router = express.Router();
+const pool = require('../config/database');
+
+// GET /api/vehicles/stats - статистика по автомобилям
+router.get('/stats', async (req, res) => {
+  try {
+    const { month } = req.query;
+
+    let query = `
+      SELECT
+        t.vehicle_number,
+        COUNT(t.id) as trips_count,
+        COALESCE(SUM(t.distance_km), 0) as total_distance,
+        COALESCE(SUM(t.trip_amount), 0) as total_revenue,
+        COUNT(DISTINCT t.driver_name) as drivers_count,
+        COUNT(DISTINCT DATE_TRUNC('day', t.loading_date)) as working_days,
+        COALESCE(ROUND(SUM(t.trip_amount) / NULLIF(SUM(t.distance_km), 0), 2), 0) as revenue_per_km,
+        COALESCE(ROUND(COUNT(t.id)::numeric / NULLIF(COUNT(DISTINCT DATE_TRUNC('day', t.loading_date)), 0), 2), 0) as trips_per_day
+      FROM trips t
+    `;
+
+    const params = [];
+
+    // Фильтр по месяцу
+    if (month) {
+      query += ` WHERE DATE_TRUNC('month', t.loading_date) = DATE_TRUNC('month', $1::date)`;
+      params.push(`${month}-01`);
+    }
+
+    query += `
+      GROUP BY t.vehicle_number
+      ORDER BY total_revenue DESC
+    `;
+
+    const result = await pool.query(query, params);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Ошибка получения статистики по автомобилям:', error);
+    res.status(500).json({ message: 'Ошибка сервера' });
+  }
+});
+
+// GET /api/vehicles/:vehicleNumber/trips - детализация рейсов автомобиля
+router.get('/:vehicleNumber/trips', async (req, res) => {
+  try {
+    const { vehicleNumber } = req.params;
+    const { month } = req.query;
+
+    let query = `
+      SELECT
+        t.id,
+        t.wb_trip_number,
+        t.loading_date,
+        t.driver_name,
+        t.route_name,
+        t.distance_km,
+        t.trip_amount as revenue,
+        t.penalty_amount
+      FROM trips t
+      WHERE t.vehicle_number = $1
+    `;
+
+    const params = [vehicleNumber];
+
+    // Фильтр по месяцу
+    if (month) {
+      query += ` AND DATE_TRUNC('month', t.loading_date) = DATE_TRUNC('month', $2::date)`;
+      params.push(`${month}-01`);
+    }
+
+    query += ` ORDER BY t.loading_date DESC`;
+
+    const result = await pool.query(query, params);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Ошибка загрузки рейсов автомобиля:', error);
+    res.status(500).json({ message: 'Ошибка сервера' });
+  }
+});
+
+module.exports = router;

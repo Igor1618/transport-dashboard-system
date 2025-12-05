@@ -9,6 +9,8 @@ import type {
   UploadResponse,
   RouteRate,
   DriverTripDetail,
+  VehicleStats,
+  VehicleTripDetail,
 } from '../types';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
@@ -98,6 +100,20 @@ export const createRoute = async (data: {
 // Удаление маршрута
 export const deleteRoute = async (id: number): Promise<void> => {
   await api.delete(`/routes/${id}`);
+};
+
+// Получение статистики по автомобилям
+export const getVehicleStats = async (month?: string): Promise<VehicleStats[]> => {
+  const params = month ? { month } : {};
+  const response = await api.get<VehicleStats[]>('/vehicles/stats', { params });
+  return response.data;
+};
+
+// Получение детализации рейсов автомобиля
+export const getVehicleTrips = async (vehicleNumber: string, month?: string): Promise<VehicleTripDetail[]> => {
+  const params = month ? { month } : {};
+  const response = await api.get<VehicleTripDetail[]>(`/vehicles/${encodeURIComponent(vehicleNumber)}/trips`, { params });
+  return response.data;
 };
 
 export default api;

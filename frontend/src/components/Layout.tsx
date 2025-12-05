@@ -26,6 +26,7 @@ const Layout: React.FC = () => {
   const menuItems = [
     { name: 'Дашборд', path: '/', icon: LayoutDashboard, permission: 'dashboard' },
     { name: 'Рейсы', path: '/trips', icon: Truck, permission: 'trips' },
+    { name: 'Автомобили', path: '/vehicles', icon: Truck, permission: 'trips' },
     { name: 'Зарплаты', path: '/salary', icon: DollarSign, permission: 'salary' },
     { name: 'Тарифы', path: '/routes', icon: Map, permission: 'salary' },
     { name: 'Водители', path: '/drivers', icon: Users, permission: 'drivers' },

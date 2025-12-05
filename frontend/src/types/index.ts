@@ -73,6 +73,28 @@ export interface DriverTripDetail {
   driver_rate: number;
 }
 
+export interface VehicleStats {
+  vehicle_number: string;
+  trips_count: number;
+  total_distance: number;
+  total_revenue: number;
+  drivers_count: number;
+  working_days: number;
+  revenue_per_km: number;
+  trips_per_day: number;
+}
+
+export interface VehicleTripDetail {
+  id: number;
+  wb_trip_number: string;
+  loading_date: string;
+  driver_name: string;
+  route_name: string;
+  distance_km: number;
+  revenue: number;
+  penalty_amount: number;
+}
+
 export interface ImportLog {
   id: number;
   filename: string;
