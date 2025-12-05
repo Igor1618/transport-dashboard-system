@@ -56,9 +56,9 @@ const VehiclesPage: React.FC = () => {
     return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
-  const totalRevenue = vehicleStats.reduce((sum, item) => sum + item.total_revenue, 0);
-  const totalDistance = vehicleStats.reduce((sum, item) => sum + item.total_distance, 0);
-  const totalTrips = vehicleStats.reduce((sum, item) => sum + item.trips_count, 0);
+  const totalRevenue = vehicleStats.reduce((sum, item) => sum + (Number(item.total_revenue) || 0), 0);
+  const totalDistance = vehicleStats.reduce((sum, item) => sum + (Number(item.total_distance) || 0), 0);
+  const totalTrips = vehicleStats.reduce((sum, item) => sum + (Number(item.trips_count) || 0), 0);
   const avgRevenuePerKm = totalDistance > 0 ? totalRevenue / totalDistance : 0;
 
   if (isLoading) {
@@ -212,25 +212,25 @@ const VehiclesPage: React.FC = () => {
                         🚛 {vehicle.vehicle_number}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {vehicle.trips_count}
+                        {Number(vehicle.trips_count) || 0}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {vehicle.total_distance.toLocaleString('ru-RU')}
+                        {Number(vehicle.total_distance || 0).toLocaleString('ru-RU')}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-                        {vehicle.total_revenue.toLocaleString('ru-RU')} ₽
+                        {Number(vehicle.total_revenue || 0).toLocaleString('ru-RU')} ₽
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {vehicle.drivers_count}
+                        {Number(vehicle.drivers_count) || 0}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {vehicle.working_days}
+                        {Number(vehicle.working_days) || 0}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium">
-                        {vehicle.revenue_per_km.toFixed(2)} ₽
+                        {Number(vehicle.revenue_per_km || 0).toFixed(2)} ₽
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-purple-600 font-medium">
-                        {vehicle.trips_per_day.toFixed(1)}
+                        {Number(vehicle.trips_per_day || 0).toFixed(1)}
                       </td>
                     </tr>
                     {expandedVehicle === vehicle.vehicle_number && (
@@ -263,10 +263,10 @@ const VehiclesPage: React.FC = () => {
                                       <td className="px-4 py-2 text-gray-600">{formatDate(trip.loading_date)}</td>
                                       <td className="px-4 py-2 text-gray-900">{trip.driver_name}</td>
                                       <td className="px-4 py-2 text-gray-900">{trip.route_name}</td>
-                                      <td className="px-4 py-2 text-gray-600">{trip.distance_km.toLocaleString('ru-RU')}</td>
-                                      <td className="px-4 py-2 text-green-600 font-medium">{trip.revenue.toLocaleString('ru-RU')} ₽</td>
+                                      <td className="px-4 py-2 text-gray-600">{Number(trip.distance_km || 0).toLocaleString('ru-RU')}</td>
+                                      <td className="px-4 py-2 text-green-600 font-medium">{Number(trip.revenue || 0).toLocaleString('ru-RU')} ₽</td>
                                       <td className="px-4 py-2 text-red-600">
-                                        {trip.penalty_amount > 0 ? `${trip.penalty_amount.toLocaleString('ru-RU')} ₽` : '—'}
+                                        {Number(trip.penalty_amount) > 0 ? `${Number(trip.penalty_amount).toLocaleString('ru-RU')} ₽` : '—'}
                                       </td>
                                     </tr>
                                   ))}

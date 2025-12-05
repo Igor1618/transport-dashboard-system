@@ -10,13 +10,13 @@ router.get('/stats', async (req, res) => {
     let query = `
       SELECT
         t.vehicle_number,
-        COUNT(t.id) as trips_count,
-        COALESCE(SUM(t.distance_km), 0) as total_distance,
-        COALESCE(SUM(t.trip_amount), 0) as total_revenue,
-        COUNT(DISTINCT t.driver_name) as drivers_count,
-        COUNT(DISTINCT DATE_TRUNC('day', t.loading_date)) as working_days,
-        COALESCE(ROUND(SUM(t.trip_amount) / NULLIF(SUM(t.distance_km), 0), 2), 0) as revenue_per_km,
-        COALESCE(ROUND(COUNT(t.id)::numeric / NULLIF(COUNT(DISTINCT DATE_TRUNC('day', t.loading_date)), 0), 2), 0) as trips_per_day
+        COUNT(t.id)::integer as trips_count,
+        COALESCE(SUM(t.distance_km), 0)::numeric as total_distance,
+        COALESCE(SUM(t.trip_amount), 0)::numeric as total_revenue,
+        COUNT(DISTINCT t.driver_name)::integer as drivers_count,
+        COUNT(DISTINCT DATE_TRUNC('day', t.loading_date))::integer as working_days,
+        COALESCE(ROUND(SUM(t.trip_amount)::numeric / NULLIF(SUM(t.distance_km), 0), 2), 0)::numeric as revenue_per_km,
+        COALESCE(ROUND(COUNT(t.id)::numeric / NULLIF(COUNT(DISTINCT DATE_TRUNC('day', t.loading_date)), 0), 2), 0)::numeric as trips_per_day
       FROM trips t
     `;
 
