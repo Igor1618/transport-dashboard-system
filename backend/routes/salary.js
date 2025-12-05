@@ -15,7 +15,7 @@ router.get('/', async (req, res) => {
         COALESCE(SUM(t.trip_amount), 0) as total_revenue,
         COALESCE(SUM(t.penalty_amount), 0) as total_penalties,
         COALESCE(SUM(COALESCE(rr.rate_per_trip, 0)), 0) as gross_salary,
-        COALESCE(SUM(COALESCE(rr.rate_per_trip, 0)) - SUM(t.penalty_amount), 0) as net_salary
+        COALESCE(SUM(COALESCE(rr.rate_per_trip, 0)), 0) as net_salary
       FROM trips t
       LEFT JOIN route_rates rr ON t.route_name = rr.route_name AND rr.is_active = true
     `;
@@ -38,6 +38,46 @@ router.get('/', async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Ошибка расчета зарплат:', error);
+    res.status(500).json({ message: 'Ошибка сервера' });
+  }
+});
+
+// GET /api/salary/driver/:driverName/trips - детализация рейсов водителя
+router.get('/driver/:driverName/trips', async (req, res) => {
+  try {
+    const { driverName } = req.params;
+    const { month } = req.query;
+
+    let query = `
+      SELECT
+        t.id,
+        t.wb_trip_number,
+        t.loading_date,
+        t.route_name,
+        t.distance_km,
+        t.trip_amount as revenue,
+        t.penalty_amount,
+        COALESCE(rr.rate_per_trip, 0) as driver_rate
+      FROM trips t
+      LEFT JOIN route_rates rr ON t.route_name = rr.route_name AND rr.is_active = true
+      WHERE t.driver_name = $1
+    `;
+
+    const params = [driverName];
+
+    // Фильтр по месяцу
+    if (month) {
+      query += ` AND DATE_TRUNC('month', t.loading_date) = DATE_TRUNC('month', $2::date)`;
+      params.push(`${month}-01`);
+    }
+
+    query += ` ORDER BY t.loading_date DESC`;
+
+    const result = await pool.query(query, params);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Ошибка загрузки рейсов водителя:', error);
     res.status(500).json({ message: 'Ошибка сервера' });
   }
 });

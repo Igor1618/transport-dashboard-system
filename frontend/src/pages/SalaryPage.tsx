@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { getSalary } from '../services/api';
-import type { SalaryData } from '../types';
-import { DollarSign, TrendingUp, Calendar } from 'lucide-react';
+import { getSalary, getDriverTrips } from '../services/api';
+import type { SalaryData, DriverTripDetail } from '../types';
+import { DollarSign, TrendingUp, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
 
 const SalaryPage: React.FC = () => {
   const [salaryData, setSalaryData] = useState<SalaryData[]>([]);
@@ -11,6 +11,9 @@ const SalaryPage: React.FC = () => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
+  const [expandedDriver, setExpandedDriver] = useState<string | null>(null);
+  const [driverTrips, setDriverTrips] = useState<Record<string, DriverTripDetail[]>>({});
+  const [loadingTrips, setLoadingTrips] = useState<string | null>(null);
 
   useEffect(() => {
     loadSalary();
@@ -27,6 +30,30 @@ const SalaryPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const toggleDriverExpand = async (driverName: string) => {
+    if (expandedDriver === driverName) {
+      setExpandedDriver(null);
+    } else {
+      setExpandedDriver(driverName);
+      if (!driverTrips[driverName]) {
+        setLoadingTrips(driverName);
+        try {
+          const trips = await getDriverTrips(driverName, selectedMonth);
+          setDriverTrips({ ...driverTrips, [driverName]: trips });
+        } catch (err) {
+          console.error('Ошибка загрузки рейсов:', err);
+        } finally {
+          setLoadingTrips(null);
+        }
+      }
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
   const totalSalary = salaryData.reduce((sum, item) => sum + item.net_salary, 0);
@@ -105,7 +132,7 @@ const SalaryPage: React.FC = () => {
               <DollarSign className="text-red-600" size={24} />
             </div>
             <div className="ml-4">
-              <p className="text-sm text-gray-600">Штрафы</p>
+              <p className="text-sm text-gray-600">Штрафы (информация)</p>
               <p className="text-2xl font-bold text-red-600">
                 {totalPenalties.toLocaleString('ru-RU')} ₽
               </p>
@@ -120,6 +147,8 @@ const SalaryPage: React.FC = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Водитель
                 </th>
@@ -143,34 +172,89 @@ const SalaryPage: React.FC = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {salaryData.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                  <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
                     Нет данных за выбранный период
                   </td>
                 </tr>
               ) : (
                 salaryData.map((item, index) => (
-                  <tr key={index} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {item.driver_name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {item.trips_count}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {item.total_distance.toLocaleString('ru-RU')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {item.total_revenue.toLocaleString('ru-RU')} ₽
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
-                      {item.total_penalties > 0
-                        ? `${item.total_penalties.toLocaleString('ru-RU')} ₽`
-                        : '—'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600">
-                      {item.net_salary.toLocaleString('ru-RU')} ₽
-                    </td>
-                  </tr>
+                  <React.Fragment key={index}>
+                    <tr className="hover:bg-gray-50 cursor-pointer" onClick={() => toggleDriverExpand(item.driver_name)}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {expandedDriver === item.driver_name ? (
+                          <ChevronDown className="text-gray-500" size={20} />
+                        ) : (
+                          <ChevronRight className="text-gray-500" size={20} />
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {item.driver_name}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {item.trips_count}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {item.total_distance.toLocaleString('ru-RU')}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {item.total_revenue.toLocaleString('ru-RU')} ₽
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
+                        {item.total_penalties > 0
+                          ? `${item.total_penalties.toLocaleString('ru-RU')} ₽`
+                          : '—'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600">
+                        {item.net_salary.toLocaleString('ru-RU')} ₽
+                      </td>
+                    </tr>
+                    {expandedDriver === item.driver_name && (
+                      <tr>
+                        <td colSpan={7} className="px-6 py-4 bg-gray-50">
+                          {loadingTrips === item.driver_name ? (
+                            <div className="flex items-center justify-center py-4">
+                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+                              <span className="ml-2 text-gray-600">Загрузка рейсов...</span>
+                            </div>
+                          ) : driverTrips[item.driver_name] && driverTrips[item.driver_name].length > 0 ? (
+                            <div className="space-y-2">
+                              <h4 className="text-sm font-bold text-gray-700 mb-3">Детализация рейсов:</h4>
+                              <table className="min-w-full text-sm">
+                                <thead className="bg-gray-100">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">№ Рейса WB</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Дата</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Маршрут</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Км</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Выручка</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Тариф водителя</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Штраф</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {driverTrips[item.driver_name].map((trip) => (
+                                    <tr key={trip.id} className="hover:bg-gray-100">
+                                      <td className="px-4 py-2 text-gray-900">{trip.wb_trip_number}</td>
+                                      <td className="px-4 py-2 text-gray-600">{formatDate(trip.loading_date)}</td>
+                                      <td className="px-4 py-2 text-gray-900">{trip.route_name}</td>
+                                      <td className="px-4 py-2 text-gray-600">{trip.distance_km.toLocaleString('ru-RU')}</td>
+                                      <td className="px-4 py-2 text-gray-900">{trip.revenue.toLocaleString('ru-RU')} ₽</td>
+                                      <td className="px-4 py-2 text-green-600 font-medium">{trip.driver_rate.toLocaleString('ru-RU')} ₽</td>
+                                      <td className="px-4 py-2 text-red-600">
+                                        {trip.penalty_amount > 0 ? `${trip.penalty_amount.toLocaleString('ru-RU')} ₽` : '—'}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <p className="text-center text-gray-500 py-4">Нет данных о рейсах</p>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))
               )}
             </tbody>
@@ -183,8 +267,9 @@ const SalaryPage: React.FC = () => {
         <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
           <h3 className="text-lg font-bold text-blue-900 mb-3">Информация о расчете</h3>
           <ul className="list-disc list-inside text-blue-800 space-y-1">
-            <li>Зарплата рассчитывается на основе выручки с рейсов за выбранный период</li>
-            <li>Из зарплаты вычитаются штрафы</li>
+            <li>Зарплата рассчитывается как сумма тарифов за все рейсы водителя</li>
+            <li>Штрафы показаны для информации, но не вычитаются из зарплаты</li>
+            <li>Нажмите на строку водителя чтобы увидеть детализацию по каждому рейсу</li>
             <li>Данные обновляются при каждой загрузке путевых листов</li>
           </ul>
         </div>

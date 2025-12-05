@@ -62,6 +62,17 @@ export interface RouteRate {
   drivers_count: number;
 }
 
+export interface DriverTripDetail {
+  id: number;
+  wb_trip_number: string;
+  loading_date: string;
+  route_name: string;
+  distance_km: number;
+  revenue: number;
+  penalty_amount: number;
+  driver_rate: number;
+}
+
 export interface ImportLog {
   id: number;
   filename: string;

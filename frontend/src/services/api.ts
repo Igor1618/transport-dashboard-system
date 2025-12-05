@@ -8,6 +8,7 @@ import type {
   ImportLog,
   UploadResponse,
   RouteRate,
+  DriverTripDetail,
 } from '../types';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
@@ -54,6 +55,13 @@ export const uploadExcel = async (file: File): Promise<UploadResponse> => {
 export const getSalary = async (month?: string): Promise<SalaryData[]> => {
   const params = month ? { month } : {};
   const response = await api.get<SalaryData[]>('/salary', { params });
+  return response.data;
+};
+
+// Получение детализации рейсов водителя
+export const getDriverTrips = async (driverName: string, month?: string): Promise<DriverTripDetail[]> => {
+  const params = month ? { month } : {};
+  const response = await api.get<DriverTripDetail[]>(`/salary/driver/${encodeURIComponent(driverName)}/trips`, { params });
   return response.data;
 };
 
