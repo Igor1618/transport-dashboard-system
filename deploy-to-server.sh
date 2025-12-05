@@ -80,14 +80,23 @@ echo "✅ Backend перезапущен"
 echo ""
 sleep 2
 
-# Шаг 6: Сборка frontend
+# Шаг 6: Сборка и развертывание frontend
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🎨 [6/6] Сборка frontend..."
+echo "🎨 [6/7] Сборка frontend..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 cd $PROJECT_PATH/frontend
 npm install --legacy-peer-deps
 npm run build
 echo "✅ Frontend собран"
+echo ""
+
+# Шаг 7: Копирование frontend в корень (где Nginx ищет)
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "📦 [7/7] Развертывание frontend..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+cd $PROJECT_PATH
+cp -r frontend/build/* .
+echo "✅ Frontend развернут в $PROJECT_PATH"
 echo ""
 
 # Проверка работоспособности
