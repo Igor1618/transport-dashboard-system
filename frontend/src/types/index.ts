@@ -6,6 +6,17 @@ export interface User {
   full_name: string;
   role: string;
   role_display: string;
+  role_id?: number;
+  is_active?: boolean;
+  last_login?: string;
+  created_at?: string;
+}
+
+export interface Role {
+  id: number;
+  name: string;
+  display_name: string;
+  description?: string;
 }
 
 export interface LoginRequest {

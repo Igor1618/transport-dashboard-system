@@ -33,6 +33,7 @@ const uploadRoutes = require('./routes/upload');
 const importHistoryRoutes = require('./routes/importHistory');
 const routesRoutes = require('./routes/routes');
 const vehiclesRoutes = require('./routes/vehicles');
+const usersRoutes = require('./routes/users');
 
 app.use('/auth', authRoutes);
 app.use('/stats', statsRoutes);
@@ -42,6 +43,7 @@ app.use('/upload', uploadRoutes);
 app.use('/import-history', importHistoryRoutes);
 app.use('/routes', routesRoutes);
 app.use('/vehicles', vehiclesRoutes);
+app.use('/users', usersRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

@@ -11,6 +11,8 @@ import type {
   DriverTripDetail,
   VehicleStats,
   VehicleTripDetail,
+  User,
+  Role,
 } from '../types';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
@@ -113,6 +115,54 @@ export const getVehicleStats = async (month?: string): Promise<VehicleStats[]> =
 export const getVehicleTrips = async (vehicleNumber: string, month?: string): Promise<VehicleTripDetail[]> => {
   const params = month ? { month } : {};
   const response = await api.get<VehicleTripDetail[]>(`/vehicles/${encodeURIComponent(vehicleNumber)}/trips`, { params });
+  return response.data;
+};
+
+// ========================================
+// Управление пользователями
+// ========================================
+
+// Получение списка всех пользователей
+export const getUsers = async (): Promise<User[]> => {
+  const response = await api.get<User[]>('/users');
+  return response.data;
+};
+
+// Получение списка ролей
+export const getRoles = async (): Promise<Role[]> => {
+  const response = await api.get<Role[]>('/users/roles');
+  return response.data;
+};
+
+// Создание нового пользователя
+export const createUser = async (data: {
+  email: string;
+  password: string;
+  full_name: string;
+  role_id: number;
+}): Promise<{ message: string; user: User }> => {
+  const response = await api.post('/users', data);
+  return response.data;
+};
+
+// Обновление пользователя
+export const updateUser = async (
+  id: number,
+  data: {
+    email?: string;
+    password?: string;
+    full_name?: string;
+    role_id?: number;
+    is_active?: boolean;
+  }
+): Promise<{ message: string; user: User }> => {
+  const response = await api.put(`/users/${id}`, data);
+  return response.data;
+};
+
+// Деактивация пользователя
+export const deleteUser = async (id: number): Promise<{ message: string }> => {
+  const response = await api.delete(`/users/${id}`);
   return response.data;
 };
 
