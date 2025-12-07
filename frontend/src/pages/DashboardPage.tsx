@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { getStats } from '../services/api';
 import type { Stats } from '../types';
 import { TrendingUp, TrendingDown, DollarSign, Truck, Users, AlertCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const DashboardPage: React.FC = () => {
+  const { user } = useAuth();
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -49,40 +51,44 @@ const DashboardPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-        {/* Общая выручка без НДС */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
-          <div className="flex items-center justify-between mb-2 md:mb-4">
-            <div className="flex items-center">
-              <div className="bg-green-100 p-2 md:p-3 rounded-lg">
-                <DollarSign className="text-green-600" size={20} />
-              </div>
-              <div className="ml-3 md:ml-4">
-                <p className="text-xs md:text-sm text-gray-600">Выручка без НДС</p>
-                <p className="text-lg md:text-2xl font-bold text-gray-900">
-                  {stats?.totalRevenue.toLocaleString('ru-RU')} ₽
-                </p>
+        {/* Общая выручка без НДС - скрыто для бухгалтера */}
+        {user?.role !== 'accountant' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
+            <div className="flex items-center justify-between mb-2 md:mb-4">
+              <div className="flex items-center">
+                <div className="bg-green-100 p-2 md:p-3 rounded-lg">
+                  <DollarSign className="text-green-600" size={20} />
+                </div>
+                <div className="ml-3 md:ml-4">
+                  <p className="text-xs md:text-sm text-gray-600">Выручка без НДС</p>
+                  <p className="text-lg md:text-2xl font-bold text-gray-900">
+                    {stats?.totalRevenue.toLocaleString('ru-RU')} ₽
+                  </p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Общая выручка с НДС */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
-          <div className="flex items-center justify-between mb-2 md:mb-4">
-            <div className="flex items-center">
-              <div className="bg-emerald-100 p-2 md:p-3 rounded-lg">
-                <TrendingUp className="text-emerald-600" size={20} />
-              </div>
-              <div className="ml-3 md:ml-4">
-                <p className="text-xs md:text-sm text-gray-600">Выручка с НДС</p>
-                <p className="text-lg md:text-2xl font-bold text-gray-900">
-                  {stats?.totalRevenueWithVat.toLocaleString('ru-RU')} ₽
-                </p>
+        {/* Общая выручка с НДС - скрыто для бухгалтера */}
+        {user?.role !== 'accountant' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
+            <div className="flex items-center justify-between mb-2 md:mb-4">
+              <div className="flex items-center">
+                <div className="bg-emerald-100 p-2 md:p-3 rounded-lg">
+                  <TrendingUp className="text-emerald-600" size={20} />
+                </div>
+                <div className="ml-3 md:ml-4">
+                  <p className="text-xs md:text-sm text-gray-600">Выручка с НДС</p>
+                  <p className="text-lg md:text-2xl font-bold text-gray-900">
+                    {stats?.totalRevenueWithVat.toLocaleString('ru-RU')} ₽
+                  </p>
+                </div>
               </div>
             </div>
+            <p className="text-xs text-gray-500">НДС 20%</p>
           </div>
-          <p className="text-xs text-gray-500">НДС 20%</p>
-        </div>
+        )}
 
         {/* Всего рейсов */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
