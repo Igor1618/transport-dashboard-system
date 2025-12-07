@@ -1144,6 +1144,10 @@
         const SUPABASE_URL = 'http://195.26.226.37:8000';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiJ9.LGzLagUWLYU030_PrhQdahdHGhALq6agEyzf3KH3bI0';
 
+        // НАСТРОЙКИ 1C API
+        const API_1C_BASE_URL = 'http://192.168.33.250/tk/hs/TransportAPI/api/v1';
+        const API_1C_TOKEN = 'transport_api_2024_secret_key';
+
         let supabase = null;
         try {
             supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -1193,7 +1197,70 @@
             container.innerHTML = `<div class="error"><i class="fas fa-exclamation-circle"></i> ${message}</div>`;
         }
 
-        // Моковые данные для демонстрации
+        // Функция для получения данных из 1C API
+        async function fetch1CData(endpoint) {
+            try {
+                const response = await fetch(`${API_1C_BASE_URL}/${endpoint}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${API_1C_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error(`Ошибка получения данных из 1C (${endpoint}):`, error);
+                return null;
+            }
+        }
+
+        // Получение данных транспорта из 1C
+        async function getVehiclesFrom1C() {
+            const data = await fetch1CData('vehicles');
+            if (!data || !Array.isArray(data)) {
+                console.warn('Не удалось получить данные машин из 1C, используем моковые');
+                return getMockData();
+            }
+
+            // Преобразуем данные 1C в нужный формат
+            return data.map(v => ({
+                id: v.id || v.vehicle_id,
+                number: v.number || v.vehicle_number || 'Н/Д',
+                model: v.model || v.vehicle_model || 'Н/Д',
+                income: parseFloat(v.income || v.total_income || 0),
+                expenses: parseFloat(v.expenses || v.total_expenses || 0),
+                trips: parseInt(v.trips || v.trip_count || 0),
+                efficiency: parseInt(v.efficiency || v.efficiency_percent || 0),
+                profit: parseFloat(v.income || 0) - parseFloat(v.expenses || 0)
+            }));
+        }
+
+        // Получение данных водителей из 1C
+        async function getDriversFrom1C() {
+            const data = await fetch1CData('drivers');
+            if (!data || !Array.isArray(data)) {
+                console.warn('Не удалось получить данные водителей из 1C, используем моковые');
+                return getMockDrivers();
+            }
+
+            // Преобразуем данные 1C в нужный формат
+            return data.map(d => ({
+                id: d.id || d.driver_id,
+                name: d.name || d.full_name || 'Н/Д',
+                vehicle: d.vehicle || d.vehicle_number || 'Н/Д',
+                trips: parseInt(d.trips || d.trip_count || 0),
+                rating: parseFloat(d.rating || 4.0),
+                status: d.status || 'active'
+            }));
+        }
+
+        // Моковые данные для демонстрации (fallback)
         function getMockData() {
             return [
                 { id: '1', number: 'А123БВ77', model: 'MAN TGX', income: 520000, expenses: 350000, trips: 28, efficiency: 85 },
@@ -1212,8 +1279,13 @@
                 document.getElementById('tableLoading').style.display = 'block';
                 document.getElementById('tableContainer').style.display = 'none';
 
-                // Пытаемся загрузить из Supabase
-                if (supabase) {
+                // Сначала пытаемся получить данные из 1C API
+                console.log('Загрузка данных из 1C API...');
+                vehiclesData = await getVehiclesFrom1C();
+
+                // Если не удалось получить из 1C, пробуем Supabase
+                if (vehiclesData.length === 0 && supabase) {
+                    console.log('Данных из 1C нет, пробуем Supabase...');
                     try {
                         const { data: vehicles, error: vError } = await supabase
                             .from('vehicles')
@@ -1229,36 +1301,30 @@
                                 )
                             `);
 
-                        if (vError) throw vError;
+                        if (!vError && vehicles && vehicles.length > 0) {
+                            vehiclesData = vehicles.map(v => {
+                                const monthData = v.vehicle_monthly_data.find(
+                                    m => m.year === currentYear && m.month === (currentMonth + 1)
+                                ) || { income: 0, expenses: 0, trips: 0, efficiency: 0 };
 
-                        vehiclesData = vehicles.map(v => {
-                            const monthData = v.vehicle_monthly_data.find(
-                                m => m.year === currentYear && m.month === (currentMonth + 1)
-                            ) || { income: 0, expenses: 0, trips: 0, efficiency: 0 };
-
-                            return {
-                                id: v.id,
-                                number: v.number,
-                                model: v.model,
-                                income: monthData.income || 0,
-                                expenses: monthData.expenses || 0,
-                                trips: monthData.trips || 0,
-                                efficiency: monthData.efficiency || 0,
-                                profit: (monthData.income || 0) - (monthData.expenses || 0)
-                            };
-                        });
-
-                        if (vehiclesData.length === 0) {
-                            throw new Error('Нет данных в базе');
+                                return {
+                                    id: v.id,
+                                    number: v.number,
+                                    model: v.model,
+                                    income: monthData.income || 0,
+                                    expenses: monthData.expenses || 0,
+                                    trips: monthData.trips || 0,
+                                    efficiency: monthData.efficiency || 0,
+                                    profit: (monthData.income || 0) - (monthData.expenses || 0)
+                                };
+                            });
                         }
                     } catch (supabaseError) {
-                        console.warn('Supabase недоступен, используем моковые данные:', supabaseError);
-                        vehiclesData = getMockData();
+                        console.warn('Supabase недоступен:', supabaseError);
                     }
-                } else {
-                    // Используем моковые данные
-                    vehiclesData = getMockData();
                 }
+
+                console.log(`Загружено ${vehiclesData.length} машин`);
 
                 document.getElementById('tableLoading').style.display = 'none';
                 document.getElementById('tableContainer').style.display = 'block';
@@ -1443,10 +1509,12 @@
             });
         });
 
-        // Mock data for vehicles section
-        function loadVehiclesSection() {
+        // Load vehicles section with real data
+        async function loadVehiclesSection() {
             const grid = document.getElementById('vehiclesGrid');
-            const vehicles = getMockData();
+            grid.innerHTML = '<div class="loading">Загрузка данных из 1C...</div>';
+
+            const vehicles = await getVehiclesFrom1C();
             const stats = calculateStats(vehicles);
 
             grid.innerHTML = vehicles.map(v => {
@@ -1515,9 +1583,11 @@
             ];
         }
 
-        function loadDriversSection() {
+        async function loadDriversSection() {
             const grid = document.getElementById('driversGrid');
-            const drivers = getMockDrivers();
+            grid.innerHTML = '<div class="loading">Загрузка данных из 1C...</div>';
+
+            const drivers = await getDriversFrom1C();
 
             grid.innerHTML = drivers.map(d => `
                 <div class="data-card">
@@ -1553,8 +1623,12 @@
         let efficiencyChartInstance = null;
         let comparisonChartInstance = null;
 
-        function loadAnalyticsSection() {
-            const vehicles = getMockData();
+        async function loadAnalyticsSection() {
+            // Показываем индикатор загрузки
+            const medianProfitElement = document.getElementById('medianProfitValue');
+            if (medianProfitElement) medianProfitElement.textContent = 'Загрузка...';
+
+            const vehicles = await getVehiclesFrom1C();
             const stats = calculateStats(vehicles);
 
             // Calculate analytics KPIs
