@@ -78,62 +78,64 @@ const SalaryPage: React.FC = () => {
 
   return (
     <div>
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Расчет зарплат</h1>
-          <p className="text-gray-600 mt-2">Зарплаты водителей по результатам рейсов</p>
-        </div>
+      <div className="mb-6 md:mb-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Расчет зарплат</h1>
+            <p className="text-sm md:text-base text-gray-600 mt-1 md:mt-2">Зарплаты водителей по результатам рейсов</p>
+          </div>
 
-        {/* Выбор месяца */}
-        <div className="flex items-center space-x-4">
-          <Calendar className="text-gray-600" size={20} />
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-          />
+          {/* Выбор месяца */}
+          <div className="flex items-center space-x-2 md:space-x-4">
+            <Calendar className="text-gray-600" size={20} />
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="px-3 md:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm md:text-base"
+            />
+          </div>
         </div>
       </div>
 
       {/* Общая статистика */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow p-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
+        <div className="bg-white rounded-lg shadow p-4 md:p-6">
           <div className="flex items-center">
-            <div className="bg-green-100 p-3 rounded-lg">
-              <DollarSign className="text-green-600" size={24} />
+            <div className="bg-green-100 p-2 md:p-3 rounded-lg">
+              <DollarSign className="text-green-600" size={20} />
             </div>
-            <div className="ml-4">
-              <p className="text-sm text-gray-600">Общая выручка</p>
-              <p className="text-2xl font-bold text-gray-900">
+            <div className="ml-3 md:ml-4">
+              <p className="text-xs md:text-sm text-gray-600">Общая выручка</p>
+              <p className="text-lg md:text-2xl font-bold text-gray-900">
                 {totalRevenue.toLocaleString('ru-RU')} ₽
               </p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-4 md:p-6">
           <div className="flex items-center">
-            <div className="bg-blue-100 p-3 rounded-lg">
-              <TrendingUp className="text-blue-600" size={24} />
+            <div className="bg-blue-100 p-2 md:p-3 rounded-lg">
+              <TrendingUp className="text-blue-600" size={20} />
             </div>
-            <div className="ml-4">
-              <p className="text-sm text-gray-600">К выплате водителям</p>
-              <p className="text-2xl font-bold text-gray-900">
+            <div className="ml-3 md:ml-4">
+              <p className="text-xs md:text-sm text-gray-600">К выплате водителям</p>
+              <p className="text-lg md:text-2xl font-bold text-gray-900">
                 {totalSalary.toLocaleString('ru-RU')} ₽
               </p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-4 md:p-6">
           <div className="flex items-center">
-            <div className="bg-red-100 p-3 rounded-lg">
-              <DollarSign className="text-red-600" size={24} />
+            <div className="bg-red-100 p-2 md:p-3 rounded-lg">
+              <DollarSign className="text-red-600" size={20} />
             </div>
-            <div className="ml-4">
-              <p className="text-sm text-gray-600">Штрафы (информация)</p>
-              <p className="text-2xl font-bold text-red-600">
+            <div className="ml-3 md:ml-4">
+              <p className="text-xs md:text-sm text-gray-600">Штрафы (информация)</p>
+              <p className="text-lg md:text-2xl font-bold text-red-600">
                 {totalPenalties.toLocaleString('ru-RU')} ₽
               </p>
             </div>
@@ -143,6 +145,9 @@ const SalaryPage: React.FC = () => {
 
       {/* Таблица зарплат */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="text-xs md:text-sm text-gray-500 p-3 md:p-4 bg-gray-50 border-b md:hidden">
+          <p>← Прокрутите таблицу горизонтально →</p>
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">

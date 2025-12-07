@@ -81,48 +81,50 @@ const VehiclesPage: React.FC = () => {
 
   return (
     <div>
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Дашборд автомобилей</h1>
-          <p className="text-gray-600 mt-2">Статистика по эффективности автопарка</p>
-        </div>
+      <div className="mb-6 md:mb-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Дашборд автомобилей</h1>
+            <p className="text-sm md:text-base text-gray-600 mt-1 md:mt-2">Статистика по эффективности автопарка</p>
+          </div>
 
-        {/* Выбор месяца */}
-        <div className="flex items-center space-x-4">
-          <Calendar className="text-gray-600" size={20} />
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-          />
+          {/* Выбор месяца */}
+          <div className="flex items-center space-x-2 md:space-x-4">
+            <Calendar className="text-gray-600" size={20} />
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="px-3 md:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm md:text-base"
+            />
+          </div>
         </div>
       </div>
 
       {/* Общая статистика */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow p-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 mb-6 md:mb-8">
+        <div className="bg-white rounded-lg shadow p-4 md:p-6">
           <div className="flex items-center">
-            <div className="bg-green-100 p-3 rounded-lg">
-              <TrendingUp className="text-green-600" size={24} />
+            <div className="bg-green-100 p-2 md:p-3 rounded-lg">
+              <TrendingUp className="text-green-600" size={20} />
             </div>
-            <div className="ml-4">
-              <p className="text-sm text-gray-600">Выручка без НДС</p>
-              <p className="text-2xl font-bold text-gray-900">
+            <div className="ml-3 md:ml-4">
+              <p className="text-xs md:text-sm text-gray-600">Выручка без НДС</p>
+              <p className="text-lg md:text-2xl font-bold text-gray-900">
                 {totalRevenue.toLocaleString('ru-RU')} ₽
               </p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-4 md:p-6">
           <div className="flex items-center">
-            <div className="bg-emerald-100 p-3 rounded-lg">
-              <TrendingUp className="text-emerald-600" size={24} />
+            <div className="bg-emerald-100 p-2 md:p-3 rounded-lg">
+              <TrendingUp className="text-emerald-600" size={20} />
             </div>
-            <div className="ml-4">
-              <p className="text-sm text-gray-600">Выручка с НДС</p>
-              <p className="text-2xl font-bold text-gray-900">
+            <div className="ml-3 md:ml-4">
+              <p className="text-xs md:text-sm text-gray-600">Выручка с НДС</p>
+              <p className="text-lg md:text-2xl font-bold text-gray-900">
                 {totalRevenueWithVat.toLocaleString('ru-RU')} ₽
               </p>
               <p className="text-xs text-gray-500">НДС 20%</p>
@@ -130,45 +132,45 @@ const VehiclesPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-4 md:p-6">
           <div className="flex items-center">
-            <div className="bg-blue-100 p-3 rounded-lg">
-              <Activity className="text-blue-600" size={24} />
+            <div className="bg-blue-100 p-2 md:p-3 rounded-lg">
+              <Activity className="text-blue-600" size={20} />
             </div>
-            <div className="ml-4">
-              <p className="text-sm text-gray-600">Всего рейсов</p>
-              <p className="text-2xl font-bold text-gray-900">
+            <div className="ml-3 md:ml-4">
+              <p className="text-xs md:text-sm text-gray-600">Всего рейсов</p>
+              <p className="text-lg md:text-2xl font-bold text-gray-900">
                 {totalTrips.toLocaleString('ru-RU')}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-4 md:p-6">
           <div className="flex items-center">
-            <div className="bg-purple-100 p-3 rounded-lg">
-              <Truck className="text-purple-600" size={24} />
+            <div className="bg-purple-100 p-2 md:p-3 rounded-lg">
+              <Truck className="text-purple-600" size={20} />
             </div>
-            <div className="ml-4">
-              <p className="text-sm text-gray-600">Пробег</p>
-              <p className="text-2xl font-bold text-gray-900">
+            <div className="ml-3 md:ml-4">
+              <p className="text-xs md:text-sm text-gray-600">Пробег</p>
+              <p className="text-lg md:text-2xl font-bold text-gray-900">
                 {totalDistance.toLocaleString('ru-RU')} км
               </p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-4 md:p-6">
           <div className="flex items-center">
-            <div className="bg-orange-100 p-3 rounded-lg">
-              <Activity className="text-orange-600" size={24} />
+            <div className="bg-orange-100 p-2 md:p-3 rounded-lg">
+              <Activity className="text-orange-600" size={20} />
             </div>
-            <div className="ml-4">
-              <p className="text-sm text-gray-600">Выручка/км</p>
-              <p className="text-xl font-bold text-gray-900">
+            <div className="ml-3 md:ml-4">
+              <p className="text-xs md:text-sm text-gray-600">Выручка/км</p>
+              <p className="text-base md:text-xl font-bold text-gray-900">
                 {avgRevenuePerKm.toFixed(2)} ₽
               </p>
-              <p className="text-sm text-emerald-600 font-medium">
+              <p className="text-xs md:text-sm text-emerald-600 font-medium">
                 {avgRevenuePerKmWithVat.toFixed(2)} ₽ с НДС
               </p>
             </div>
@@ -179,6 +181,10 @@ const VehiclesPage: React.FC = () => {
       {/* Таблица автомобилей */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
+          <div className="text-xs md:text-sm text-gray-500 p-3 md:p-4 bg-gray-50 border-b">
+            <p className="hidden md:block">Нажмите на строку для просмотра детализации рейсов</p>
+            <p className="md:hidden">Нажмите на автомобиль для деталей</p>
+          </div>
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -323,13 +329,13 @@ const VehiclesPage: React.FC = () => {
 
       {/* Дополнительная информация */}
       {vehicleStats.length > 0 && (
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <h3 className="text-lg font-bold text-blue-900 mb-3">Метрики эффективности</h3>
-          <ul className="list-disc list-inside text-blue-800 space-y-1">
+        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4 md:p-6">
+          <h3 className="text-base md:text-lg font-bold text-blue-900 mb-2 md:mb-3">Метрики эффективности</h3>
+          <ul className="list-disc list-inside text-blue-800 space-y-1 text-xs md:text-sm">
             <li><strong>₽/км</strong> - выручка на километр пробега (показатель рентабельности маршрутов)</li>
             <li><strong>Рейсов/день</strong> - среднее количество рейсов в день (показатель загрузки автомобиля)</li>
             <li><strong>Раб. дней</strong> - количество дней когда автомобиль был в работе</li>
-            <li>Нажмите на строку автомобиля чтобы увидеть детализацию всех рейсов</li>
+            <li className="hidden md:list-item">Нажмите на строку автомобиля чтобы увидеть детализацию всех рейсов</li>
           </ul>
         </div>
       )}

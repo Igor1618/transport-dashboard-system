@@ -66,31 +66,34 @@ const TripsPage: React.FC = () => {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Рейсы</h1>
-        <p className="text-gray-600 mt-2">Список всех рейсов</p>
+      <div className="mb-6 md:mb-8">
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Рейсы</h1>
+        <p className="text-sm md:text-base text-gray-600 mt-1 md:mt-2">Список всех рейсов</p>
       </div>
 
       {/* Поиск */}
-      <div className="mb-6 flex items-center space-x-4">
+      <div className="mb-4 md:mb-6 flex items-center space-x-2 md:space-x-4">
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
           <input
             type="text"
-            placeholder="Поиск по номеру рейса, водителю, машине или маршруту..."
+            placeholder="Поиск..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
           />
         </div>
-        <button className="flex items-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-          <Filter size={20} className="mr-2" />
-          Фильтры
+        <button className="flex items-center px-3 md:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm md:text-base">
+          <Filter size={18} className="mr-1 md:mr-2" />
+          <span className="hidden sm:inline">Фильтры</span>
         </button>
       </div>
 
       {/* Таблица рейсов */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="text-xs md:text-sm text-gray-500 p-3 md:p-4 bg-gray-50 border-b md:hidden">
+          <p>← Прокрутите таблицу горизонтально →</p>
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
