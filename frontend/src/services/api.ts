@@ -24,6 +24,22 @@ const api = axios.create({
   },
 });
 
+// Добавляем интерцептор для передачи роли пользователя
+api.interceptors.request.use((config) => {
+  const userStr = localStorage.getItem('user');
+  if (userStr) {
+    try {
+      const user = JSON.parse(userStr);
+      if (user && user.role) {
+        config.headers['x-user-role'] = user.role;
+      }
+    } catch (e) {
+      console.error('Error parsing user from localStorage', e);
+    }
+  }
+  return config;
+});
+
 // Авторизация
 export const login = async (credentials: LoginRequest): Promise<LoginResponse> => {
   const response = await api.post<LoginResponse>('/auth/login', credentials);

@@ -43,11 +43,10 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role_id);
 
--- Тестовый пользователь (пароль: Director123!)
--- ВАЖНО: В production использовать хэширование паролей!
-INSERT INTO users (email, password_hash, full_name, role_id) VALUES
-    ('IgorL', 'Director123!', 'Игорь Л.', (SELECT id FROM roles WHERE name = 'director'))
-ON CONFLICT (email) DO NOTHING;
+-- ⚠️ ВАЖНО: Для создания суперпользователя используйте команду:
+-- npm run create-superuser
+-- Это обеспечит безопасное хэширование пароля с использованием bcrypt
+
 
 -- ============================================
 -- ТАБЛИЦА РЕЙСОВ

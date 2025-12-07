@@ -30,7 +30,7 @@ const Layout: React.FC = () => {
     { name: 'Автомобили', path: '/vehicles', icon: Truck, permission: 'trips' },
     { name: 'Зарплаты', path: '/salary', icon: DollarSign, permission: 'salary' },
     { name: 'Тарифы', path: '/routes', icon: Map, permission: 'salary' },
-    { name: 'Пользователи', path: '/users', icon: Users, permission: 'dashboard' },
+    { name: 'Пользователи', path: '/users', icon: Users, permission: 'director' },
     { name: 'Загрузка', path: '/upload', icon: Upload, permission: 'upload' },
   ];
 

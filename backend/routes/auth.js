@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/database');
+const { comparePassword } = require('../utils/passwordUtils');
 
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
@@ -13,19 +14,26 @@ router.post('/login', async (req, res) => {
 
     // Поиск пользователя
     const userQuery = `
-      SELECT u.id, u.email, u.full_name, r.name as role, r.display_name as role_display
+      SELECT u.id, u.email, u.password_hash, u.full_name, r.name as role, r.display_name as role_display
       FROM users u
       JOIN roles r ON u.role_id = r.id
-      WHERE u.email = $1 AND u.password_hash = $2 AND u.is_active = true
+      WHERE u.email = $1 AND u.is_active = true
     `;
 
-    const result = await pool.query(userQuery, [email, password]);
+    const result = await pool.query(userQuery, [email]);
 
     if (result.rows.length === 0) {
       return res.status(401).json({ message: 'Неверный логин или пароль' });
     }
 
     const user = result.rows[0];
+
+    // Проверка пароля с использованием bcrypt
+    const isPasswordValid = await comparePassword(password, user.password_hash);
+
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: 'Неверный логин или пароль' });
+    }
 
     // Обновление времени последнего входа
     await pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
@@ -46,3 +54,4 @@ router.post('/login', async (req, res) => {
 });
 
 module.exports = router;
+

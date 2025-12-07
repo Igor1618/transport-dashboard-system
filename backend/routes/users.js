@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/database');
+const { checkRole } = require('../middleware/auth');
+const { hashPassword } = require('../utils/passwordUtils');
 
-// GET /api/users - Получить всех пользователей
-router.get('/', async (req, res) => {
+// GET /api/users - Получить всех пользователей (Только директор)
+router.get('/', checkRole(['director']), async (req, res) => {
   try {
     const query = `
       SELECT
@@ -46,8 +48,8 @@ router.get('/roles', async (req, res) => {
   }
 });
 
-// POST /api/users - Создать нового пользователя
-router.post('/', async (req, res) => {
+// POST /api/users - Создать нового пользователя (Только директор)
+router.post('/', checkRole(['director']), async (req, res) => {
   try {
     const { email, password, full_name, role_id } = req.body;
 
@@ -70,6 +72,9 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // Хэширование пароля
+    const hashedPassword = await hashPassword(password);
+
     // Создание пользователя
     const query = `
       INSERT INTO users (email, password_hash, full_name, role_id)
@@ -77,7 +82,7 @@ router.post('/', async (req, res) => {
       RETURNING id, email, full_name, role_id, is_active, created_at
     `;
 
-    const result = await pool.query(query, [email, password, full_name, role_id]);
+    const result = await pool.query(query, [email, hashedPassword, full_name, role_id]);
 
     res.status(201).json({
       message: 'Пользователь успешно создан',
@@ -89,8 +94,8 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT /api/users/:id - Обновить пользователя
-router.put('/:id', async (req, res) => {
+// PUT /api/users/:id - Обновить пользователя (Только директор)
+router.put('/:id', checkRole(['director']), async (req, res) => {
   try {
     const { id } = req.params;
     const { email, password, full_name, role_id, is_active } = req.body;
@@ -129,8 +134,9 @@ router.put('/:id', async (req, res) => {
       values.push(email);
     }
     if (password !== undefined && password !== '') {
+      const hashedPassword = await hashPassword(password);
       updates.push(`password_hash = $${paramCounter++}`);
-      values.push(password);
+      values.push(hashedPassword);
     }
     if (full_name !== undefined) {
       updates.push(`full_name = $${paramCounter++}`);
@@ -167,8 +173,8 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/users/:id - Удалить пользователя
-router.delete('/:id', async (req, res) => {
+// DELETE /api/users/:id - Удалить пользователя (Только директор)
+router.delete('/:id', checkRole(['director']), async (req, res) => {
   try {
     const { id } = req.params;
 
