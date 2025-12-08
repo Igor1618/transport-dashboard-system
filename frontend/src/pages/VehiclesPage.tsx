@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { getVehicleStats, getVehicleTrips } from '../services/api';
 import type { VehicleStats, VehicleTripDetail } from '../types';
-import { Truck, TrendingUp, Calendar, ChevronDown, ChevronRight, Activity } from 'lucide-react';
+import { Truck, TrendingUp, Calendar, ChevronDown, ChevronRight, Activity, Search } from 'lucide-react';
 
 const VehiclesPage: React.FC = () => {
   const [vehicleStats, setVehicleStats] = useState<VehicleStats[]>([]);
+  const [filteredVehicleStats, setFilteredVehicleStats] = useState<VehicleStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -14,22 +15,40 @@ const VehiclesPage: React.FC = () => {
   const [expandedVehicle, setExpandedVehicle] = useState<string | null>(null);
   const [vehicleTrips, setVehicleTrips] = useState<Record<string, VehicleTripDetail[]>>({});
   const [loadingTrips, setLoadingTrips] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     loadVehicleStats();
   }, [selectedMonth]);
+
+  useEffect(() => {
+    filterVehicles();
+  }, [searchTerm, vehicleStats]);
 
   const loadVehicleStats = async () => {
     try {
       setIsLoading(true);
       const data = await getVehicleStats(selectedMonth);
       setVehicleStats(data);
+      setFilteredVehicleStats(data);
     } catch (err: any) {
       setError('Ошибка загрузки данных по автомобилям');
       console.error(err);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const filterVehicles = () => {
+    if (!searchTerm) {
+      setFilteredVehicleStats(vehicleStats);
+      return;
+    }
+
+    const filtered = vehicleStats.filter((vehicle) =>
+      vehicle.vehicle_number.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredVehicleStats(filtered);
   };
 
   const toggleVehicleExpand = async (vehicleNumber: string) => {
@@ -56,10 +75,10 @@ const VehiclesPage: React.FC = () => {
     return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
-  const totalRevenue = vehicleStats.reduce((sum, item) => sum + (Number(item.total_revenue) || 0), 0);
-  const totalRevenueWithVat = vehicleStats.reduce((sum, item) => sum + (Number(item.total_revenue_with_vat) || 0), 0);
-  const totalDistance = vehicleStats.reduce((sum, item) => sum + (Number(item.total_distance) || 0), 0);
-  const totalTrips = vehicleStats.reduce((sum, item) => sum + (Number(item.trips_count) || 0), 0);
+  const totalRevenue = filteredVehicleStats.reduce((sum, item) => sum + (Number(item.total_revenue) || 0), 0);
+  const totalRevenueWithVat = filteredVehicleStats.reduce((sum, item) => sum + (Number(item.total_revenue_with_vat) || 0), 0);
+  const totalDistance = filteredVehicleStats.reduce((sum, item) => sum + (Number(item.total_distance) || 0), 0);
+  const totalTrips = filteredVehicleStats.reduce((sum, item) => sum + (Number(item.trips_count) || 0), 0);
   const avgRevenuePerKm = totalDistance > 0 ? totalRevenue / totalDistance : 0;
   const avgRevenuePerKmWithVat = totalDistance > 0 ? totalRevenueWithVat / totalDistance : 0;
 
@@ -98,6 +117,18 @@ const VehiclesPage: React.FC = () => {
               className="px-3 md:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm md:text-base"
             />
           </div>
+        </div>
+
+        {/* Поиск по номеру машины */}
+        <div className="mt-4 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+          <input
+            type="text"
+            placeholder="Поиск по номеру машины..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          />
         </div>
       </div>
 
@@ -223,14 +254,14 @@ const VehiclesPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {vehicleStats.length === 0 ? (
+              {filteredVehicleStats.length === 0 ? (
                 <tr>
                   <td colSpan={11} className="px-6 py-4 text-center text-gray-500">
-                    Нет данных за выбранный период
+                    {searchTerm ? 'Автомобиль не найден' : 'Нет данных за выбранный период'}
                   </td>
                 </tr>
               ) : (
-                vehicleStats.map((vehicle, index) => (
+                filteredVehicleStats.map((vehicle, index) => (
                   <React.Fragment key={index}>
                     <tr className="hover:bg-gray-50 cursor-pointer" onClick={() => toggleVehicleExpand(vehicle.vehicle_number)}>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -328,7 +359,7 @@ const VehiclesPage: React.FC = () => {
       </div>
 
       {/* Дополнительная информация */}
-      {vehicleStats.length > 0 && (
+      {filteredVehicleStats.length > 0 && (
         <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4 md:p-6">
           <h3 className="text-base md:text-lg font-bold text-blue-900 mb-2 md:mb-3">Метрики эффективности</h3>
           <ul className="list-disc list-inside text-blue-800 space-y-1 text-xs md:text-sm">

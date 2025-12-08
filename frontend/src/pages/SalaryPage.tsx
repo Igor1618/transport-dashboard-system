@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { getSalary, getDriverTrips } from '../services/api';
 import type { SalaryData, DriverTripDetail } from '../types';
-import { DollarSign, TrendingUp, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
+import { DollarSign, TrendingUp, Calendar, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const SalaryPage: React.FC = () => {
   const { user } = useAuth();
   const [salaryData, setSalaryData] = useState<SalaryData[]>([]);
+  const [filteredSalaryData, setFilteredSalaryData] = useState<SalaryData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -16,22 +17,40 @@ const SalaryPage: React.FC = () => {
   const [expandedDriver, setExpandedDriver] = useState<string | null>(null);
   const [driverTrips, setDriverTrips] = useState<Record<string, DriverTripDetail[]>>({});
   const [loadingTrips, setLoadingTrips] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     loadSalary();
   }, [selectedMonth]);
+
+  useEffect(() => {
+    filterSalary();
+  }, [searchTerm, salaryData]);
 
   const loadSalary = async () => {
     try {
       setIsLoading(true);
       const data = await getSalary(selectedMonth);
       setSalaryData(data);
+      setFilteredSalaryData(data);
     } catch (err: any) {
       setError('Ошибка загрузки данных о зарплатах');
       console.error(err);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const filterSalary = () => {
+    if (!searchTerm) {
+      setFilteredSalaryData(salaryData);
+      return;
+    }
+
+    const filtered = salaryData.filter((item) =>
+      item.driver_name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredSalaryData(filtered);
   };
 
   const toggleDriverExpand = async (driverName: string) => {
@@ -58,9 +77,9 @@ const SalaryPage: React.FC = () => {
     return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
-  const totalSalary = salaryData.reduce((sum, item) => sum + Number(item.net_salary), 0);
-  const totalRevenue = salaryData.reduce((sum, item) => sum + Number(item.total_revenue), 0);
-  const totalPenalties = salaryData.reduce((sum, item) => sum + Number(item.total_penalties), 0);
+  const totalSalary = filteredSalaryData.reduce((sum, item) => sum + Number(item.net_salary), 0);
+  const totalRevenue = filteredSalaryData.reduce((sum, item) => sum + Number(item.total_revenue), 0);
+  const totalPenalties = filteredSalaryData.reduce((sum, item) => sum + Number(item.total_penalties), 0);
 
   if (isLoading) {
     return (
@@ -97,6 +116,18 @@ const SalaryPage: React.FC = () => {
               className="px-3 md:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm md:text-base"
             />
           </div>
+        </div>
+
+        {/* Поиск по ФИО водителя */}
+        <div className="mt-4 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+          <input
+            type="text"
+            placeholder="Поиск по ФИО водителя..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          />
         </div>
       </div>
 
@@ -182,14 +213,14 @@ const SalaryPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {salaryData.length === 0 ? (
+              {filteredSalaryData.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
-                    Нет данных за выбранный период
+                    {searchTerm ? 'Водитель не найден' : 'Нет данных за выбранный период'}
                   </td>
                 </tr>
               ) : (
-                salaryData.map((item, index) => (
+                filteredSalaryData.map((item, index) => (
                   <React.Fragment key={index}>
                     <tr className="hover:bg-gray-50 cursor-pointer" onClick={() => toggleDriverExpand(item.driver_name)}>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -281,7 +312,7 @@ const SalaryPage: React.FC = () => {
       </div>
 
       {/* Дополнительная информация */}
-      {salaryData.length > 0 && (
+      {filteredSalaryData.length > 0 && (
         <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
           <h3 className="text-lg font-bold text-blue-900 mb-3">Информация о расчете</h3>
           <ul className="list-disc list-inside text-blue-800 space-y-1">
