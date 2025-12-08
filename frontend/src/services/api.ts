@@ -47,8 +47,9 @@ export const login = async (credentials: LoginRequest): Promise<LoginResponse> =
 };
 
 // Получение статистики
-export const getStats = async (): Promise<Stats> => {
-  const response = await api.get<Stats>('/stats');
+export const getStats = async (month?: string): Promise<Stats> => {
+  const params = month ? { month } : {};
+  const response = await api.get<Stats>('/stats', { params });
   return response.data;
 };
 

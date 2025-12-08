@@ -36,6 +36,14 @@ export interface Stats {
   totalVehicles: number;
   totalPenalties: number;
   tripsThisMonth: number;
+  changes?: {
+    totalTrips: number;
+    totalRevenue: number;
+    totalRevenueWithVat: number;
+    totalDrivers: number;
+    totalVehicles: number;
+    totalPenalties: number;
+  };
 }
 
 export interface Trip {
