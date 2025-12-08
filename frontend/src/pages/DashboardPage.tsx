@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { getStats } from '../services/api';
-import type { Stats } from '../types';
+import { getStats, getMonthlyStats } from '../services/api';
+import type { Stats, MonthlyStats } from '../types';
 import { TrendingUp, TrendingDown, DollarSign, Truck, Users, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import MonthYearPicker from '../components/MonthYearPicker';
+import DashboardCharts from '../components/DashboardCharts';
 
 const DashboardPage: React.FC = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState<Stats | null>(null);
+  const [monthlyStats, setMonthlyStats] = useState<MonthlyStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -17,6 +19,7 @@ const DashboardPage: React.FC = () => {
 
   useEffect(() => {
     loadStats();
+    loadMonthlyStats();
   }, [selectedMonth]);
 
   const loadStats = async () => {
@@ -29,6 +32,15 @@ const DashboardPage: React.FC = () => {
       console.error(err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadMonthlyStats = async () => {
+    try {
+      const data = await getMonthlyStats(6); // Последние 6 месяцев
+      setMonthlyStats(data);
+    } catch (err: any) {
+      console.error('Ошибка загрузки графиков:', err);
     }
   };
 
@@ -204,6 +216,9 @@ const DashboardPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Графики */}
+      {monthlyStats.length > 0 && <DashboardCharts data={monthlyStats} />}
 
       {/* Дополнительная информация */}
       <div className="mt-6 md:mt-8 bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">

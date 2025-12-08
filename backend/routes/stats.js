@@ -105,4 +105,53 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/stats/monthly?months=6
+// Получение помесячной статистики за последние N месяцев для графиков
+router.get('/monthly', async (req, res) => {
+  try {
+    const months = parseInt(req.query.months) || 6; // По умолчанию 6 месяцев
+    const monthsData = [];
+
+    // Получаем данные за последние N месяцев
+    for (let i = months - 1; i >= 0; i--) {
+      const date = new Date();
+      date.setMonth(date.getMonth() - i);
+
+      const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+      const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59);
+
+      const statsQuery = `
+        SELECT
+          COUNT(*) as total_trips,
+          COALESCE(SUM(trip_amount), 0) as total_revenue,
+          COALESCE(SUM(trip_amount * 1.2), 0) as total_revenue_with_vat,
+          COALESCE(SUM(penalty_amount), 0) as total_penalties,
+          COUNT(DISTINCT driver_name) as total_drivers,
+          COUNT(DISTINCT vehicle_number) as total_vehicles
+        FROM trips
+        WHERE loading_date >= $1 AND loading_date <= $2
+      `;
+
+      const result = await pool.query(statsQuery, [monthStart, monthEnd]);
+      const stats = result.rows[0];
+
+      monthsData.push({
+        month: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+        monthName: date.toLocaleDateString('ru-RU', { month: 'short', year: 'numeric' }),
+        totalTrips: parseInt(stats.total_trips) || 0,
+        totalRevenue: parseFloat(stats.total_revenue) || 0,
+        totalRevenueWithVat: parseFloat(stats.total_revenue_with_vat) || 0,
+        totalDrivers: parseInt(stats.total_drivers) || 0,
+        totalVehicles: parseInt(stats.total_vehicles) || 0,
+        totalPenalties: parseFloat(stats.total_penalties) || 0,
+      });
+    }
+
+    res.json(monthsData);
+  } catch (error) {
+    console.error('Ошибка получения помесячной статистики:', error);
+    res.status(500).json({ message: 'Ошибка сервера' });
+  }
+});
+
 module.exports = router;

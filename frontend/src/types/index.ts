@@ -46,6 +46,17 @@ export interface Stats {
   };
 }
 
+export interface MonthlyStats {
+  month: string;
+  monthName: string;
+  totalTrips: number;
+  totalRevenue: number;
+  totalRevenueWithVat: number;
+  totalDrivers: number;
+  totalVehicles: number;
+  totalPenalties: number;
+}
+
 export interface Trip {
   id: number;
   wb_trip_number: string;

@@ -3,6 +3,7 @@ import type {
   LoginRequest,
   LoginResponse,
   Stats,
+  MonthlyStats,
   Trip,
   SalaryData,
   ImportLog,
@@ -50,6 +51,12 @@ export const login = async (credentials: LoginRequest): Promise<LoginResponse> =
 export const getStats = async (month?: string): Promise<Stats> => {
   const params = month ? { month } : {};
   const response = await api.get<Stats>('/stats', { params });
+  return response.data;
+};
+
+// Получение помесячной статистики для графиков
+export const getMonthlyStats = async (months: number = 6): Promise<MonthlyStats[]> => {
+  const response = await api.get<MonthlyStats[]>('/stats/monthly', { params: { months } });
   return response.data;
 };
 
