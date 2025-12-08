@@ -30,14 +30,57 @@ const VehiclesPage: React.FC = () => {
     try {
       setIsLoading(true);
       const data = await getVehicleStats(selectedMonth);
-      setVehicleStats(data);
-      setFilteredVehicleStats(data);
+
+      // Объединяем дублирующиеся машины (разный регистр)
+      const mergedData = mergeVehiclesByNumber(data);
+
+      setVehicleStats(mergedData);
+      setFilteredVehicleStats(mergedData);
     } catch (err: any) {
       setError('Ошибка загрузки данных по автомобилям');
       console.error(err);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Функция для объединения машин с одинаковыми номерами (разный регистр)
+  const mergeVehiclesByNumber = (vehicles: VehicleStats[]): VehicleStats[] => {
+    const mergedMap = new Map<string, VehicleStats>();
+
+    vehicles.forEach((vehicle) => {
+      const normalizedNumber = vehicle.vehicle_number.toUpperCase().trim();
+
+      if (mergedMap.has(normalizedNumber)) {
+        // Машина уже есть - суммируем данные
+        const existing = mergedMap.get(normalizedNumber)!;
+        existing.trips_count = Number(existing.trips_count) + Number(vehicle.trips_count);
+        existing.total_distance = Number(existing.total_distance) + Number(vehicle.total_distance);
+        existing.total_revenue = Number(existing.total_revenue) + Number(vehicle.total_revenue);
+        existing.total_revenue_with_vat = Number(existing.total_revenue_with_vat) + Number(vehicle.total_revenue_with_vat);
+        existing.drivers_count = Math.max(Number(existing.drivers_count), Number(vehicle.drivers_count));
+        existing.working_days = Number(existing.working_days) + Number(vehicle.working_days);
+
+        // Пересчитываем средние значения
+        existing.revenue_per_km = existing.total_distance > 0
+          ? existing.total_revenue / existing.total_distance
+          : 0;
+        existing.revenue_per_km_with_vat = existing.total_distance > 0
+          ? existing.total_revenue_with_vat / existing.total_distance
+          : 0;
+        existing.trips_per_day = existing.working_days > 0
+          ? existing.trips_count / existing.working_days
+          : 0;
+      } else {
+        // Первая встреча с этим номером - добавляем в верхнем регистре
+        mergedMap.set(normalizedNumber, {
+          ...vehicle,
+          vehicle_number: normalizedNumber, // Используем нормализованный номер
+        });
+      }
+    });
+
+    return Array.from(mergedMap.values());
   };
 
   const filterVehicles = () => {
