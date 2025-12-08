@@ -61,16 +61,108 @@ const VehiclesPage: React.FC = () => {
       .join('');
   };
 
-  // Функция для объединения машин с одинаковыми номерами (разный регистр/алфавит)
+  // Функция для вычисления расстояния Левенштейна (количество отличий между строками)
+  const levenshteinDistance = (str1: string, str2: string): number => {
+    const len1 = str1.length;
+    const len2 = str2.length;
+    const dp: number[][] = Array(len1 + 1).fill(null).map(() => Array(len2 + 1).fill(0));
+
+    for (let i = 0; i <= len1; i++) dp[i][0] = i;
+    for (let j = 0; j <= len2; j++) dp[0][j] = j;
+
+    for (let i = 1; i <= len1; i++) {
+      for (let j = 1; j <= len2; j++) {
+        if (str1[i - 1] === str2[j - 1]) {
+          dp[i][j] = dp[i - 1][j - 1];
+        } else {
+          dp[i][j] = Math.min(
+            dp[i - 1][j] + 1,    // удаление
+            dp[i][j - 1] + 1,    // вставка
+            dp[i - 1][j - 1] + 1 // замена
+          );
+        }
+      }
+    }
+
+    return dp[len1][len2];
+  };
+
+  // Функция для поиска похожих номеров (нечеткое сравнение)
+  const findSimilarVehicles = (vehicles: VehicleStats[]): Map<string, string[]> => {
+    const similarGroups = new Map<string, string[]>();
+    const normalized = vehicles.map(v => normalizeVehicleNumber(v.vehicle_number));
+
+    for (let i = 0; i < normalized.length; i++) {
+      const num1 = normalized[i];
+      if (similarGroups.has(num1)) continue;
+
+      const group = [num1];
+
+      for (let j = i + 1; j < normalized.length; j++) {
+        const num2 = normalized[j];
+
+        // Если длина одинаковая и отличие <= 2 символа - похожие номера (опечатка)
+        if (num1.length === num2.length) {
+          const distance = levenshteinDistance(num1, num2);
+          if (distance > 0 && distance <= 2) {
+            group.push(num2);
+            similarGroups.set(num2, [num1]); // Помечаем как уже обработанный
+          }
+        }
+      }
+
+      if (group.length > 1) {
+        // Есть похожие номера - запоминаем группу
+        group.forEach(num => similarGroups.set(num, group));
+      }
+    }
+
+    return similarGroups;
+  };
+
+  // Функция для объединения машин с одинаковыми/похожими номерами
   const mergeVehiclesByNumber = (vehicles: VehicleStats[]): VehicleStats[] => {
+    // Шаг 1: Нормализуем все номера
+    const normalized = vehicles.map(v => ({
+      ...v,
+      normalizedNumber: normalizeVehicleNumber(v.vehicle_number)
+    }));
+
+    // Шаг 2: Находим группы похожих номеров
+    const similarGroups = findSimilarVehicles(vehicles);
+
+    // Шаг 3: Создаем карту для слияния
     const mergedMap = new Map<string, VehicleStats>();
+    const processedGroups = new Set<string>();
 
-    vehicles.forEach((vehicle) => {
-      const normalizedNumber = normalizeVehicleNumber(vehicle.vehicle_number);
+    normalized.forEach((vehicle) => {
+      const num = vehicle.normalizedNumber;
 
-      if (mergedMap.has(normalizedNumber)) {
-        // Машина уже есть - суммируем данные
-        const existing = mergedMap.get(normalizedNumber)!;
+      // Проверяем, есть ли похожие номера
+      const group = similarGroups.get(num);
+
+      if (group && group.length > 1) {
+        // Есть похожие номера - объединяем в группу
+        const groupKey = group.sort().join('|'); // Уникальный ключ для группы
+
+        if (!processedGroups.has(groupKey)) {
+          // Первый раз встречаем эту группу
+          processedGroups.add(groupKey);
+
+          // Находим номер с наибольшим количеством рейсов (он правильный)
+          const groupVehicles = normalized.filter(v => group.includes(v.normalizedNumber));
+          const mainVehicle = groupVehicles.reduce((prev, curr) =>
+            Number(curr.trips_count) > Number(prev.trips_count) ? curr : prev
+          );
+
+          mergedMap.set(groupKey, {
+            ...mainVehicle,
+            vehicle_number: mainVehicle.normalizedNumber
+          });
+        }
+
+        // Добавляем данные текущей машины к группе
+        const existing = mergedMap.get(groupKey)!;
         existing.trips_count = Number(existing.trips_count) + Number(vehicle.trips_count);
         existing.total_distance = Number(existing.total_distance) + Number(vehicle.total_distance);
         existing.total_revenue = Number(existing.total_revenue) + Number(vehicle.total_revenue);
@@ -78,22 +170,37 @@ const VehiclesPage: React.FC = () => {
         existing.drivers_count = Math.max(Number(existing.drivers_count), Number(vehicle.drivers_count));
         existing.working_days = Number(existing.working_days) + Number(vehicle.working_days);
 
-        // Пересчитываем средние значения
+        // Пересчитываем средние
         existing.revenue_per_km = existing.total_distance > 0
-          ? existing.total_revenue / existing.total_distance
-          : 0;
+          ? existing.total_revenue / existing.total_distance : 0;
         existing.revenue_per_km_with_vat = existing.total_distance > 0
-          ? existing.total_revenue_with_vat / existing.total_distance
-          : 0;
+          ? existing.total_revenue_with_vat / existing.total_distance : 0;
         existing.trips_per_day = existing.working_days > 0
-          ? existing.trips_count / existing.working_days
-          : 0;
+          ? existing.trips_count / existing.working_days : 0;
+
       } else {
-        // Первая встреча с этим номером - добавляем в верхнем регистре
-        mergedMap.set(normalizedNumber, {
-          ...vehicle,
-          vehicle_number: normalizedNumber, // Используем нормализованный номер
-        });
+        // Нет похожих номеров - обрабатываем как обычно
+        if (mergedMap.has(num)) {
+          const existing = mergedMap.get(num)!;
+          existing.trips_count = Number(existing.trips_count) + Number(vehicle.trips_count);
+          existing.total_distance = Number(existing.total_distance) + Number(vehicle.total_distance);
+          existing.total_revenue = Number(existing.total_revenue) + Number(vehicle.total_revenue);
+          existing.total_revenue_with_vat = Number(existing.total_revenue_with_vat) + Number(vehicle.total_revenue_with_vat);
+          existing.drivers_count = Math.max(Number(existing.drivers_count), Number(vehicle.drivers_count));
+          existing.working_days = Number(existing.working_days) + Number(vehicle.working_days);
+
+          existing.revenue_per_km = existing.total_distance > 0
+            ? existing.total_revenue / existing.total_distance : 0;
+          existing.revenue_per_km_with_vat = existing.total_distance > 0
+            ? existing.total_revenue_with_vat / existing.total_distance : 0;
+          existing.trips_per_day = existing.working_days > 0
+            ? existing.trips_count / existing.working_days : 0;
+        } else {
+          mergedMap.set(num, {
+            ...vehicle,
+            vehicle_number: num
+          });
+        }
       }
     });
 
