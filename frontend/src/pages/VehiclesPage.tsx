@@ -44,12 +44,29 @@ const VehiclesPage: React.FC = () => {
     }
   };
 
-  // Функция для объединения машин с одинаковыми номерами (разный регистр)
+  // Функция для нормализации номера (кириллица -> латиница)
+  const normalizeVehicleNumber = (number: string): string => {
+    const cyrillicToLatin: { [key: string]: string } = {
+      'А': 'A', 'В': 'B', 'Е': 'E', 'К': 'K', 'М': 'M', 'Н': 'H',
+      'О': 'O', 'Р': 'P', 'С': 'C', 'Т': 'T', 'У': 'Y', 'Х': 'X',
+      'а': 'A', 'в': 'B', 'е': 'E', 'к': 'K', 'м': 'M', 'н': 'H',
+      'о': 'O', 'р': 'P', 'с': 'C', 'т': 'T', 'у': 'Y', 'х': 'X'
+    };
+
+    return number
+      .trim()
+      .toUpperCase()
+      .split('')
+      .map(char => cyrillicToLatin[char] || char)
+      .join('');
+  };
+
+  // Функция для объединения машин с одинаковыми номерами (разный регистр/алфавит)
   const mergeVehiclesByNumber = (vehicles: VehicleStats[]): VehicleStats[] => {
     const mergedMap = new Map<string, VehicleStats>();
 
     vehicles.forEach((vehicle) => {
-      const normalizedNumber = vehicle.vehicle_number.toUpperCase().trim();
+      const normalizedNumber = normalizeVehicleNumber(vehicle.vehicle_number);
 
       if (mergedMap.has(normalizedNumber)) {
         // Машина уже есть - суммируем данные
