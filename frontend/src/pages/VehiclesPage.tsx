@@ -186,7 +186,7 @@ const VehiclesPage: React.FC = () => {
           merged.total_revenue = Number(merged.total_revenue) + Number(v.total_revenue);
           merged.total_revenue_with_vat = Number(merged.total_revenue_with_vat) + Number(v.total_revenue_with_vat);
           merged.drivers_count = Math.max(Number(merged.drivers_count), Number(v.drivers_count));
-          merged.working_days = Number(merged.working_days) + Number(v.working_days);
+          merged.working_days = Math.max(Number(merged.working_days), Number(v.working_days));
         });
 
         // Пересчитываем средние
@@ -210,7 +210,7 @@ const VehiclesPage: React.FC = () => {
           existing.total_revenue = Number(existing.total_revenue) + Number(vehicle.total_revenue);
           existing.total_revenue_with_vat = Number(existing.total_revenue_with_vat) + Number(vehicle.total_revenue_with_vat);
           existing.drivers_count = Math.max(Number(existing.drivers_count), Number(vehicle.drivers_count));
-          existing.working_days = Number(existing.working_days) + Number(vehicle.working_days);
+          existing.working_days = Math.max(Number(existing.working_days), Number(vehicle.working_days));
 
           existing.revenue_per_km = existing.total_distance > 0
             ? existing.total_revenue / existing.total_distance : 0;
