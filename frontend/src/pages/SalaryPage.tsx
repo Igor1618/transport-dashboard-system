@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { getSalary, getDriverTrips } from '../services/api';
 import type { SalaryData, DriverTripDetail } from '../types';
-import { DollarSign, TrendingUp, Calendar, ChevronDown, ChevronRight, Search } from 'lucide-react';
+import { DollarSign, TrendingUp, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import MonthYearPicker from '../components/MonthYearPicker';
 
 const SalaryPage: React.FC = () => {
   const { user } = useAuth();
@@ -107,15 +108,10 @@ const SalaryPage: React.FC = () => {
           </div>
 
           {/* Выбор месяца */}
-          <div className="flex items-center space-x-2 md:space-x-4">
-            <Calendar className="text-gray-600" size={20} />
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="px-3 md:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm md:text-base"
-            />
-          </div>
+          <MonthYearPicker
+            value={selectedMonth}
+            onChange={setSelectedMonth}
+          />
         </div>
 
         {/* Поиск по ФИО водителя */}

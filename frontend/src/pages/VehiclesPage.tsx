@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { getVehicleStats, getVehicleTrips } from '../services/api';
 import type { VehicleStats, VehicleTripDetail } from '../types';
-import { Truck, TrendingUp, Calendar, ChevronDown, ChevronRight, Activity, Search } from 'lucide-react';
+import { Truck, TrendingUp, ChevronDown, ChevronRight, Activity, Search } from 'lucide-react';
+import MonthYearPicker from '../components/MonthYearPicker';
 
 const VehiclesPage: React.FC = () => {
   const [vehicleStats, setVehicleStats] = useState<VehicleStats[]>([]);
@@ -108,15 +109,10 @@ const VehiclesPage: React.FC = () => {
           </div>
 
           {/* Выбор месяца */}
-          <div className="flex items-center space-x-2 md:space-x-4">
-            <Calendar className="text-gray-600" size={20} />
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="px-3 md:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm md:text-base"
-            />
-          </div>
+          <MonthYearPicker
+            value={selectedMonth}
+            onChange={setSelectedMonth}
+          />
         </div>
 
         {/* Поиск по номеру машины */}
