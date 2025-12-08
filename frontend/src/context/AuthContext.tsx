@@ -57,7 +57,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const rolePermissions: Record<string, string[]> = {
         manager: ['dashboard', 'trips', 'salary', 'vehicles', 'upload'],
         economist: ['dashboard', 'trips', 'salary'],
-        accountant: ['dashboard', 'trips', 'salary', 'vehicles'], // Доступ ко всем разделам, но без финансовой информации
+        accountant: ['dashboard', 'trips', 'salary'], // Только зарплаты и рейсы, без финансовой информации
         mechanic: ['dashboard', 'vehicles'],
         dispatcher: ['dashboard', 'trips', 'upload', 'vehicles'],
       };

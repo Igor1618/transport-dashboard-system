@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { getSalary, getDriverTrips } from '../services/api';
 import type { SalaryData, DriverTripDetail } from '../types';
 import { DollarSign, TrendingUp, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const SalaryPage: React.FC = () => {
+  const { user } = useAuth();
   const [salaryData, setSalaryData] = useState<SalaryData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -100,19 +102,22 @@ const SalaryPage: React.FC = () => {
 
       {/* Общая статистика */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
-        <div className="bg-white rounded-lg shadow p-4 md:p-6">
-          <div className="flex items-center">
-            <div className="bg-green-100 p-2 md:p-3 rounded-lg">
-              <DollarSign className="text-green-600" size={20} />
-            </div>
-            <div className="ml-3 md:ml-4">
-              <p className="text-xs md:text-sm text-gray-600">Общая выручка</p>
-              <p className="text-lg md:text-2xl font-bold text-gray-900">
-                {totalRevenue.toLocaleString('ru-RU')} ₽
-              </p>
+        {/* Общая выручка - скрыто для бухгалтера */}
+        {user?.role !== 'accountant' && (
+          <div className="bg-white rounded-lg shadow p-4 md:p-6">
+            <div className="flex items-center">
+              <div className="bg-green-100 p-2 md:p-3 rounded-lg">
+                <DollarSign className="text-green-600" size={20} />
+              </div>
+              <div className="ml-3 md:ml-4">
+                <p className="text-xs md:text-sm text-gray-600">Общая выручка</p>
+                <p className="text-lg md:text-2xl font-bold text-gray-900">
+                  {totalRevenue.toLocaleString('ru-RU')} ₽
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         <div className="bg-white rounded-lg shadow p-4 md:p-6">
           <div className="flex items-center">
@@ -163,9 +168,11 @@ const SalaryPage: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Км
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Выручка
-                </th>
+                {user?.role !== 'accountant' && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Выручка
+                  </th>
+                )}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Штрафы
                 </th>
@@ -201,9 +208,11 @@ const SalaryPage: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {item.total_distance.toLocaleString('ru-RU')}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.total_revenue.toLocaleString('ru-RU')} ₽
-                      </td>
+                      {user?.role !== 'accountant' && (
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {item.total_revenue.toLocaleString('ru-RU')} ₽
+                        </td>
+                      )}
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
                         {item.total_penalties > 0
                           ? `${item.total_penalties.toLocaleString('ru-RU')} ₽`
@@ -231,7 +240,9 @@ const SalaryPage: React.FC = () => {
                                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Дата</th>
                                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Маршрут</th>
                                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Км</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Выручка</th>
+                                    {user?.role !== 'accountant' && (
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Выручка</th>
+                                    )}
                                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Тариф водителя</th>
                                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Штраф</th>
                                   </tr>
@@ -243,7 +254,9 @@ const SalaryPage: React.FC = () => {
                                       <td className="px-4 py-2 text-gray-600">{formatDate(trip.loading_date)}</td>
                                       <td className="px-4 py-2 text-gray-900">{trip.route_name}</td>
                                       <td className="px-4 py-2 text-gray-600">{trip.distance_km.toLocaleString('ru-RU')}</td>
-                                      <td className="px-4 py-2 text-gray-900">{trip.revenue.toLocaleString('ru-RU')} ₽</td>
+                                      {user?.role !== 'accountant' && (
+                                        <td className="px-4 py-2 text-gray-900">{trip.revenue.toLocaleString('ru-RU')} ₽</td>
+                                      )}
                                       <td className="px-4 py-2 text-green-600 font-medium">{trip.driver_rate.toLocaleString('ru-RU')} ₽</td>
                                       <td className="px-4 py-2 text-red-600">
                                         {trip.penalty_amount > 0 ? `${trip.penalty_amount.toLocaleString('ru-RU')} ₽` : '—'}

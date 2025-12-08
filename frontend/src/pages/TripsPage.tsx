@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { getTrips } from '../services/api';
 import type { Trip } from '../types';
 import { Search, Filter } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const TripsPage: React.FC = () => {
+  const { user } = useAuth();
   const [trips, setTrips] = useState<Trip[]>([]);
   const [filteredTrips, setFilteredTrips] = useState<Trip[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -116,12 +118,16 @@ const TripsPage: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Км
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Без НДС
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  С НДС
-                </th>
+                {user?.role !== 'accountant' && (
+                  <>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Без НДС
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      С НДС
+                    </th>
+                  </>
+                )}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Штраф
                 </th>
@@ -153,12 +159,16 @@ const TripsPage: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {trip.distance_km}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {trip.trip_amount.toLocaleString('ru-RU')} ₽
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-700 font-medium">
-                      {trip.trip_amount_with_vat.toLocaleString('ru-RU')} ₽
-                    </td>
+                    {user?.role !== 'accountant' && (
+                      <>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {trip.trip_amount.toLocaleString('ru-RU')} ₽
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-green-700 font-medium">
+                          {trip.trip_amount_with_vat.toLocaleString('ru-RU')} ₽
+                        </td>
+                      </>
+                    )}
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       {trip.has_penalty ? (
                         <span className="text-red-600 font-medium">
@@ -179,17 +189,19 @@ const TripsPage: React.FC = () => {
       {/* Итоги */}
       {filteredTrips.length > 0 && (
         <div className="mt-4 bg-white rounded-lg shadow p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className={`grid grid-cols-1 gap-4 ${user?.role !== 'accountant' ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
             <div>
               <p className="text-sm text-gray-600">Всего рейсов</p>
               <p className="text-2xl font-bold text-gray-900">{filteredTrips.length}</p>
             </div>
-            <div>
-              <p className="text-sm text-gray-600">Общая сумма</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {filteredTrips.reduce((sum, trip) => sum + trip.trip_amount, 0).toLocaleString('ru-RU')} ₽
-              </p>
-            </div>
+            {user?.role !== 'accountant' && (
+              <div>
+                <p className="text-sm text-gray-600">Общая сумма</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {filteredTrips.reduce((sum, trip) => sum + trip.trip_amount, 0).toLocaleString('ru-RU')} ₽
+                </p>
+              </div>
+            )}
             <div>
               <p className="text-sm text-gray-600">Всего км</p>
               <p className="text-2xl font-bold text-gray-900">
