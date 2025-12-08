@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getVehicleStats, getVehicleTrips } from '../services/api';
+import { getVehicleStats, getVehicleTrips, getCanonicalVehicleNumbers } from '../services/api';
 import type { VehicleStats, VehicleTripDetail } from '../types';
 import { Truck, TrendingUp, ChevronDown, ChevronRight, Activity, Search } from 'lucide-react';
 import MonthYearPicker from '../components/MonthYearPicker';
@@ -7,6 +7,7 @@ import MonthYearPicker from '../components/MonthYearPicker';
 const VehiclesPage: React.FC = () => {
   const [vehicleStats, setVehicleStats] = useState<VehicleStats[]>([]);
   const [filteredVehicleStats, setFilteredVehicleStats] = useState<VehicleStats[]>([]);
+  const [canonicalNumbers, setCanonicalNumbers] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -19,12 +20,27 @@ const VehiclesPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    loadVehicleStats();
-  }, [selectedMonth]);
+    loadCanonicalNumbers();
+  }, []);
+
+  useEffect(() => {
+    if (canonicalNumbers.length > 0) {
+      loadVehicleStats();
+    }
+  }, [selectedMonth, canonicalNumbers]);
 
   useEffect(() => {
     filterVehicles();
   }, [searchTerm, vehicleStats]);
+
+  const loadCanonicalNumbers = async () => {
+    try {
+      const numbers = await getCanonicalVehicleNumbers();
+      setCanonicalNumbers(numbers);
+    } catch (err: any) {
+      console.error('Ошибка загрузки канонических номеров:', err);
+    }
+  };
 
   const loadVehicleStats = async () => {
     try {
@@ -120,16 +136,51 @@ const VehiclesPage: React.FC = () => {
     return similarGroups;
   };
 
-  // Функция для объединения машин с одинаковыми номерами (кириллица/латиница)
+  // Функция для поиска канонического номера через Левенштейна
+  const findCanonicalNumber = (vehicleNumber: string): string => {
+    const normalized = normalizeVehicleNumber(vehicleNumber);
+
+    // Сначала пытаемся найти точное совпадение
+    const exactMatch = canonicalNumbers.find(
+      canonical => normalizeVehicleNumber(canonical) === normalized
+    );
+    if (exactMatch) {
+      return normalizeVehicleNumber(exactMatch);
+    }
+
+    // Если нет точного совпадения, ищем ближайший с расстоянием = 1 (опечатка)
+    let bestMatch = normalized;
+    let minDistance = Infinity;
+
+    for (const canonical of canonicalNumbers) {
+      const normalizedCanonical = normalizeVehicleNumber(canonical);
+
+      // Только для номеров одинаковой длины
+      if (normalized.length !== normalizedCanonical.length) continue;
+
+      const distance = levenshteinDistance(normalized, normalizedCanonical);
+
+      // Только если distance = 1 (одна опечатка)
+      if (distance === 1 && distance < minDistance) {
+        minDistance = distance;
+        bestMatch = normalizedCanonical;
+      }
+    }
+
+    return bestMatch;
+  };
+
+  // Функция для объединения машин с одинаковыми номерами
   const mergeVehiclesByNumber = (vehicles: VehicleStats[]): VehicleStats[] => {
     const mergedMap = new Map<string, VehicleStats>();
 
     vehicles.forEach((vehicle) => {
-      const normalizedNumber = normalizeVehicleNumber(vehicle.vehicle_number);
+      // Ищем канонический номер (исправляем опечатки)
+      const canonicalNumber = findCanonicalNumber(vehicle.vehicle_number);
 
-      if (mergedMap.has(normalizedNumber)) {
+      if (mergedMap.has(canonicalNumber)) {
         // Машина уже есть - суммируем данные
-        const existing = mergedMap.get(normalizedNumber)!;
+        const existing = mergedMap.get(canonicalNumber)!;
         existing.trips_count = Number(existing.trips_count) + Number(vehicle.trips_count);
         existing.total_distance = Number(existing.total_distance) + Number(vehicle.total_distance);
         existing.total_revenue = Number(existing.total_revenue) + Number(vehicle.total_revenue);
@@ -146,9 +197,9 @@ const VehiclesPage: React.FC = () => {
           ? existing.trips_count / existing.working_days : 0;
       } else {
         // Первая встреча с этим номером - добавляем
-        mergedMap.set(normalizedNumber, {
+        mergedMap.set(canonicalNumber, {
           ...vehicle,
-          vehicle_number: normalizedNumber,
+          vehicle_number: canonicalNumber,
         });
       }
     });

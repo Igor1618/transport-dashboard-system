@@ -128,6 +128,12 @@ export const deleteRoute = async (id: number): Promise<void> => {
   await api.delete(`/routes/${id}`);
 };
 
+// Получение канонических номеров машин
+export const getCanonicalVehicleNumbers = async (): Promise<string[]> => {
+  const response = await api.get<string[]>('/vehicles/canonical');
+  return response.data;
+};
+
 // Получение статистики по автомобилям
 export const getVehicleStats = async (month?: string): Promise<VehicleStats[]> => {
   const params = month ? { month } : {};

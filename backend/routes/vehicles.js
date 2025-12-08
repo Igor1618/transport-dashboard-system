@@ -2,6 +2,31 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/database');
 
+// GET /api/vehicles/canonical
+// Получение списка канонических (правильных) номеров машин
+router.get('/canonical', async (req, res) => {
+  try {
+    // Получаем список номеров машин с количеством рейсов
+    // Берем самый частый вариант написания каждого номера
+    const query = `
+      SELECT
+        vehicle_number,
+        COUNT(*) as trips_count
+      FROM trips
+      GROUP BY vehicle_number
+      ORDER BY trips_count DESC
+    `;
+
+    const result = await pool.query(query);
+    const canonicalNumbers = result.rows.map(row => row.vehicle_number);
+
+    res.json(canonicalNumbers);
+  } catch (error) {
+    console.error('Ошибка получения канонических номеров:', error);
+    res.status(500).json({ message: 'Ошибка сервера' });
+  }
+});
+
 // GET /api/vehicles/stats - статистика по автомобилям
 router.get('/stats', async (req, res) => {
   try {
