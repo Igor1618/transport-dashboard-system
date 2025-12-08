@@ -58,9 +58,9 @@ const SalaryPage: React.FC = () => {
     return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
-  const totalSalary = salaryData.reduce((sum, item) => sum + item.net_salary, 0);
-  const totalRevenue = salaryData.reduce((sum, item) => sum + item.total_revenue, 0);
-  const totalPenalties = salaryData.reduce((sum, item) => sum + item.total_penalties, 0);
+  const totalSalary = salaryData.reduce((sum, item) => sum + Number(item.net_salary), 0);
+  const totalRevenue = salaryData.reduce((sum, item) => sum + Number(item.total_revenue), 0);
+  const totalPenalties = salaryData.reduce((sum, item) => sum + Number(item.total_penalties), 0);
 
   if (isLoading) {
     return (

@@ -198,20 +198,20 @@ const TripsPage: React.FC = () => {
               <div>
                 <p className="text-sm text-gray-600">Общая сумма</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {filteredTrips.reduce((sum, trip) => sum + trip.trip_amount, 0).toLocaleString('ru-RU')} ₽
+                  {filteredTrips.reduce((sum, trip) => sum + Number(trip.trip_amount), 0).toLocaleString('ru-RU')} ₽
                 </p>
               </div>
             )}
             <div>
               <p className="text-sm text-gray-600">Всего км</p>
               <p className="text-2xl font-bold text-gray-900">
-                {filteredTrips.reduce((sum, trip) => sum + trip.distance_km, 0).toLocaleString('ru-RU')}
+                {filteredTrips.reduce((sum, trip) => sum + Number(trip.distance_km), 0).toLocaleString('ru-RU')}
               </p>
             </div>
             <div>
               <p className="text-sm text-gray-600">Штрафы</p>
               <p className="text-2xl font-bold text-red-600">
-                {filteredTrips.reduce((sum, trip) => sum + trip.penalty_amount, 0).toLocaleString('ru-RU')} ₽
+                {filteredTrips.reduce((sum, trip) => sum + Number(trip.penalty_amount), 0).toLocaleString('ru-RU')} ₽
               </p>
             </div>
           </div>
