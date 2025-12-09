@@ -215,6 +215,46 @@ const DashboardPage: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Зарплаты водителей */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
+          <div className="flex items-center mb-2">
+            <div className="bg-violet-100 p-2 md:p-3 rounded-lg">
+              <DollarSign className="text-violet-600" size={20} />
+            </div>
+            <div className="ml-3 md:ml-4 flex-1">
+              <p className="text-xs md:text-sm text-gray-600">Зарплаты водителей</p>
+              <p className="text-lg md:text-2xl font-bold text-gray-900">
+                {stats?.totalSalary.toLocaleString('ru-RU')} ₽
+              </p>
+            </div>
+          </div>
+          {stats?.changes && (
+            <div className="mt-2">
+              <PercentageChange value={stats.changes.totalSalary} />
+            </div>
+          )}
+        </div>
+
+        {/* Выручка на километр */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
+          <div className="flex items-center mb-2">
+            <div className="bg-amber-100 p-2 md:p-3 rounded-lg">
+              <TrendingUp className="text-amber-600" size={20} />
+            </div>
+            <div className="ml-3 md:ml-4 flex-1">
+              <p className="text-xs md:text-sm text-gray-600">Выручка на километр</p>
+              <p className="text-lg md:text-2xl font-bold text-gray-900">
+                {stats?.revenuePerKm.toFixed(2)} ₽/км
+              </p>
+            </div>
+          </div>
+          {stats?.changes && (
+            <div className="mt-2">
+              <PercentageChange value={stats.changes.revenuePerKm} />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Графики */}

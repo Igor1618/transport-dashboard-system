@@ -35,6 +35,9 @@ export interface Stats {
   totalDrivers: number;
   totalVehicles: number;
   totalPenalties: number;
+  totalSalary: number;
+  totalDistance: number;
+  revenuePerKm: number;
   tripsThisMonth: number;
   changes?: {
     totalTrips: number;
@@ -43,6 +46,8 @@ export interface Stats {
     totalDrivers: number;
     totalVehicles: number;
     totalPenalties: number;
+    totalSalary: number;
+    revenuePerKm: number;
   };
 }
 

@@ -37,7 +37,8 @@ router.get('/', async (req, res) => {
         COALESCE(SUM(trip_amount * 1.2), 0) as total_revenue_with_vat,
         COALESCE(SUM(penalty_amount), 0) as total_penalties,
         COUNT(DISTINCT driver_name) as total_drivers,
-        COUNT(DISTINCT vehicle_number) as total_vehicles
+        COUNT(DISTINCT vehicle_number) as total_vehicles,
+        COALESCE(SUM(distance_km), 0) as total_distance
       FROM trips
       WHERE loading_date >= $1 AND loading_date <= $2
     `;
@@ -50,7 +51,8 @@ router.get('/', async (req, res) => {
         COALESCE(SUM(trip_amount * 1.2), 0) as total_revenue_with_vat,
         COALESCE(SUM(penalty_amount), 0) as total_penalties,
         COUNT(DISTINCT driver_name) as total_drivers,
-        COUNT(DISTINCT vehicle_number) as total_vehicles
+        COUNT(DISTINCT vehicle_number) as total_vehicles,
+        COALESCE(SUM(distance_km), 0) as total_distance
       FROM trips
       WHERE loading_date >= $1 AND loading_date <= $2
     `;
@@ -67,22 +69,40 @@ router.get('/', async (req, res) => {
       return ((current - previous) / previous) * 100;
     };
 
+    const currentRevenue = parseFloat(currentStats.total_revenue) || 0;
+    const currentPenalties = parseFloat(currentStats.total_penalties) || 0;
+    const currentDistance = parseFloat(currentStats.total_distance) || 0;
+    const currentSalary = (currentRevenue * 0.3) - currentPenalties;
+    const currentRevenuePerKm = currentDistance > 0 ? currentRevenue / currentDistance : 0;
+
+    const prevRevenue = parseFloat(prevStats.total_revenue) || 0;
+    const prevPenalties = parseFloat(prevStats.total_penalties) || 0;
+    const prevDistance = parseFloat(prevStats.total_distance) || 0;
+    const prevSalary = (prevRevenue * 0.3) - prevPenalties;
+    const prevRevenuePerKm = prevDistance > 0 ? prevRevenue / prevDistance : 0;
+
     const current = {
       totalTrips: parseInt(currentStats.total_trips) || 0,
-      totalRevenue: parseFloat(currentStats.total_revenue) || 0,
+      totalRevenue: currentRevenue,
       totalRevenueWithVat: parseFloat(currentStats.total_revenue_with_vat) || 0,
       totalDrivers: parseInt(currentStats.total_drivers) || 0,
       totalVehicles: parseInt(currentStats.total_vehicles) || 0,
-      totalPenalties: parseFloat(currentStats.total_penalties) || 0,
+      totalPenalties: currentPenalties,
+      totalSalary: currentSalary,
+      totalDistance: currentDistance,
+      revenuePerKm: currentRevenuePerKm,
     };
 
     const previous = {
       totalTrips: parseInt(prevStats.total_trips) || 0,
-      totalRevenue: parseFloat(prevStats.total_revenue) || 0,
+      totalRevenue: prevRevenue,
       totalRevenueWithVat: parseFloat(prevStats.total_revenue_with_vat) || 0,
       totalDrivers: parseInt(prevStats.total_drivers) || 0,
       totalVehicles: parseInt(prevStats.total_vehicles) || 0,
-      totalPenalties: parseFloat(prevStats.total_penalties) || 0,
+      totalPenalties: prevPenalties,
+      totalSalary: prevSalary,
+      totalDistance: prevDistance,
+      revenuePerKm: prevRevenuePerKm,
     };
 
     const changes = {
@@ -92,6 +112,8 @@ router.get('/', async (req, res) => {
       totalDrivers: calculateChange(current.totalDrivers, previous.totalDrivers),
       totalVehicles: calculateChange(current.totalVehicles, previous.totalVehicles),
       totalPenalties: calculateChange(current.totalPenalties, previous.totalPenalties),
+      totalSalary: calculateChange(current.totalSalary, previous.totalSalary),
+      revenuePerKm: calculateChange(current.revenuePerKm, previous.revenuePerKm),
     };
 
     res.json({
