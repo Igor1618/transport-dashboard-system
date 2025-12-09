@@ -35,6 +35,12 @@ const routesRoutes = require('./routes/routes');
 const vehiclesRoutes = require('./routes/vehicles');
 const usersRoutes = require('./routes/users');
 
+// 1C Integration Routes
+const driversRoutes = require('./routes/drivers');
+const contractsRoutes = require('./routes/contracts');
+const driverReportsRoutes = require('./routes/driverReports');
+const analyticsRoutes = require('./routes/analytics');
+
 app.use('/auth', authRoutes);
 app.use('/stats', statsRoutes);
 app.use('/trips', tripsRoutes);
@@ -44,6 +50,12 @@ app.use('/import-history', importHistoryRoutes);
 app.use('/routes', routesRoutes);
 app.use('/vehicles', vehiclesRoutes);
 app.use('/users', usersRoutes);
+
+// 1C Integration Endpoints
+app.use('/drivers', driversRoutes);
+app.use('/contracts', contractsRoutes);
+app.use('/driver-reports', driverReportsRoutes);
+app.use('/analytics', analyticsRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -68,19 +80,26 @@ app.listen(PORT, () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
-║   🚛  TL196 Backend API                                   ║
+║   🚛  TL196 Backend API + 1C Integration                 ║
 ║                                                           ║
 ║   Сервер запущен на порту: ${PORT}                          ║
 ║   Режим: ${process.env.NODE_ENV || 'development'}                              ║
 ║   Время: ${new Date().toLocaleString('ru-RU')}            ║
 ║                                                           ║
-║   Доступные endpoints:                                    ║
+║   Основные endpoints:                                     ║
 ║   - POST /auth/login                                      ║
 ║   - GET  /stats                                           ║
 ║   - GET  /trips                                           ║
 ║   - GET  /salary                                          ║
 ║   - POST /upload                                          ║
 ║   - GET  /import-history                                  ║
+║                                                           ║
+║   1C Integration endpoints:                               ║
+║   - GET  /drivers                                         ║
+║   - GET  /contracts                                       ║
+║   - GET  /driver-reports                                  ║
+║   - GET  /analytics/*                                     ║
+║                                                           ║
 ║   - GET  /health                                          ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
