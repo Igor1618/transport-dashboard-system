@@ -76,49 +76,44 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ data }) => {
         </ResponsiveContainer>
       </div>
 
-      {/* График штрафов */}
+      {/* График зарплат */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">Штрафы по месяцам</h3>
+        <h3 className="text-lg font-bold text-gray-900 mb-4">Зарплаты водителей</h3>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={data}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="monthName" fontSize={12} />
             <YAxis fontSize={12} tickFormatter={formatCurrency} />
             <Tooltip
-              formatter={(value: number) => [`${value.toLocaleString('ru-RU')} ₽`, 'Штрафы']}
+              formatter={(value: number) => [`${value.toLocaleString('ru-RU')} ₽`, 'Зарплаты']}
               labelStyle={{ color: '#000' }}
             />
             <Legend />
-            <Bar dataKey="totalPenalties" fill="#ef4444" name="Штрафы" />
+            <Bar dataKey="totalSalary" fill="#8b5cf6" name="Зарплаты" />
           </BarChart>
         </ResponsiveContainer>
       </div>
 
-      {/* График водителей и машин */}
+      {/* График рубль/км */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">Водители и транспорт</h3>
+        <h3 className="text-lg font-bold text-gray-900 mb-4">Выручка на километр</h3>
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="monthName" fontSize={12} />
             <YAxis fontSize={12} />
-            <Tooltip labelStyle={{ color: '#000' }} />
+            <Tooltip
+              formatter={(value: number) => [`${value.toFixed(2)} ₽/км`, 'Выручка/км']}
+              labelStyle={{ color: '#000' }}
+            />
             <Legend />
             <Line
               type="monotone"
-              dataKey="totalDrivers"
-              stroke="#8b5cf6"
+              dataKey="revenuePerKm"
+              stroke="#f59e0b"
               strokeWidth={2}
-              name="Водителей"
-              dot={{ fill: '#8b5cf6', r: 4 }}
-            />
-            <Line
-              type="monotone"
-              dataKey="totalVehicles"
-              stroke="#6366f1"
-              strokeWidth={2}
-              name="Машин"
-              dot={{ fill: '#6366f1', r: 4 }}
+              name="₽/км"
+              dot={{ fill: '#f59e0b', r: 4 }}
             />
           </LineChart>
         </ResponsiveContainer>

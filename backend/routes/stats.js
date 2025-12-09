@@ -127,7 +127,8 @@ router.get('/monthly', async (req, res) => {
           COALESCE(SUM(trip_amount * 1.2), 0) as total_revenue_with_vat,
           COALESCE(SUM(penalty_amount), 0) as total_penalties,
           COUNT(DISTINCT driver_name) as total_drivers,
-          COUNT(DISTINCT vehicle_number) as total_vehicles
+          COUNT(DISTINCT vehicle_number) as total_vehicles,
+          COALESCE(SUM(distance_km), 0) as total_distance
         FROM trips
         WHERE loading_date >= $1 AND loading_date <= $2
       `;
@@ -135,15 +136,28 @@ router.get('/monthly', async (req, res) => {
       const result = await pool.query(statsQuery, [monthStart, monthEnd]);
       const stats = result.rows[0];
 
+      // Рассчитываем общую зарплату за месяц
+      // Зарплата = 30% от выручки - штрафы
+      const totalRevenue = parseFloat(stats.total_revenue) || 0;
+      const totalPenalties = parseFloat(stats.total_penalties) || 0;
+      const totalSalary = (totalRevenue * 0.3) - totalPenalties;
+
+      // Рассчитываем рубль/км
+      const totalDistance = parseFloat(stats.total_distance) || 0;
+      const revenuePerKm = totalDistance > 0 ? totalRevenue / totalDistance : 0;
+
       monthsData.push({
         month: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
         monthName: date.toLocaleDateString('ru-RU', { month: 'short', year: 'numeric' }),
         totalTrips: parseInt(stats.total_trips) || 0,
-        totalRevenue: parseFloat(stats.total_revenue) || 0,
+        totalRevenue: totalRevenue,
         totalRevenueWithVat: parseFloat(stats.total_revenue_with_vat) || 0,
         totalDrivers: parseInt(stats.total_drivers) || 0,
         totalVehicles: parseInt(stats.total_vehicles) || 0,
-        totalPenalties: parseFloat(stats.total_penalties) || 0,
+        totalPenalties: totalPenalties,
+        totalSalary: totalSalary,
+        totalDistance: totalDistance,
+        revenuePerKm: revenuePerKm,
       });
     }
 

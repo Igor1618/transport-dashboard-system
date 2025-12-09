@@ -55,6 +55,9 @@ export interface MonthlyStats {
   totalDrivers: number;
   totalVehicles: number;
   totalPenalties: number;
+  totalSalary: number;
+  totalDistance: number;
+  revenuePerKm: number;
 }
 
 export interface Trip {
