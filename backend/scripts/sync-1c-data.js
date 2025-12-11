@@ -207,22 +207,62 @@ async function syncContracts() {
 async function syncDriverReports() {
   console.log('\n📋 4. Синхронизация отчетов водителей...');
 
-  const reports = await fetch1CData('/driver-reports', {
-    date_from: dateFrom,
-    date_to: dateTo
-  });
+  // Разбиваем период на недельные интервалы для обхода ограничения API (макс. 1000 записей)
+  const weeklyRanges = [];
+  const startDate = new Date(dateFrom);
+  const endDate = new Date(dateTo);
 
-  if (!reports || !Array.isArray(reports)) {
+  let currentStart = new Date(startDate);
+  while (currentStart <= endDate) {
+    let currentEnd = new Date(currentStart);
+    currentEnd.setDate(currentEnd.getDate() + 6); // +6 дней = неделя
+
+    if (currentEnd > endDate) {
+      currentEnd = new Date(endDate);
+    }
+
+    weeklyRanges.push({
+      from: currentStart.toISOString().split('T')[0],
+      to: currentEnd.toISOString().split('T')[0]
+    });
+
+    currentStart.setDate(currentStart.getDate() + 7);
+  }
+
+  console.log(`   Период разбит на ${weeklyRanges.length} недельных интервалов`);
+
+  let allReports = [];
+
+  // Загружаем данные по неделям
+  for (let i = 0; i < weeklyRanges.length; i++) {
+    const range = weeklyRanges[i];
+    console.log(`   Загрузка ${i + 1}/${weeklyRanges.length}: ${range.from} - ${range.to}`);
+
+    const reports = await fetch1CData('/driver-reports', {
+      date_from: range.from,
+      date_to: range.to
+    });
+
+    if (!reports || !Array.isArray(reports)) {
+      console.error(`   ⚠️  Не удалось получить отчеты за период ${range.from} - ${range.to}`);
+      continue;
+    }
+
+    console.log(`   Получено: ${reports.length} записей`);
+    allReports = allReports.concat(reports);
+  }
+
+  if (allReports.length === 0) {
     console.error('❌ Не удалось получить отчеты водителей');
     return;
   }
 
-  console.log(`   Получено: ${reports.length} записей`);
+  console.log(`   Всего получено: ${allReports.length} записей`);
 
   let inserted = 0;
   let updated = 0;
 
-  for (const report of reports) {
+  for (const report of allReports) {
     try {
       const result = await pool.query(
         `INSERT INTO driver_reports (
