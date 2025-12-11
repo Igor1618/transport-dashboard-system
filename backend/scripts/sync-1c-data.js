@@ -6,6 +6,10 @@
  * Пример: node sync-1c-data.js 2024-11
  */
 
+// Отключаем прокси для локальной сети
+process.env.NO_PROXY = (process.env.NO_PROXY || process.env.no_proxy || '') + ',192.168.33.250,192.168.33.0/24';
+process.env.no_proxy = process.env.NO_PROXY;
+
 const axios = require('axios');
 const { Pool } = require('pg');
 require('dotenv').config({ path: '../.env' });
@@ -20,11 +24,28 @@ const API_AUTH = {
 // Подключение к БД
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 5432,
+  port: process.env.DB_PORT || 5433,
   database: process.env.DB_NAME || 'postgres',
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD
 });
+
+// Функция для парсинга чисел из формата 1C (с пробелами и запятыми)
+function parseNumber(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  if (typeof value === 'number') {
+    return value;
+  }
+
+  // Убираем пробелы и заменяем запятую на точку
+  const cleaned = String(value).replace(/\s/g, '').replace(',', '.');
+  const parsed = parseFloat(cleaned);
+
+  return isNaN(parsed) ? null : parsed;
+}
 
 // Получить период для загрузки
 const args = process.argv.slice(2);
@@ -32,6 +53,10 @@ const month = args[0] || '2024-11'; // По умолчанию ноябрь 2024
 
 const dateFrom = `${month}-01`;
 const dateTo = month === '2024-11' ? '2024-11-30' : `${month}-30`;
+
+console.error('===== SCRIPT STARTING =====');
+console.error('DEBUG TOP LEVEL: dateFrom=', dateFrom, 'dateTo=', dateTo);
+console.error('===========================');
 
 console.log(`
 ╔═══════════════════════════════════════════════════════════╗
@@ -206,9 +231,11 @@ async function syncContracts() {
 // 4. Синхронизация отчетов водителей
 async function syncDriverReports() {
   console.log('\n📋 4. Синхронизация отчетов водителей...');
+  console.log('DEBUG: dateFrom =', dateFrom, 'dateTo =', dateTo);
 
   // Разбиваем период на недельные интервалы для обхода ограничения API (макс. 1000 записей)
   const weeklyRanges = [];
+  console.log('DEBUG: Начало создания недельных интервалов...');
   const startDate = new Date(dateFrom);
   const endDate = new Date(dateTo);
 
@@ -299,14 +326,14 @@ async function syncDriverReports() {
           report.driver_name,
           report.vehicle_id,
           report.vehicle_number,
-          report.fuel_start,
-          report.fuel_end,
-          report.mileage,
-          report.fuel_quantity,
-          report.fuel_amount,
-          report.total_expenses,
-          report.driver_accruals,
-          report.driver_payments
+          parseNumber(report.fuel_start),
+          parseNumber(report.fuel_end),
+          parseNumber(report.mileage),
+          parseNumber(report.fuel_quantity),
+          parseNumber(report.fuel_amount),
+          parseNumber(report.total_expenses),
+          parseNumber(report.driver_accruals),
+          parseNumber(report.driver_payments)
         ]
       );
 
@@ -326,7 +353,7 @@ async function syncDriverReports() {
           await pool.query(
             `INSERT INTO expense_categories (driver_report_id, category, amount)
              VALUES ($1, $2, $3)`,
-            [report.id, category.category, category.amount]
+            [report.id, category.category, parseNumber(category.amount)]
           );
         }
       }
@@ -344,6 +371,7 @@ async function main() {
     await syncVehicles();
     await syncDrivers();
     await syncContracts();
+    console.log('DEBUG: Вызов syncDriverReports(), dateFrom=', dateFrom, 'dateTo=', dateTo);
     await syncDriverReports();
 
     console.log(`
