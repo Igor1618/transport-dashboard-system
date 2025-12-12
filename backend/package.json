@@ -1,0 +1,21 @@
+{
+  "name": "transport-dashboard-backend",
+  "version": "1.0.0",
+  "description": "Backend синхронизации данных из 1C ERP в PostgreSQL для транспортной компании",
+  "main": "scripts/sync-1c-data.js",
+  "scripts": {
+    "sync": "node scripts/sync-1c-data.js",
+    "diagnose": "node scripts/diagnose-db-connection.js",
+    "load-reports": "node scripts/load-driver-reports-nov.js",
+    "test-db": "node -e \"const {Pool}=require('pg'); const p=new Pool({host:'localhost',port:5433,database:'postgres',user:'postgres',password:'5+NMkUPabjFbh5vGZtWx5ea0QAX2NSR3G1k0sfAedms='}); p.query('SELECT 1').then(()=>{console.log('OK');p.end()}).catch(e=>{console.error(e.message);p.end()})\""
+  },
+  "dependencies": {
+    "pg": "^8.11.3",
+    "dotenv": "^16.3.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "",
+  "license": "ISC"
+}
