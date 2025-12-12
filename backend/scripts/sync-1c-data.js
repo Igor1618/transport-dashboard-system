@@ -47,8 +47,8 @@ const DB_CONFIG = {
 // ==========================================
 const API_CONFIG = {
   baseUrl: 'http://192.168.33.250/tk/hs/TransportAPI/api/v1',
-  username: 'api_user',
-  password: 'api_password',
+  username: 'TransportAPI',
+  password: 'TransportAPI_SecretPass',
   timeout: 30000
 };
 
