@@ -1,0 +1,582 @@
+{
+  "name": "1C → PostgreSQL Sync (Fixed)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 2 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Schedule: Daily 2 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-400, 300],
+      "id": "trigger-schedule"
+    },
+    {
+      "parameters": {},
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-400, 100],
+      "id": "trigger-manual"
+    },
+    {
+      "parameters": {
+        "url": "http://192.168.33.250/tk/hs/TransportAPI/api/v1/vehicles",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "1C: Get Vehicles",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-100, 0],
+      "id": "get-vehicles",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "kVIepkfhbBhTYFg5",
+          "name": "TransportAPI"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "http://192.168.33.250/tk/hs/TransportAPI/api/v1/drivers",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "1C: Get Drivers",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-100, 200],
+      "id": "get-drivers",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "kVIepkfhbBhTYFg5",
+          "name": "TransportAPI"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "=http://192.168.33.250/tk/hs/TransportAPI/api/v1/contracts?date_from={{ $now.minus(30, 'days').toFormat('yyyy-MM-dd') }}&date_to={{ $now.toFormat('yyyy-MM-dd') }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "name": "1C: Get Contracts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-100, 400],
+      "id": "get-contracts",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "kVIepkfhbBhTYFg5",
+          "name": "TransportAPI"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "=http://192.168.33.250/tk/hs/TransportAPI/api/v1/driver-reports?date_from={{ $now.minus(30, 'days').toFormat('yyyy-MM-dd') }}&date_to={{ $now.toFormat('yyyy-MM-dd') }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "name": "1C: Get Driver Reports",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-100, 600],
+      "id": "get-driver-reports",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "kVIepkfhbBhTYFg5",
+          "name": "TransportAPI"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Проверяем что данные получены и трансформируем для PostgreSQL\nconst items = $input.all();\n\n// Если ошибка - возвращаем пустой массив\nif (!items || items.length === 0 || items[0].json.error) {\n  console.log('⚠️ Vehicles: No data or error');\n  return [];\n}\n\n// Если данные вложены в массив\nlet vehicles = items;\nif (items[0].json && Array.isArray(items[0].json)) {\n  vehicles = items[0].json.map(v => ({ json: v }));\n}\n\nconst result = [];\nfor (const item of vehicles) {\n  const v = item.json;\n  result.push({\n    json: {\n      id: String(v.id || v.Ref_Key || '').trim(),\n      license_plate: String(v.license_plate || v.ГосНомер || v.RegNumber || '').trim(),\n      model: String(v.model || v.Модель || v.Model || v.Description || 'Неизвестно').trim()\n    }\n  });\n}\n\nconsole.log(`✅ Vehicles: ${result.length} records`);\nreturn result;"
+      },
+      "name": "Transform: Vehicles",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [150, 0],
+      "id": "transform-vehicles"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Проверяем что данные получены и трансформируем для PostgreSQL\nconst items = $input.all();\n\nif (!items || items.length === 0 || items[0].json.error) {\n  console.log('⚠️ Drivers: No data or error');\n  return [];\n}\n\nlet drivers = items;\nif (items[0].json && Array.isArray(items[0].json)) {\n  drivers = items[0].json.map(d => ({ json: d }));\n}\n\nconst result = [];\nfor (const item of drivers) {\n  const d = item.json;\n  result.push({\n    json: {\n      id: String(d.id || d.Ref_Key || d.full_name || '').trim(),\n      full_name: String(d.full_name || d.ФИО || d.Description || d.name || 'Неизвестно').trim()\n    }\n  });\n}\n\nconsole.log(`✅ Drivers: ${result.length} records`);\nreturn result;"
+      },
+      "name": "Transform: Drivers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [150, 200],
+      "id": "transform-drivers"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Трансформация контрактов с безопасным экранированием\nconst items = $input.all();\n\nif (!items || items.length === 0 || items[0].json.error) {\n  console.log('⚠️ Contracts: No data or error');\n  return [];\n}\n\nlet contracts = items;\nif (items[0].json && Array.isArray(items[0].json)) {\n  contracts = items[0].json.map(c => ({ json: c }));\n}\n\n// Функция для безопасного экранирования строк\nfunction esc(val) {\n  if (val === null || val === undefined) return null;\n  return String(val).replace(/'/g, \"''\");\n}\n\nconst result = [];\nfor (const item of contracts) {\n  const c = item.json;\n  result.push({\n    json: {\n      number: esc(c.number || c.Номер),\n      date: c.date || c.Дата,\n      organization: esc(c.organization || c.Организация || ''),\n      contractor_id: esc(c.contractor_id || c.Контрагент_Key || ''),\n      contractor_name: esc(c.contractor_name || c.Контрагент || ''),\n      vehicle_id: esc(c.vehicle_id || c.ТС_Key || ''),\n      vehicle_number: esc(c.vehicle_number || c.ГосНомер || ''),\n      driver_id: esc(c.driver_id || c.Водитель_Key || ''),\n      driver_name: esc(c.driver_name || c.Водитель || ''),\n      responsible_logist: esc(c.responsible_logist || c.ОтветственныйЛогист || ''),\n      route: esc(c.route || c.Маршрут || ''),\n      payment_term: esc(c.payment_term || c.УсловияОплаты || ''),\n      payment_condition: esc(c.payment_condition || c.СрокОплаты || ''),\n      amount: parseFloat(c.amount || c.Сумма || 0) || 0\n    }\n  });\n}\n\nconsole.log(`✅ Contracts: ${result.length} records`);\nreturn result;"
+      },
+      "name": "Transform: Contracts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [150, 400],
+      "id": "transform-contracts"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Трансформация отчётов водителей\nconst items = $input.all();\n\nif (!items || items.length === 0 || items[0].json.error) {\n  console.log('⚠️ Driver Reports: No data or error');\n  return [];\n}\n\nlet reports = items;\nif (items[0].json && Array.isArray(items[0].json)) {\n  reports = items[0].json.map(r => ({ json: r }));\n}\n\nfunction esc(val) {\n  if (val === null || val === undefined) return null;\n  return String(val).replace(/'/g, \"''\");\n}\n\nconst result = [];\nfor (const item of reports) {\n  const r = item.json;\n  result.push({\n    json: {\n      id: esc(r.id || r.Ref_Key),\n      number: esc(r.number || r.Номер),\n      date_from: r.date_from || r.ДатаНачала,\n      date_to: r.date_to || r.ДатаОкончания,\n      driver_id: esc(r.driver_id || r.Водитель_Key || ''),\n      driver_name: esc(r.driver_name || r.Водитель || ''),\n      vehicle_id: esc(r.vehicle_id || r.ТС_Key || ''),\n      vehicle_number: esc(r.vehicle_number || r.ГосНомер || ''),\n      fuel_start: parseFloat(r.fuel_start || r.ТопливоНачало || 0) || 0,\n      fuel_end: parseFloat(r.fuel_end || r.ТопливоКонец || 0) || 0,\n      mileage: parseFloat(r.mileage || r.Пробег || 0) || 0,\n      fuel_quantity: parseFloat(r.fuel_quantity || r.КоличествоТоплива || 0) || 0,\n      fuel_amount: parseFloat(r.fuel_amount || r.СуммаТоплива || 0) || 0,\n      total_expenses: parseFloat(r.total_expenses || r.ВсегоРасходы || 0) || 0,\n      driver_accruals: parseFloat(r.driver_accruals || r.НачисленоВодителю || 0) || 0,\n      driver_payments: parseFloat(r.driver_payments || r.ВыплаченоВодителю || 0) || 0,\n      expense_categories: r.expense_categories || r.КатегорииРасходов || []\n    }\n  });\n}\n\nconsole.log(`✅ Driver Reports: ${result.length} records`);\nreturn result;"
+      },
+      "name": "Transform: Driver Reports",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [150, 600],
+      "id": "transform-driver-reports"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM vehicles; SELECT 'vehicles cleared' as status;",
+        "options": {}
+      },
+      "name": "DB: Clear Vehicles",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [400, 0],
+      "id": "clear-vehicles",
+      "credentials": {
+        "postgres": {
+          "id": "LIDFwhUbrNchvBBP",
+          "name": "Postgres_Direct"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM drivers; SELECT 'drivers cleared' as status;",
+        "options": {}
+      },
+      "name": "DB: Clear Drivers",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [400, 200],
+      "id": "clear-drivers",
+      "credentials": {
+        "postgres": {
+          "id": "LIDFwhUbrNchvBBP",
+          "name": "Postgres_Direct"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": "public",
+        "table": "vehicles",
+        "columns": "id, license_plate, model",
+        "options": {}
+      },
+      "name": "DB: Insert Vehicles",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [650, 0],
+      "id": "insert-vehicles",
+      "credentials": {
+        "postgres": {
+          "id": "LIDFwhUbrNchvBBP",
+          "name": "Postgres_Direct"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": "public",
+        "table": "drivers",
+        "columns": "id, full_name",
+        "options": {}
+      },
+      "name": "DB: Insert Drivers",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [650, 200],
+      "id": "insert-drivers",
+      "credentials": {
+        "postgres": {
+          "id": "LIDFwhUbrNchvBBP",
+          "name": "Postgres_Direct"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "schema": "public",
+        "table": "contracts",
+        "columns": "number, date, organization, contractor_id, contractor_name, vehicle_id, vehicle_number, driver_id, driver_name, responsible_logist, route, payment_term, payment_condition, amount",
+        "conflictColumns": "number, date",
+        "options": {}
+      },
+      "name": "DB: Upsert Contracts",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [400, 400],
+      "id": "upsert-contracts",
+      "credentials": {
+        "postgres": {
+          "id": "LIDFwhUbrNchvBBP",
+          "name": "Postgres_Direct"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "schema": "public",
+        "table": "driver_reports",
+        "columns": "id, number, date_from, date_to, driver_id, driver_name, vehicle_id, vehicle_number, fuel_start, fuel_end, mileage, fuel_quantity, fuel_amount, total_expenses, driver_accruals, driver_payments",
+        "conflictColumns": "id",
+        "options": {}
+      },
+      "name": "DB: Upsert Driver Reports",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [400, 600],
+      "id": "upsert-driver-reports",
+      "credentials": {
+        "postgres": {
+          "id": "LIDFwhUbrNchvBBP",
+          "name": "Postgres_Direct"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Извлекаем категории расходов из отчётов водителей\nconst items = $input.all();\nconst result = [];\n\nfor (const item of items) {\n  const reportId = item.json.id;\n  const categories = item.json.expense_categories || [];\n  \n  if (Array.isArray(categories)) {\n    for (const cat of categories) {\n      result.push({\n        json: {\n          driver_report_id: reportId,\n          category: String(cat.category || cat.Категория || '').replace(/'/g, \"''\"),\n          amount: parseFloat(cat.amount || cat.Сумма || 0) || 0\n        }\n      });\n    }\n  }\n}\n\nconsole.log(`✅ Expense Categories: ${result.length} records`);\nreturn result;"
+      },
+      "name": "Extract: Expense Categories",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 800],
+      "id": "extract-expense-categories"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM expense_categories WHERE driver_report_id IN (SELECT id FROM driver_reports WHERE date_from >= CURRENT_DATE - INTERVAL '30 days'); SELECT 'expense_categories cleared' as status;",
+        "options": {}
+      },
+      "name": "DB: Clear Expense Categories",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [650, 800],
+      "id": "clear-expense-categories",
+      "credentials": {
+        "postgres": {
+          "id": "LIDFwhUbrNchvBBP",
+          "name": "Postgres_Direct"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": "public",
+        "table": "expense_categories",
+        "columns": "driver_report_id, category, amount",
+        "options": {}
+      },
+      "name": "DB: Insert Expense Categories",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [900, 800],
+      "id": "insert-expense-categories",
+      "credentials": {
+        "postgres": {
+          "id": "LIDFwhUbrNchvBBP",
+          "name": "Postgres_Direct"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Собираем статистику синхронизации\nconst stats = {\n  sync_time: new Date().toISOString(),\n  vehicles: 0,\n  drivers: 0,\n  contracts: 0,\n  driver_reports: 0,\n  expense_categories: 0,\n  errors: []\n};\n\ntry {\n  // Получаем данные из предыдущих нодов\n  const vehiclesData = $('Transform: Vehicles').all();\n  const driversData = $('Transform: Drivers').all();\n  const contractsData = $('Transform: Contracts').all();\n  const reportsData = $('Transform: Driver Reports').all();\n  const categoriesData = $('Extract: Expense Categories').all();\n  \n  stats.vehicles = vehiclesData.length;\n  stats.drivers = driversData.length;\n  stats.contracts = contractsData.length;\n  stats.driver_reports = reportsData.length;\n  stats.expense_categories = categoriesData.length;\n  \n} catch (e) {\n  stats.errors.push(e.message);\n}\n\nstats.status = stats.errors.length === 0 ? 'SUCCESS' : 'PARTIAL';\nstats.total_records = stats.vehicles + stats.drivers + stats.contracts + stats.driver_reports + stats.expense_categories;\n\nconsole.log('📊 Sync Report:', JSON.stringify(stats, null, 2));\n\nreturn [{ json: stats }];"
+      },
+      "name": "Create: Sync Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300],
+      "id": "create-sync-report"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO import_log (sync_time, vehicles_count, drivers_count, contracts_count, driver_reports_count, expense_categories_count, status, errors)\nVALUES (\n  '{{ $json.sync_time }}',\n  {{ $json.vehicles }},\n  {{ $json.drivers }},\n  {{ $json.contracts }},\n  {{ $json.driver_reports }},\n  {{ $json.expense_categories }},\n  '{{ $json.status }}',\n  '{{ JSON.stringify($json.errors) }}'\n)\nON CONFLICT DO NOTHING;",
+        "options": {}
+      },
+      "name": "DB: Log Sync Result",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1350, 300],
+      "id": "log-sync-result",
+      "credentials": {
+        "postgres": {
+          "id": "LIDFwhUbrNchvBBP",
+          "name": "Postgres_Direct"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "SUCCESS",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Check: Status",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1550, 300],
+      "id": "check-status"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "message",
+              "value": "=✅ Синхронизация 1C → PostgreSQL завершена успешно!\n\n📊 Статистика:\n• Машин: {{ $json.vehicles }}\n• Водителей: {{ $json.drivers }}\n• Договоров: {{ $json.contracts }}\n• Отчётов: {{ $json.driver_reports }}\n• Категорий расходов: {{ $json.expense_categories }}\n\n⏱ Время: {{ $json.sync_time }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Success Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1800, 200],
+      "id": "success-message"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "message",
+              "value": "=⚠️ Синхронизация завершена с ошибками!\n\n📊 Статистика:\n• Машин: {{ $json.vehicles }}\n• Водителей: {{ $json.drivers }}\n• Договоров: {{ $json.contracts }}\n• Отчётов: {{ $json.driver_reports }}\n\n❌ Ошибки: {{ $json.errors.join(', ') }}\n\n⏱ Время: {{ $json.sync_time }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Error Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1800, 400],
+      "id": "error-message"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch",
+        "output": "empty"
+      },
+      "name": "Wait: All Done",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [900, 300],
+      "id": "wait-all-done"
+    }
+  ],
+  "connections": {
+    "Schedule: Daily 2 AM": {
+      "main": [
+        [
+          { "node": "1C: Get Vehicles", "type": "main", "index": 0 },
+          { "node": "1C: Get Drivers", "type": "main", "index": 0 },
+          { "node": "1C: Get Contracts", "type": "main", "index": 0 },
+          { "node": "1C: Get Driver Reports", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          { "node": "1C: Get Vehicles", "type": "main", "index": 0 },
+          { "node": "1C: Get Drivers", "type": "main", "index": 0 },
+          { "node": "1C: Get Contracts", "type": "main", "index": 0 },
+          { "node": "1C: Get Driver Reports", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "1C: Get Vehicles": {
+      "main": [
+        [{ "node": "Transform: Vehicles", "type": "main", "index": 0 }]
+      ]
+    },
+    "1C: Get Drivers": {
+      "main": [
+        [{ "node": "Transform: Drivers", "type": "main", "index": 0 }]
+      ]
+    },
+    "1C: Get Contracts": {
+      "main": [
+        [{ "node": "Transform: Contracts", "type": "main", "index": 0 }]
+      ]
+    },
+    "1C: Get Driver Reports": {
+      "main": [
+        [{ "node": "Transform: Driver Reports", "type": "main", "index": 0 }]
+      ]
+    },
+    "Transform: Vehicles": {
+      "main": [
+        [{ "node": "DB: Clear Vehicles", "type": "main", "index": 0 }]
+      ]
+    },
+    "Transform: Drivers": {
+      "main": [
+        [{ "node": "DB: Clear Drivers", "type": "main", "index": 0 }]
+      ]
+    },
+    "Transform: Contracts": {
+      "main": [
+        [{ "node": "DB: Upsert Contracts", "type": "main", "index": 0 }]
+      ]
+    },
+    "Transform: Driver Reports": {
+      "main": [
+        [
+          { "node": "DB: Upsert Driver Reports", "type": "main", "index": 0 },
+          { "node": "Extract: Expense Categories", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "DB: Clear Vehicles": {
+      "main": [
+        [{ "node": "DB: Insert Vehicles", "type": "main", "index": 0 }]
+      ]
+    },
+    "DB: Clear Drivers": {
+      "main": [
+        [{ "node": "DB: Insert Drivers", "type": "main", "index": 0 }]
+      ]
+    },
+    "DB: Insert Vehicles": {
+      "main": [
+        [{ "node": "Wait: All Done", "type": "main", "index": 0 }]
+      ]
+    },
+    "DB: Insert Drivers": {
+      "main": [
+        [{ "node": "Wait: All Done", "type": "main", "index": 1 }]
+      ]
+    },
+    "DB: Upsert Contracts": {
+      "main": [
+        [{ "node": "Wait: All Done", "type": "main", "index": 2 }]
+      ]
+    },
+    "DB: Upsert Driver Reports": {
+      "main": [
+        [{ "node": "Wait: All Done", "type": "main", "index": 3 }]
+      ]
+    },
+    "Extract: Expense Categories": {
+      "main": [
+        [{ "node": "DB: Clear Expense Categories", "type": "main", "index": 0 }]
+      ]
+    },
+    "DB: Clear Expense Categories": {
+      "main": [
+        [{ "node": "DB: Insert Expense Categories", "type": "main", "index": 0 }]
+      ]
+    },
+    "DB: Insert Expense Categories": {
+      "main": [
+        [{ "node": "Wait: All Done", "type": "main", "index": 4 }]
+      ]
+    },
+    "Wait: All Done": {
+      "main": [
+        [{ "node": "Create: Sync Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create: Sync Report": {
+      "main": [
+        [{ "node": "DB: Log Sync Result", "type": "main", "index": 0 }]
+      ]
+    },
+    "DB: Log Sync Result": {
+      "main": [
+        [{ "node": "Check: Status", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check: Status": {
+      "main": [
+        [{ "node": "Success Message", "type": "main", "index": 0 }],
+        [{ "node": "Error Message", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 2,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
