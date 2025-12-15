@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Транспорт РФ - Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --bg: #f1f5f9;
+            --card: #ffffff;
+            --border: #e2e8f0;
+            --text: #1e293b;
+            --text-muted: #64748b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+            color: white;
+            padding: 20px 24px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .header-controls select, .header-controls input {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            cursor: pointer;
+        }
+
+        .header-controls select option { color: #333; }
+        .header-controls input::placeholder { color: rgba(255,255,255,0.7); }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        /* KPI Cards */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .kpi-card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid var(--border);
+        }
+
+        .kpi-card .label {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .kpi-card .value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .kpi-card .change {
+            font-size: 13px;
+            margin-top: 8px;
+        }
+
+        .kpi-card .change.positive { color: var(--success); }
+        .kpi-card .change.negative { color: var(--danger); }
+
+        /* Main Grid */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 24px;
+        }
+
+        @media (max-width: 1200px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+
+        /* Cards */
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-header h2 {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .card-body {
+            padding: 20px;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            background: var(--bg);
+            padding: 4px;
+            border-radius: 8px;
+        }
+
+        .tab {
+            padding: 8px 16px;
+            border: none;
+            background: transparent;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-muted);
+        }
+
+        .tab:hover { background: var(--card); }
+        .tab.active {
+            background: var(--card);
+            color: var(--primary);
+            font-weight: 600;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        /* Table */
+        .table-container {
+            overflow-x: auto;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        thead {
+            position: sticky;
+            top: 0;
+            background: #f8fafc;
+            z-index: 10;
+        }
+
+        th {
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-muted);
+            border-bottom: 2px solid var(--border);
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        th:hover { color: var(--primary); }
+
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        tbody tr {
+            transition: background 0.2s;
+        }
+
+        tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        .vehicle-cell {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .vehicle-number {
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .vehicle-model {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .amount {
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .amount.positive { color: var(--success); }
+        .amount.negative { color: var(--danger); }
+
+        /* Chart */
+        .chart-container {
+            height: 300px;
+            position: relative;
+        }
+
+        /* Top List */
+        .top-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .top-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: var(--bg);
+            border-radius: 8px;
+        }
+
+        .top-rank {
+            font-size: 20px;
+            width: 32px;
+            text-align: center;
+        }
+
+        .top-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .top-name {
+            font-weight: 600;
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .top-sub {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .top-value {
+            font-weight: 700;
+            font-size: 16px;
+            color: var(--success);
+            white-space: nowrap;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Status Badge */
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge-success { background: #dcfce7; color: #166534; }
+        .badge-warning { background: #fef3c7; color: #92400e; }
+        .badge-info { background: #dbeafe; color: #1e40af; }
+
+        /* Sidebar Stats */
+        .sidebar-stats {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .stat-row:last-child { border-bottom: none; }
+
+        .stat-label { color: var(--text-muted); font-size: 14px; }
+        .stat-value { font-weight: 600; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <h1>🚛 Транспорт РФ</h1>
+            <div class="header-controls">
+                <select id="periodSelect"></select>
+                <input type="text" id="searchInput" placeholder="Поиск..." style="width: 200px;">
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- KPI Row -->
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="label">Выручка</div>
+                <div class="value" id="kpiRevenue">-</div>
+            </div>
+            <div class="kpi-card">
+                <div class="label">Договоров</div>
+                <div class="value" id="kpiContracts">-</div>
+            </div>
+            <div class="kpi-card">
+                <div class="label">Машин</div>
+                <div class="value" id="kpiVehicles">-</div>
+            </div>
+            <div class="kpi-card">
+                <div class="label">Водителей</div>
+                <div class="value" id="kpiDrivers">-</div>
+            </div>
+            <div class="kpi-card">
+                <div class="label">Расходы (топливо)</div>
+                <div class="value" id="kpiFuel">-</div>
+            </div>
+            <div class="kpi-card">
+                <div class="label">Пробег (км)</div>
+                <div class="value" id="kpiMileage">-</div>
+            </div>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="main-grid">
+            <!-- Left: Tables -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Данные</h2>
+                    <div class="tabs">
+                        <button class="tab active" onclick="switchTab('vehicles')">Машины</button>
+                        <button class="tab" onclick="switchTab('drivers')">Водители</button>
+                        <button class="tab" onclick="switchTab('contracts')">Договоры</button>
+                    </div>
+                </div>
+                <div class="card-body" style="padding: 0;">
+                    <div id="tabContent">
+                        <div class="loading">
+                            <div class="loading-spinner"></div>
+                            Загрузка данных...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Sidebar -->
+            <div style="display: flex; flex-direction: column; gap: 24px;">
+                <!-- Top Vehicles -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Топ-5 машин по выручке</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="top-list" id="topVehicles">
+                            <div class="loading">Загрузка...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Выручка по месяцам</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="revenueChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Статистика периода</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="sidebar-stats" id="periodStats">
+                            <div class="stat-row">
+                                <span class="stat-label">Средний чек</span>
+                                <span class="stat-value" id="statAvgAmount">-</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Рейсов на машину</span>
+                                <span class="stat-value" id="statTripsPerVehicle">-</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Расход топлива/км</span>
+                                <span class="stat-value" id="statFuelPerKm">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Supabase Config
+        const SUPABASE_URL = 'http://195.26.226.37:8000';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiJ9.LGzLagUWLYU030_PrhQdahdHGhALq6agEyzf3KH3bI0';
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // State
+        let currentTab = 'vehicles';
+        let currentPeriod = null;
+        let searchTerm = '';
+        let revenueChart = null;
+
+        // Data
+        let contracts = [];
+        let driverReports = [];
+        let vehicles = [];
+        let drivers = [];
+
+        // Format helpers
+        function formatMoney(amount) {
+            return new Intl.NumberFormat('ru-RU', {
+                style: 'currency',
+                currency: 'RUB',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(amount || 0);
+        }
+
+        function formatNumber(num) {
+            return new Intl.NumberFormat('ru-RU').format(num || 0);
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            return new Date(dateStr).toLocaleDateString('ru-RU');
+        }
+
+        // Generate period options
+        function initPeriods() {
+            const select = document.getElementById('periodSelect');
+            const months = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+
+            const options = [];
+            const now = new Date();
+
+            for (let i = 0; i < 48; i++) { // Last 4 years
+                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                const label = `${months[d.getMonth()]} ${d.getFullYear()}`;
+                options.push(`<option value="${value}">${label}</option>`);
+            }
+
+            select.innerHTML = options.join('');
+            currentPeriod = select.value;
+
+            select.addEventListener('change', (e) => {
+                currentPeriod = e.target.value;
+                loadData();
+            });
+        }
+
+        // Load all data
+        async function loadData() {
+            const [year, month] = currentPeriod.split('-');
+            const startDate = `${year}-${month}-01`;
+            const endDate = new Date(year, month, 0).toISOString().split('T')[0]; // Last day of month
+
+            try {
+                // Load contracts for period
+                const { data: contractsData, error: cErr } = await supabase
+                    .from('contracts')
+                    .select('*')
+                    .gte('date', startDate)
+                    .lte('date', endDate)
+                    .order('date', { ascending: false });
+
+                if (cErr) throw cErr;
+                contracts = contractsData || [];
+
+                // Load driver reports for period
+                const { data: reportsData, error: rErr } = await supabase
+                    .from('driver_reports')
+                    .select('*')
+                    .gte('date_from', startDate)
+                    .lte('date_to', endDate + 'T23:59:59');
+
+                if (rErr) throw rErr;
+                driverReports = reportsData || [];
+
+                // Load vehicles
+                const { data: vehiclesData } = await supabase
+                    .from('vehicles')
+                    .select('*');
+                vehicles = vehiclesData || [];
+
+                // Load drivers
+                const { data: driversData } = await supabase
+                    .from('drivers')
+                    .select('*');
+                drivers = driversData || [];
+
+                updateKPIs();
+                updateTable();
+                updateTopVehicles();
+                updateStats();
+
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('tabContent').innerHTML = `
+                    <div class="loading" style="color: var(--danger);">
+                        Ошибка загрузки: ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Load chart data (all months)
+        async function loadChartData() {
+            try {
+                const { data, error } = await supabase
+                    .from('contracts')
+                    .select('date, amount')
+                    .order('date', { ascending: true });
+
+                if (error) throw error;
+
+                // Group by month
+                const monthlyData = {};
+                (data || []).forEach(c => {
+                    const month = c.date.substring(0, 7);
+                    monthlyData[month] = (monthlyData[month] || 0) + (c.amount || 0);
+                });
+
+                // Last 12 months
+                const labels = [];
+                const values = [];
+                const now = new Date();
+
+                for (let i = 11; i >= 0; i--) {
+                    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                    const monthNames = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+                    labels.push(monthNames[d.getMonth()]);
+                    values.push(monthlyData[key] || 0);
+                }
+
+                updateChart(labels, values);
+
+            } catch (error) {
+                console.error('Chart error:', error);
+            }
+        }
+
+        // Update KPIs
+        function updateKPIs() {
+            const totalRevenue = contracts.reduce((sum, c) => sum + (c.amount || 0), 0);
+            const totalFuel = driverReports.reduce((sum, r) => sum + (r.fuel_amount || 0), 0);
+            const totalMileage = driverReports.reduce((sum, r) => sum + (r.mileage || 0), 0);
+
+            const uniqueVehicles = new Set(contracts.map(c => c.vehicle_id).filter(Boolean));
+            const uniqueDrivers = new Set(contracts.map(c => c.driver_id).filter(Boolean));
+
+            document.getElementById('kpiRevenue').textContent = formatMoney(totalRevenue);
+            document.getElementById('kpiContracts').textContent = formatNumber(contracts.length);
+            document.getElementById('kpiVehicles').textContent = uniqueVehicles.size;
+            document.getElementById('kpiDrivers').textContent = uniqueDrivers.size;
+            document.getElementById('kpiFuel').textContent = formatMoney(totalFuel);
+            document.getElementById('kpiMileage').textContent = formatNumber(totalMileage);
+        }
+
+        // Update stats
+        function updateStats() {
+            const totalRevenue = contracts.reduce((sum, c) => sum + (c.amount || 0), 0);
+            const avgAmount = contracts.length > 0 ? totalRevenue / contracts.length : 0;
+
+            const uniqueVehicles = new Set(contracts.map(c => c.vehicle_id).filter(Boolean));
+            const tripsPerVehicle = uniqueVehicles.size > 0 ? contracts.length / uniqueVehicles.size : 0;
+
+            const totalFuel = driverReports.reduce((sum, r) => sum + (r.fuel_quantity || 0), 0);
+            const totalMileage = driverReports.reduce((sum, r) => sum + (r.mileage || 0), 0);
+            const fuelPerKm = totalMileage > 0 ? (totalFuel / totalMileage * 100) : 0;
+
+            document.getElementById('statAvgAmount').textContent = formatMoney(avgAmount);
+            document.getElementById('statTripsPerVehicle').textContent = tripsPerVehicle.toFixed(1);
+            document.getElementById('statFuelPerKm').textContent = fuelPerKm.toFixed(1) + ' л/100км';
+        }
+
+        // Update top vehicles
+        function updateTopVehicles() {
+            const vehicleRevenue = {};
+
+            contracts.forEach(c => {
+                const key = c.vehicle_number || c.vehicle_id || 'Неизвестно';
+                vehicleRevenue[key] = (vehicleRevenue[key] || 0) + (c.amount || 0);
+            });
+
+            const sorted = Object.entries(vehicleRevenue)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5);
+
+            const ranks = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+
+            document.getElementById('topVehicles').innerHTML = sorted.length > 0
+                ? sorted.map(([vehicle, amount], i) => `
+                    <div class="top-item">
+                        <span class="top-rank">${ranks[i]}</span>
+                        <div class="top-info">
+                            <div class="top-name">${vehicle}</div>
+                            <div class="top-sub">${contracts.filter(c => (c.vehicle_number || c.vehicle_id) === vehicle).length} договоров</div>
+                        </div>
+                        <div class="top-value">${formatMoney(amount)}</div>
+                    </div>
+                `).join('')
+                : '<div class="loading">Нет данных за период</div>';
+        }
+
+        // Update chart
+        function updateChart(labels, values) {
+            const ctx = document.getElementById('revenueChart').getContext('2d');
+
+            if (revenueChart) {
+                revenueChart.destroy();
+            }
+
+            revenueChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Выручка',
+                        data: values,
+                        backgroundColor: 'rgba(37, 99, 235, 0.8)',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: v => (v / 1000000).toFixed(1) + 'M'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Switch tab
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            updateTable();
+        }
+
+        // Update table based on current tab
+        function updateTable() {
+            const container = document.getElementById('tabContent');
+            const search = searchTerm.toLowerCase();
+
+            if (currentTab === 'vehicles') {
+                // Aggregate by vehicle
+                const vehicleData = {};
+
+                contracts.forEach(c => {
+                    const key = c.vehicle_number || c.vehicle_id || 'Неизвестно';
+                    if (!vehicleData[key]) {
+                        vehicleData[key] = {
+                            number: c.vehicle_number || '-',
+                            id: c.vehicle_id || '-',
+                            contracts: 0,
+                            amount: 0
+                        };
+                    }
+                    vehicleData[key].contracts++;
+                    vehicleData[key].amount += c.amount || 0;
+                });
+
+                // Add mileage from reports
+                driverReports.forEach(r => {
+                    const key = r.vehicle_number || r.vehicle_id;
+                    if (vehicleData[key]) {
+                        vehicleData[key].mileage = (vehicleData[key].mileage || 0) + (r.mileage || 0);
+                        vehicleData[key].fuel = (vehicleData[key].fuel || 0) + (r.fuel_amount || 0);
+                    }
+                });
+
+                let rows = Object.values(vehicleData);
+
+                if (search) {
+                    rows = rows.filter(v =>
+                        v.number.toLowerCase().includes(search) ||
+                        v.id.toLowerCase().includes(search)
+                    );
+                }
+
+                rows.sort((a, b) => b.amount - a.amount);
+
+                container.innerHTML = `
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Машина</th>
+                                    <th>Договоров</th>
+                                    <th>Выручка</th>
+                                    <th>Пробег</th>
+                                    <th>Топливо</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rows.map(v => `
+                                    <tr>
+                                        <td>
+                                            <div class="vehicle-cell">
+                                                <span class="vehicle-number">${v.number}</span>
+                                            </div>
+                                        </td>
+                                        <td>${v.contracts}</td>
+                                        <td><span class="amount positive">${formatMoney(v.amount)}</span></td>
+                                        <td>${formatNumber(v.mileage || 0)} км</td>
+                                        <td>${formatMoney(v.fuel || 0)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+            } else if (currentTab === 'drivers') {
+                // Aggregate by driver
+                const driverData = {};
+
+                contracts.forEach(c => {
+                    const key = c.driver_name || c.driver_id || 'Неизвестно';
+                    if (!driverData[key]) {
+                        driverData[key] = {
+                            name: c.driver_name || '-',
+                            id: c.driver_id || '-',
+                            contracts: 0,
+                            amount: 0
+                        };
+                    }
+                    driverData[key].contracts++;
+                    driverData[key].amount += c.amount || 0;
+                });
+
+                // Add earnings from reports
+                driverReports.forEach(r => {
+                    const key = r.driver_name || r.driver_id;
+                    if (driverData[key]) {
+                        driverData[key].accruals = (driverData[key].accruals || 0) + (r.driver_accruals || 0);
+                        driverData[key].payments = (driverData[key].payments || 0) + (r.driver_payments || 0);
+                    }
+                });
+
+                let rows = Object.values(driverData);
+
+                if (search) {
+                    rows = rows.filter(d => d.name.toLowerCase().includes(search));
+                }
+
+                rows.sort((a, b) => b.amount - a.amount);
+
+                container.innerHTML = `
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Водитель</th>
+                                    <th>Договоров</th>
+                                    <th>Выручка</th>
+                                    <th>Начисления</th>
+                                    <th>Выплаты</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rows.map(d => `
+                                    <tr>
+                                        <td>
+                                            <div class="vehicle-cell">
+                                                <span class="vehicle-number">${d.name}</span>
+                                            </div>
+                                        </td>
+                                        <td>${d.contracts}</td>
+                                        <td><span class="amount positive">${formatMoney(d.amount)}</span></td>
+                                        <td>${formatMoney(d.accruals || 0)}</td>
+                                        <td>${formatMoney(d.payments || 0)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+            } else if (currentTab === 'contracts') {
+                let rows = [...contracts];
+
+                if (search) {
+                    rows = rows.filter(c =>
+                        (c.number || '').toLowerCase().includes(search) ||
+                        (c.contractor_name || '').toLowerCase().includes(search) ||
+                        (c.vehicle_number || '').toLowerCase().includes(search) ||
+                        (c.driver_name || '').toLowerCase().includes(search)
+                    );
+                }
+
+                container.innerHTML = `
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Номер</th>
+                                    <th>Дата</th>
+                                    <th>Контрагент</th>
+                                    <th>Машина</th>
+                                    <th>Водитель</th>
+                                    <th>Сумма</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rows.slice(0, 100).map(c => `
+                                    <tr>
+                                        <td><strong>${c.number || '-'}</strong></td>
+                                        <td>${formatDate(c.date)}</td>
+                                        <td>${c.contractor_name || '-'}</td>
+                                        <td>${c.vehicle_number || '-'}</td>
+                                        <td>${c.driver_name || '-'}</td>
+                                        <td><span class="amount positive">${formatMoney(c.amount)}</span></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        ${rows.length > 100 ? `<div style="padding: 16px; text-align: center; color: var(--text-muted);">Показано 100 из ${rows.length}</div>` : ''}
+                    </div>
+                `;
+            }
+        }
+
+        // Search handler
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            searchTerm = e.target.value;
+            updateTable();
+        });
+
+        // Init
+        initPeriods();
+        loadData();
+        loadChartData();
+    </script>
+</body>
+</html>
