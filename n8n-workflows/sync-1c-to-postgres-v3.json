@@ -1,0 +1,203 @@
+{
+  "name": "Sync 1C to PostgreSQL v3",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 2 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily 2:00 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://192.168.33.250/tk/hs/TransportAPI/api/v1/vehicles",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "id": "fetch-vehicles",
+      "name": "Fetch Vehicles",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [500, 150],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "kVIepkfhbBhTYFg5",
+          "name": "TransportAPI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://192.168.33.250/tk/hs/TransportAPI/api/v1/drivers",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "id": "fetch-drivers",
+      "name": "Fetch Drivers",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [500, 300],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "kVIepkfhbBhTYFg5",
+          "name": "TransportAPI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=http://192.168.33.250/tk/hs/TransportAPI/api/v1/contracts?date_from={{ $now.minus(30, 'days').toFormat('yyyy-MM-dd') }}&date_to={{ $now.toFormat('yyyy-MM-dd') }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "id": "fetch-contracts",
+      "name": "Fetch Contracts (30d)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [500, 450],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "kVIepkfhbBhTYFg5",
+          "name": "TransportAPI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO vehicles (id, license_plate, model, created_at, synced_at)\nVALUES ('{{ $json.id }}', '{{ $json.license_plate }}', '{{ $json.model }}', NOW(), NOW())\nON CONFLICT (id) DO UPDATE SET\n  license_plate = EXCLUDED.license_plate,\n  model = EXCLUDED.model,\n  synced_at = NOW();",
+        "options": {}
+      },
+      "id": "upsert-vehicles",
+      "name": "Upsert Vehicles",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [750, 150],
+      "credentials": {
+        "postgres": {
+          "id": "LIDFwhUbrNchvBBP",
+          "name": "Postgres_Direct"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO drivers (id, full_name, created_at, synced_at)\nVALUES ('{{ $json.id }}', '{{ $json.full_name || $json.name }}', NOW(), NOW())\nON CONFLICT (id) DO UPDATE SET\n  full_name = EXCLUDED.full_name,\n  synced_at = NOW();",
+        "options": {}
+      },
+      "id": "upsert-drivers",
+      "name": "Upsert Drivers",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [750, 300],
+      "credentials": {
+        "postgres": {
+          "id": "LIDFwhUbrNchvBBP",
+          "name": "Postgres_Direct"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO contracts (number, date, organization, contractor_id, contractor_name, vehicle_id, vehicle_number, driver_id, driver_name, responsible_logist, route, payment_term, payment_condition, amount, created_at, synced_at, updated_at)\nVALUES ('{{ $json.number }}', '{{ $json.date }}', '{{ $json.organization }}', '{{ $json.contractor_id }}', '{{ $json.contractor_name }}', '{{ $json.vehicle_id }}', '{{ $json.vehicle_number }}', '{{ $json.driver_id }}', '{{ $json.driver_name }}', '{{ $json.responsible_logist }}', '{{ $json.route }}', '{{ $json.payment_term }}', '{{ $json.payment_condition }}', {{ $json.amount || 0 }}, NOW(), NOW(), NOW())\nON CONFLICT (number, date) DO UPDATE SET\n  organization = EXCLUDED.organization,\n  contractor_id = EXCLUDED.contractor_id,\n  contractor_name = EXCLUDED.contractor_name,\n  vehicle_id = EXCLUDED.vehicle_id,\n  vehicle_number = EXCLUDED.vehicle_number,\n  driver_id = EXCLUDED.driver_id,\n  driver_name = EXCLUDED.driver_name,\n  responsible_logist = EXCLUDED.responsible_logist,\n  route = EXCLUDED.route,\n  payment_term = EXCLUDED.payment_term,\n  payment_condition = EXCLUDED.payment_condition,\n  amount = EXCLUDED.amount,\n  synced_at = NOW(),\n  updated_at = NOW();",
+        "options": {}
+      },
+      "id": "upsert-contracts",
+      "name": "Upsert Contracts",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [750, 450],
+      "credentials": {
+        "postgres": {
+          "id": "LIDFwhUbrNchvBBP",
+          "name": "Postgres_Direct"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO sync_log (sync_type, vehicles_count, drivers_count, contracts_count, synced_at, status)\nVALUES ('n8n_daily', {{ $('Fetch Vehicles').item.json.length || 0 }}, {{ $('Fetch Drivers').item.json.length || 0 }}, {{ $('Fetch Contracts (30d)').item.json.length || 0 }}, NOW(), 'success');",
+        "options": {}
+      },
+      "id": "log-sync",
+      "name": "Log Sync Result",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [1000, 300],
+      "credentials": {
+        "postgres": {
+          "id": "LIDFwhUbrNchvBBP",
+          "name": "Postgres_Direct"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily 2:00 AM": {
+      "main": [
+        [
+          { "node": "Fetch Vehicles", "type": "main", "index": 0 },
+          { "node": "Fetch Drivers", "type": "main", "index": 0 },
+          { "node": "Fetch Contracts (30d)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Vehicles": {
+      "main": [
+        [{ "node": "Upsert Vehicles", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Drivers": {
+      "main": [
+        [{ "node": "Upsert Drivers", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Contracts (30d)": {
+      "main": [
+        [{ "node": "Upsert Contracts", "type": "main", "index": 0 }]
+      ]
+    },
+    "Upsert Vehicles": {
+      "main": [
+        [{ "node": "Log Sync Result", "type": "main", "index": 0 }]
+      ]
+    },
+    "Upsert Drivers": {
+      "main": [
+        [{ "node": "Log Sync Result", "type": "main", "index": 0 }]
+      ]
+    },
+    "Upsert Contracts": {
+      "main": [
+        [{ "node": "Log Sync Result", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2024-12-15T00:00:00.000Z",
+  "versionId": "v3"
+}

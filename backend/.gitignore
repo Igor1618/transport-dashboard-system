@@ -1,0 +1,11 @@
+# Environment variables (contains credentials)
+.env
+
+# Dependencies
+node_modules/
+
+# Checkpoint file (resume state)
+scripts/.checkpoint.json
+
+# Logs
+*.log
