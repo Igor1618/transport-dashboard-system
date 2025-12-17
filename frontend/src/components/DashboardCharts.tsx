@@ -19,8 +19,8 @@ interface DashboardChartsProps {
 
 const DashboardCharts: React.FC<DashboardChartsProps> = ({ data }) => {
   // Форматирование чисел для подписей
-  const formatCurrency = (value: number) => {
-    return `${(value / 1000).toFixed(0)}к ₽`;
+  const formatCurrency = (value: number | undefined) => {
+    return `${((value || 0) / 1000).toFixed(0)}к ₽`;
   };
 
   return (
@@ -34,7 +34,7 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ data }) => {
             <XAxis dataKey="monthName" fontSize={12} />
             <YAxis fontSize={12} tickFormatter={formatCurrency} />
             <Tooltip
-              formatter={(value: number) => [`${value.toLocaleString('ru-RU')} ₽`, '']}
+              formatter={(value) => [`${Number(value || 0).toLocaleString('ru-RU')} ₽`, '']}
               labelStyle={{ color: '#000' }}
             />
             <Legend />
@@ -67,7 +67,7 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ data }) => {
             <XAxis dataKey="monthName" fontSize={12} />
             <YAxis fontSize={12} />
             <Tooltip
-              formatter={(value: number) => [value, 'Рейсов']}
+              formatter={(value) => [value, 'Рейсов']}
               labelStyle={{ color: '#000' }}
             />
             <Legend />
@@ -85,7 +85,7 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ data }) => {
             <XAxis dataKey="monthName" fontSize={12} />
             <YAxis fontSize={12} tickFormatter={formatCurrency} />
             <Tooltip
-              formatter={(value: number) => [`${value.toLocaleString('ru-RU')} ₽`, 'Зарплаты']}
+              formatter={(value) => [`${Number(value || 0).toLocaleString('ru-RU')} ₽`, 'Зарплаты']}
               labelStyle={{ color: '#000' }}
             />
             <Legend />
@@ -103,7 +103,7 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({ data }) => {
             <XAxis dataKey="monthName" fontSize={12} />
             <YAxis fontSize={12} />
             <Tooltip
-              formatter={(value: number) => [`${value.toFixed(2)} ₽/км`, 'Выручка/км']}
+              formatter={(value) => [`${Number(value || 0).toFixed(2)} ₽/км`, 'Выручка/км']}
               labelStyle={{ color: '#000' }}
             />
             <Legend />
