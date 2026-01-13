@@ -79,7 +79,7 @@
 
         .kpi-row {
             display: grid;
-            grid-template-columns: repeat(6, 1fr);
+            grid-template-columns: repeat(7, 1fr);
             gap: 15px;
         }
 
@@ -420,6 +420,10 @@
                     <div class="kpi-value" id="kpiTrips">0</div>
                     <div class="kpi-label">Рейсов</div>
                 </div>
+                <div class="kpi-card">
+                    <div class="kpi-value" id="kpiDrivers">0</div>
+                    <div class="kpi-label">Водителей</div>
+                </div>
             </div>
         </div>
 
@@ -505,6 +509,21 @@
             container.innerHTML = `<div class="error">${message}</div>`;
         }
 
+        async function loadDriversCount() {
+            try {
+                const { count, error } = await supabase
+                    .from('drivers')
+                    .select('*', { count: 'exact', head: true });
+
+                if (error) throw error;
+
+                document.getElementById('kpiDrivers').textContent = count || 0;
+            } catch (error) {
+                console.error('Error loading drivers count:', error);
+                document.getElementById('kpiDrivers').textContent = '0';
+            }
+        }
+
         async function loadVehiclesData() {
             try {
                 document.getElementById('tableLoading').style.display = 'block';
@@ -546,7 +565,8 @@
 
                 document.getElementById('tableLoading').style.display = 'none';
                 document.getElementById('tableContainer').style.display = 'block';
-                
+
+                loadDriversCount();
                 updateDashboard();
             } catch (error) {
                 console.error('Error loading data:', error);

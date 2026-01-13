@@ -1,0 +1,9 @@
+{
+  "project": {
+    "name": "Дашборд Транспортной Компании",
+    "version": "3.0",
+    "repository": "https://github.com/Igor1618/transport-dashboard-system",
+    "description": "Компактный веб-дашборд для управления транспортной компанией с микросервисной архитектурой"
+  },
+  "tasks": []
+}
