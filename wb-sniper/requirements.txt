@@ -1,0 +1,16 @@
+# WB Tender Sniper Dependencies
+
+# Fast HTTP client with HTTP/2 support
+httpx[http2]>=0.25.0
+
+# For mitmproxy addon (installed in VNC container)
+# mitmproxy>=10.0.0
+
+# Telegram bot (optional)
+python-telegram-bot>=20.0
+
+# Async support
+anyio>=4.0.0
+
+# For token extraction
+# sqlite3 is built-in
