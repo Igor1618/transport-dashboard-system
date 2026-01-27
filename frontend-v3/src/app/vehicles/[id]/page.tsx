@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, TrendingUp, Fuel, Users, FileText } from "lucide-react";
 
-const SUPABASE_URL = "https://pqvtvocsqhazaraknvnz.supabase.co";
+const SUPABASE_URL = "";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxdnR2b2NzcWhemFyYWtudm56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzE2NjkxMDcsImV4cCI6MjA0NzI0NTEwN30.f3qnR6VfPvNjWiMfCPLiPbHr4UkPK8eDHzBxbRNJvXw";
 
 async function fetchVehicleData(vehicleNumber: string) {
@@ -103,7 +103,7 @@ export default function VehiclePage() {
             <Users className="w-5 h-5" /> Водители ({drivers.length})
           </h3>
           <div className="space-y-2">
-            {drivers.slice(0, 10).map((driver: string) => (
+            {drivers.slice(0, 10).map((driver: any) => (
               <div key={driver} className="flex items-center justify-between py-2 border-b border-slate-700">
                 <span className="text-slate-300">{driver}</span>
               </div>

@@ -15,10 +15,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ru">
-      <body className="flex min-h-screen">
+      <body className="min-h-screen bg-slate-950">
         <QueryProvider>
           <Sidebar />
-          <main className="flex-1 p-6 ml-64">{children}</main>
+          <main className="pt-14 lg:pt-0 lg:ml-64 p-4 lg:p-6 min-h-screen">
+            {children}
+          </main>
         </QueryProvider>
       </body>
     </html>
