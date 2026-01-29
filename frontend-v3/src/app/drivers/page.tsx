@@ -3,51 +3,50 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Search, Calendar } from "lucide-react";
+import { ChevronRight, Search, Calendar, Users, TrendingUp, AlertTriangle, Route } from "lucide-react";
 
 const MONTHS = [
   "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
   "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
 ];
 
-async function fetchVehiclesByMonth(month: string) {
-  const res = await fetch(`/rest/v1/vehicle_economics_combined?month=eq.${month}&order=margin.desc`);
+async function fetchDriversByMonth(month: string) {
+  const res = await fetch(`/rest/v1/driver_economics_combined?month=eq.${month}&order=total_revenue.desc`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
 
-async function fetchVehiclesByRange(startDate: string, endDate: string) {
+async function fetchDriversByRange(startDate: string, endDate: string) {
   // Один запрос с диапазоном месяцев
   const start = new Date(startDate);
   const end = new Date(endDate);
   const startMonth = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-01`;
   const endMonth = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-01`;
   
-  const res = await fetch(`/rest/v1/vehicle_economics_combined?month=gte.${startMonth}&month=lte.${endMonth}`);
+  const res = await fetch(`/rest/v1/driver_economics_combined?month=gte.${startMonth}&month=lte.${endMonth}`);
   if (!res.ok) throw new Error('API error');
   const data = await res.json();
   
-  // Объединяем данные по машинам
-  const vehicleMap: Record<string, any> = {};
-  data?.forEach((v: any) => {
-    const key = v.vehicle_number;
-    if (!key) return;
-    if (!vehicleMap[key]) {
-      vehicleMap[key] = { ...v };
+  // Объединяем данные по водителям
+  const driverMap: Record<string, any> = {};
+  data?.forEach((d: any) => {
+    const key = d.driver_name || 'unknown';
+    if (!driverMap[key]) {
+      driverMap[key] = { ...d };
     } else {
-      vehicleMap[key].total_revenue = (vehicleMap[key].total_revenue || 0) + (v.total_revenue || 0);
-      vehicleMap[key].wb_revenue = (vehicleMap[key].wb_revenue || 0) + (v.wb_revenue || 0);
-      vehicleMap[key].trf_revenue = (vehicleMap[key].trf_revenue || 0) + (v.trf_revenue || 0);
-      vehicleMap[key].wb_trips = (vehicleMap[key].wb_trips || 0) + (v.wb_trips || 0);
-      vehicleMap[key].trf_trips = (vehicleMap[key].trf_trips || 0) + (v.trf_trips || 0);
-      vehicleMap[key].expenses = (vehicleMap[key].expenses || 0) + (v.expenses || 0);
-      vehicleMap[key].margin = (vehicleMap[key].margin || 0) + (v.margin || 0);
-      vehicleMap[key].wb_distance = (vehicleMap[key].wb_distance || 0) + (v.wb_distance || 0);
-      vehicleMap[key].wb_penalties = (vehicleMap[key].wb_penalties || 0) + (v.wb_penalties || 0);
+      driverMap[key].total_revenue = (driverMap[key].total_revenue || 0) + (d.total_revenue || 0);
+      driverMap[key].trf_revenue = (driverMap[key].trf_revenue || 0) + (d.trf_revenue || 0);
+      driverMap[key].wb_revenue = (driverMap[key].wb_revenue || 0) + (d.wb_revenue || 0);
+      driverMap[key].wb_trips = (driverMap[key].wb_trips || 0) + (d.wb_trips || 0);
+      driverMap[key].trf_trips = (driverMap[key].trf_trips || 0) + (d.trf_trips || 0);
+      driverMap[key].expenses = (driverMap[key].expenses || 0) + (d.expenses || 0);
+      driverMap[key].margin = (driverMap[key].margin || 0) + (d.margin || 0);
+      driverMap[key].wb_penalties = (driverMap[key].wb_penalties || 0) + (d.wb_penalties || 0);
+      driverMap[key].mileage = (driverMap[key].mileage || 0) + (d.mileage || 0);
     }
   });
   
-  return Object.values(vehicleMap).sort((a: any, b: any) => (b.margin || 0) - (a.margin || 0));
+  return Object.values(driverMap).sort((a: any, b: any) => (b.total_revenue || 0) - (a.total_revenue || 0));
 }
 
 function formatMoney(n: number) {
@@ -57,7 +56,13 @@ function formatMoney(n: number) {
   return n.toFixed(0);
 }
 
-export default function VehiclesPage() {
+function formatKm(n: number) {
+  if (!n) return "0";
+  if (n >= 1000) return (n / 1000).toFixed(0) + " тыс";
+  return n.toFixed(0);
+}
+
+export default function DriversPage() {
   const now = new Date();
   const [mode, setMode] = useState<"month" | "range">("month");
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
@@ -79,28 +84,11 @@ export default function VehiclesPage() {
     years.push(y);
   }
 
-  // Единый запрос
-  const { data: vehicles = [], isLoading } = useQuery({
-    queryKey: ["vehicles", mode, mode === "month" ? month : `${startDate}-${endDate}`],
-    queryFn: () => mode === "month" ? fetchVehiclesByMonth(month) : fetchVehiclesByRange(startDate, endDate),
+  const { data: drivers = [], isLoading } = useQuery({
+    queryKey: ["drivers", mode, mode === "month" ? month : `${startDate}-${endDate}`],
+    queryFn: () => mode === "month" ? fetchDriversByMonth(month) : fetchDriversByRange(startDate, endDate),
   });
 
-  const filtered = vehicles.filter((v: any) => {
-    if (!v.vehicle_number) return false;
-    if (search && !v.vehicle_number.toLowerCase().includes(search.toLowerCase())) return false;
-    if (filter === "trf" && !v.trf_trips) return false;
-    if (filter === "wb" && !v.wb_trips) return false;
-    return true;
-  });
-
-  // Статистика
-  const totals = filtered.reduce((acc: any, v: any) => ({
-    revenue: acc.revenue + (v.total_revenue || 0),
-    margin: acc.margin + (v.margin || 0),
-    trips: acc.trips + (v.trf_trips || 0) + (v.wb_trips || 0),
-  }), { revenue: 0, margin: 0, trips: 0 });
-
-  // Быстрый выбор периода
   const setQuickRange = (days: number) => {
     const end = new Date();
     const start = new Date();
@@ -110,11 +98,28 @@ export default function VehiclesPage() {
     setEndDate(end.toISOString().split('T')[0]);
   };
 
+  const filtered = drivers.filter((d: any) => {
+    if (!d.driver_name) return false;
+    if (search && !d.driver_name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filter === "trf" && !d.trf_trips) return false;
+    if (filter === "wb" && !d.wb_trips) return false;
+    return true;
+  });
+
+  // Статистика
+  const totals = filtered.reduce((acc: any, d: any) => ({
+    revenue: acc.revenue + (d.total_revenue || 0),
+    margin: acc.margin + (d.margin || 0),
+    trips: acc.trips + (d.trf_trips || 0) + (d.wb_trips || 0),
+    penalties: acc.penalties + (d.wb_penalties || 0),
+    mileage: acc.mileage + (d.mileage || 0),
+  }), { revenue: 0, margin: 0, trips: 0, penalties: 0, mileage: 0 });
+
   return (
     <div>
       <div className="mb-4">
-        <h1 className="text-xl sm:text-2xl font-bold text-white">Машины</h1>
-        <p className="text-slate-400 text-sm">Экономика по каждой машине</p>
+        <h1 className="text-xl sm:text-2xl font-bold text-white">Водители</h1>
+        <p className="text-slate-400 text-sm">Экономика по каждому водителю</p>
       </div>
 
       {/* Period Selector */}
@@ -136,7 +141,6 @@ export default function VehiclesPage() {
             </button>
           </div>
           
-          {/* Quick ranges */}
           {mode === "range" && (
             <div className="flex gap-1 flex-wrap">
               <button onClick={() => setQuickRange(7)} className="px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded">7 дней</button>
@@ -145,9 +149,32 @@ export default function VehiclesPage() {
               <button onClick={() => setQuickRange(365)} className="px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded">Год</button>
             </div>
           )}
+          
+          <div className="flex-1" />
+          
+          {/* Filter buttons */}
+          <div className="flex bg-slate-900 rounded-lg p-1">
+            <button
+              onClick={() => setFilter("all")}
+              className={`px-3 py-1 rounded text-sm transition ${filter === "all" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"}`}
+            >
+              Все
+            </button>
+            <button
+              onClick={() => setFilter("trf")}
+              className={`px-3 py-1 rounded text-sm transition ${filter === "trf" ? "bg-green-600 text-white" : "text-slate-400 hover:text-white"}`}
+            >
+              РФ
+            </button>
+            <button
+              onClick={() => setFilter("wb")}
+              className={`px-3 py-1 rounded text-sm transition ${filter === "wb" ? "bg-purple-600 text-white" : "text-slate-400 hover:text-white"}`}
+            >
+              WB
+            </button>
+          </div>
         </div>
 
-        {/* Date selectors */}
         <div className="flex flex-wrap items-center gap-3">
           <Calendar className="w-5 h-5 text-slate-400" />
           
@@ -190,30 +217,6 @@ export default function VehiclesPage() {
               />
             </>
           )}
-          
-          <div className="flex-1" />
-          
-          {/* Filter buttons */}
-          <div className="flex bg-slate-900 rounded-lg p-1">
-            <button
-              onClick={() => setFilter("all")}
-              className={`px-3 py-1 rounded text-sm transition ${filter === "all" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"}`}
-            >
-              Все
-            </button>
-            <button
-              onClick={() => setFilter("trf")}
-              className={`px-3 py-1 rounded text-sm transition ${filter === "trf" ? "bg-green-600 text-white" : "text-slate-400 hover:text-white"}`}
-            >
-              РФ
-            </button>
-            <button
-              onClick={() => setFilter("wb")}
-              className={`px-3 py-1 rounded text-sm transition ${filter === "wb" ? "bg-purple-600 text-white" : "text-slate-400 hover:text-white"}`}
-            >
-              WB
-            </button>
-          </div>
         </div>
         
         {/* Search */}
@@ -221,7 +224,7 @@ export default function VehiclesPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Поиск по номеру..."
+            placeholder="Поиск по ФИО..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-400 focus:outline-none focus:border-blue-500"
@@ -230,7 +233,14 @@ export default function VehiclesPage() {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
+        <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50 text-center">
+          <div className="text-slate-400 text-xs">Водителей</div>
+          <div className="text-white font-bold flex items-center justify-center gap-1">
+            <Users className="w-4 h-4" />
+            {filtered.length}
+          </div>
+        </div>
         <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50 text-center">
           <div className="text-slate-400 text-xs">Выручка</div>
           <div className="text-blue-400 font-bold">{formatMoney(totals.revenue)} ₽</div>
@@ -243,45 +253,53 @@ export default function VehiclesPage() {
           <div className="text-slate-400 text-xs">Рейсов</div>
           <div className="text-white font-bold">{totals.trips}</div>
         </div>
+        <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50 text-center">
+          <div className="text-slate-400 text-xs">Штрафы WB</div>
+          <div className="text-red-400 font-bold">{formatMoney(totals.penalties)} ₽</div>
+        </div>
       </div>
 
       {isLoading ? (
         <div className="text-slate-400 text-center py-8">Загрузка...</div>
-      ) : mode === "range" && (!startDate || !endDate) ? (
-        <div className="text-slate-400 text-center py-8">Выберите период</div>
       ) : (
         <>
           {/* Mobile Cards */}
           <div className="lg:hidden space-y-2">
-            {filtered.map((v: any) => (
+            {filtered.map((d: any, idx: number) => (
               <Link 
-                key={v.vehicle_number}
-                href={`/vehicles/${encodeURIComponent(v.vehicle_number)}`}
+                key={d.driver_name || idx}
+                href={`/drivers/${encodeURIComponent(d.driver_name || '')}`}
                 className="block bg-slate-800/50 rounded-lg p-3 border border-slate-700/50 active:bg-slate-700/50"
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium text-white text-sm">{v.vehicle_number}</span>
+                  <span className="font-medium text-white text-sm truncate flex-1">{d.driver_name || 'Без имени'}</span>
                   <div className="flex items-center gap-2">
-                    {v.trf_trips > 0 && <span className="text-xs bg-green-900/50 text-green-400 px-1.5 py-0.5 rounded">РФ</span>}
-                    {v.wb_trips > 0 && <span className="text-xs bg-purple-900/50 text-purple-400 px-1.5 py-0.5 rounded">WB</span>}
+                    {d.trf_trips > 0 && <span className="text-xs bg-green-900/50 text-green-400 px-1.5 py-0.5 rounded">РФ</span>}
+                    {d.wb_trips > 0 && <span className="text-xs bg-purple-900/50 text-purple-400 px-1.5 py-0.5 rounded">WB</span>}
                     <ChevronRight className="w-4 h-4 text-slate-500" />
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="grid grid-cols-4 gap-2 text-xs">
                   <div>
                     <span className="text-slate-500">Выручка</span>
-                    <p className="text-blue-400 font-medium">{formatMoney(v.total_revenue)}</p>
+                    <p className="text-blue-400 font-medium">{formatMoney(d.total_revenue)}</p>
                   </div>
                   <div>
                     <span className="text-slate-500">Маржа</span>
-                    <p className={`font-medium ${v.margin >= 0 ? "text-green-400" : "text-red-400"}`}>
-                      {formatMoney(v.margin)}
+                    <p className={`font-medium ${d.margin >= 0 ? "text-green-400" : "text-red-400"}`}>
+                      {formatMoney(d.margin)}
                     </p>
                   </div>
                   <div>
                     <span className="text-slate-500">Рейсов</span>
                     <p className="text-white font-medium">
-                      {(v.trf_trips || 0) + (v.wb_trips || 0)}
+                      {(d.trf_trips || 0) + (d.wb_trips || 0)}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Штрафы</span>
+                    <p className="text-red-400 font-medium">
+                      {d.wb_penalties > 0 ? formatMoney(d.wb_penalties) : '—'}
                     </p>
                   </div>
                 </div>
@@ -295,35 +313,43 @@ export default function VehiclesPage() {
               <table className="w-full">
                 <thead className="bg-slate-900">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Машина</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Водитель</th>
                     <th className="px-4 py-3 text-center text-xs font-medium text-slate-400 uppercase">Тип</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase">Рейсов</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase">Выручка</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase">Расходы</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase">Маржа</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase">Штрафы</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase">Пробег</th>
                     <th className="px-4 py-3"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700">
-                  {filtered.map((v: any) => (
-                    <tr key={v.vehicle_number} className="hover:bg-slate-700/50">
+                  {filtered.map((d: any, idx: number) => (
+                    <tr key={d.driver_name || idx} className="hover:bg-slate-700/50">
                       <td className="px-4 py-3">
-                        <span className="font-medium text-white">{v.vehicle_number}</span>
+                        <span className="font-medium text-white">{d.driver_name || 'Без имени'}</span>
                       </td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex justify-center gap-1">
-                          {v.trf_trips > 0 && <span className="text-xs bg-green-900/50 text-green-400 px-1.5 py-0.5 rounded">РФ:{v.trf_trips}</span>}
-                          {v.wb_trips > 0 && <span className="text-xs bg-purple-900/50 text-purple-400 px-1.5 py-0.5 rounded">WB:{v.wb_trips}</span>}
+                          {d.trf_trips > 0 && <span className="text-xs bg-green-900/50 text-green-400 px-1.5 py-0.5 rounded">РФ:{d.trf_trips}</span>}
+                          {d.wb_trips > 0 && <span className="text-xs bg-purple-900/50 text-purple-400 px-1.5 py-0.5 rounded">WB:{d.wb_trips}</span>}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right text-slate-300">{(v.trf_trips || 0) + (v.wb_trips || 0)}</td>
-                      <td className="px-4 py-3 text-right text-blue-400">{formatMoney(v.total_revenue)}</td>
-                      <td className="px-4 py-3 text-right text-yellow-400">{formatMoney(v.expenses)}</td>
-                      <td className={`px-4 py-3 text-right font-medium ${v.margin >= 0 ? "text-green-400" : "text-red-400"}`}>
-                        {formatMoney(v.margin)}
+                      <td className="px-4 py-3 text-right text-slate-300">{(d.trf_trips || 0) + (d.wb_trips || 0)}</td>
+                      <td className="px-4 py-3 text-right text-blue-400">{formatMoney(d.total_revenue)}</td>
+                      <td className="px-4 py-3 text-right text-yellow-400">{formatMoney(d.expenses)}</td>
+                      <td className={`px-4 py-3 text-right font-medium ${d.margin >= 0 ? "text-green-400" : "text-red-400"}`}>
+                        {formatMoney(d.margin)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-red-400">
+                        {d.wb_penalties > 0 ? formatMoney(d.wb_penalties) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right text-slate-400">
+                        {d.mileage > 0 ? formatKm(d.mileage) + ' км' : '—'}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Link href={`/vehicles/${encodeURIComponent(v.vehicle_number)}`} className="text-slate-400 hover:text-white">
+                        <Link href={`/drivers/${encodeURIComponent(d.driver_name || '')}`} className="text-slate-400 hover:text-white">
                           <ChevronRight className="w-5 h-5" />
                         </Link>
                       </td>
@@ -339,7 +365,7 @@ export default function VehiclesPage() {
           )}
           
           <div className="mt-4 text-center text-slate-500 text-sm">
-            Всего: {filtered.length} машин
+            Всего: {filtered.length} водителей
           </div>
         </>
       )}

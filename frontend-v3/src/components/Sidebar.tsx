@@ -2,26 +2,44 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   LayoutDashboard, Truck, Users, FileText, Upload, 
-  BarChart3, TrendingUp, Menu, X
+  BarChart3, TrendingUp, Menu, X, LogOut, DollarSign
 } from "lucide-react";
+import { useAuth } from "./AuthProvider";
 
 const menuItems = [
   { href: "/", label: "Дашборд", icon: LayoutDashboard },
   { href: "/vehicles", label: "Машины", icon: Truck },
   { href: "/drivers", label: "Водители", icon: Users },
+  { href: "/reports", label: "Отчёты водителей", icon: FileText },
   { href: "/trips", label: "Рейсы", icon: FileText },
   { href: "/analytics", label: "Аналитика", icon: BarChart3 },
   { href: "/ratings", label: "Рейтинги", icon: TrendingUp },
+  { href: "/rates", label: "Тарифы", icon: DollarSign },
   { href: "/upload", label: "Загрузка", icon: Upload },
+  { href: "/users", label: "Пользователи", icon: Users },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
-  
+  const [mounted, setMounted] = useState(false);
+  const { user, logout } = useAuth();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    setIsOpen(false);
+  }, [pathname]);
+
+  if (!mounted) {
+    return null;
+  }
+
   return (
     <>
       {/* Mobile Header */}
@@ -50,8 +68,7 @@ export function Sidebar() {
       <aside className={`
         fixed left-0 top-0 h-full w-64 bg-slate-900 border-r border-slate-800 p-4 z-50
         transition-transform duration-300 ease-in-out
-        lg:translate-x-0
-        ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        ${isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0
       `}>
         <div className="flex items-center gap-3 mb-8 px-2 pt-2 lg:pt-0">
           <span className="text-2xl">🚛</span>
@@ -85,11 +102,18 @@ export function Sidebar() {
           })}
         </nav>
         
-        <div className="absolute bottom-4 left-4 right-4">
+        <div className="absolute bottom-4 left-4 right-4 space-y-2">
           <div className="bg-slate-800 rounded-lg p-3">
-            <div className="text-sm text-slate-400">Лихачев Сергей</div>
-            <div className="text-xs text-slate-500">Директор</div>
+            <div className="text-sm text-slate-300">{user?.full_name || 'Пользователь'}</div>
+            <div className="text-xs text-slate-500">{user?.role_display || ''}</div>
           </div>
+          <button
+            onClick={logout}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-slate-800 hover:bg-red-600/20 text-slate-400 hover:text-red-400 rounded-lg transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            <span className="text-sm">Выйти</span>
+          </button>
         </div>
       </aside>
     </>
