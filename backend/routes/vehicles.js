@@ -191,4 +191,79 @@ router.get('/:vehicleNumber/trips', async (req, res) => {
   }
 });
 
+
+// ===== ДОКУМЕНТЫ МАШИН =====
+
+// GET /api/vehicles/docs/:id
+router.get("/docs/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      "SELECT * FROM vehicles WHERE id = $1",
+      [id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Машина не найдена" });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error("Ошибка:", error);
+    res.status(500).json({ message: "Ошибка сервера" });
+  }
+});
+
+// PATCH /api/vehicles/docs/:id
+router.patch("/docs/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const fields = ["sts_number", "sts_date", "pts_number", "vin", "year", "owner", "color", "notes"];
+    const updates = [];
+    const values = [];
+    let idx = 1;
+    
+    for (const field of fields) {
+      if (req.body[field] !== undefined) {
+        updates.push(field + " = $" + idx);
+        values.push(req.body[field]);
+        idx++;
+      }
+    }
+    
+    if (updates.length === 0) {
+      return res.status(400).json({ message: "Нет данных для обновления" });
+    }
+    
+    values.push(id);
+    const result = await pool.query(
+      "UPDATE vehicles SET " + updates.join(", ") + " WHERE id = $" + idx + " RETURNING *",
+      values
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Машина не найдена" });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error("Ошибка:", error);
+    res.status(500).json({ message: "Ошибка сервера" });
+  }
+});
+
+// GET /api/vehicles/search/:query
+router.get("/search/:query", async (req, res) => {
+  try {
+    const { query } = req.params;
+    const searchTerm = "%" + query.toUpperCase() + "%";
+    
+    const result = await pool.query(
+      "SELECT v.*, (SELECT d.full_name FROM vehicle_assignments va JOIN drivers d ON d.id = va.driver_id WHERE va.vehicle_id = v.id AND va.is_current = true LIMIT 1) as current_driver, (SELECT d.phone FROM vehicle_assignments va JOIN drivers d ON d.id = va.driver_id WHERE va.vehicle_id = v.id AND va.is_current = true LIMIT 1) as driver_phone FROM vehicles v WHERE UPPER(v.id) LIKE $1 OR UPPER(v.license_plate) LIKE $1 LIMIT 10",
+      [searchTerm]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Ошибка:", error);
+    res.status(500).json({ message: "Ошибка сервера" });
+  }
+});
+
 module.exports = router;

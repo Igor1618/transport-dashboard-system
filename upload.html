@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Загрузка Excel - TL196</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #fff; min-height: 100vh; padding: 20px; }
+    .container { max-width: 600px; margin: 0 auto; }
+    h1 { font-size: 24px; margin-bottom: 8px; }
+    .subtitle { color: #888; margin-bottom: 24px; }
+    .upload-box { background: #252540; border: 2px dashed #444; border-radius: 12px; padding: 40px; text-align: center; margin-bottom: 20px; }
+    .upload-box.dragover { border-color: #4CAF50; background: #2a2a4a; }
+    .icon { font-size: 48px; margin-bottom: 16px; }
+    input[type="file"] { display: none; }
+    .btn { display: inline-block; padding: 12px 24px; border-radius: 8px; font-size: 16px; cursor: pointer; border: none; transition: 0.2s; }
+    .btn-primary { background: #4a69bd; color: #fff; }
+    .btn-primary:hover { background: #3c5aa6; }
+    .btn-success { background: #27ae60; color: #fff; width: 100%; margin-top: 16px; }
+    .btn-success:hover { background: #219a52; }
+    .btn-success:disabled { background: #555; cursor: not-allowed; }
+    .file-info { background: #333; padding: 12px; border-radius: 8px; margin-top: 16px; }
+    .result { padding: 16px; border-radius: 8px; margin-top: 20px; }
+    .result.success { background: rgba(39, 174, 96, 0.2); border: 1px solid #27ae60; }
+    .result.error { background: rgba(231, 76, 60, 0.2); border: 1px solid #e74c3c; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
+    .stat { background: #333; padding: 12px; border-radius: 8px; text-align: center; }
+    .stat-value { font-size: 24px; font-weight: bold; }
+    .stat-label { font-size: 12px; color: #888; }
+    .back-link { display: inline-block; margin-bottom: 20px; color: #4a69bd; text-decoration: none; }
+    .back-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="/" class="back-link">← Назад к дашборду</a>
+    <h1>📤 Загрузка данных</h1>
+    <p class="subtitle">Импорт путевых листов из Excel файлов Wildberries</p>
+
+    <div class="upload-box" id="dropZone">
+      <div class="icon">📊</div>
+      <p style="color: #888; margin-bottom: 16px;">Перетащите файл сюда или</p>
+      <input type="file" id="fileInput" accept=".xlsx,.xls">
+      <label for="fileInput" class="btn btn-primary">Выбрать файл</label>
+      <div id="fileInfo" class="file-info" style="display: none;"></div>
+      <button id="uploadBtn" class="btn btn-success" style="display: none;">🚀 Загрузить в базу</button>
+    </div>
+
+    <div id="result"></div>
+  </div>
+
+  <script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const fileInfo = document.getElementById('fileInfo');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const resultDiv = document.getElementById('result');
+    let selectedFile = null;
+
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+
+    fileInput.addEventListener('change', (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+    function handleFile(file) {
+      selectedFile = file;
+      fileInfo.innerHTML = '📄 ' + file.name + ' <span style="color:#888">(' + (file.size/1024).toFixed(1) + ' KB)</span>';
+      fileInfo.style.display = 'block';
+      uploadBtn.style.display = 'block';
+      resultDiv.innerHTML = '';
+    }
+
+    uploadBtn.addEventListener('click', async () => {
+      if (!selectedFile) return;
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = '⏳ Загрузка...';
+
+      try {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.message || 'Ошибка');
+
+        resultDiv.innerHTML = '<div class="result success"><strong>✅ Файл обработан</strong>' +
+          '<div class="stats">' +
+          '<div class="stat"><div class="stat-value">' + (data.totalRows||0) + '</div><div class="stat-label">Всего</div></div>' +
+          '<div class="stat"><div class="stat-value" style="color:#27ae60">' + (data.rowsImported||0) + '</div><div class="stat-label">Импортировано</div></div>' +
+          '<div class="stat"><div class="stat-value" style="color:#f39c12">' + (data.rowsSkipped||0) + '</div><div class="stat-label">Пропущено</div></div>' +
+          '</div></div>';
+
+        selectedFile = null;
+        fileInput.value = '';
+        fileInfo.style.display = 'none';
+        uploadBtn.style.display = 'none';
+      } catch (err) {
+        resultDiv.innerHTML = '<div class="result error">❌ ' + err.message + '</div>';
+      }
+      uploadBtn.disabled = false;
+      uploadBtn.textContent = '🚀 Загрузить в базу';
+    });
+  </script>
+</body>
+</html>

@@ -71,8 +71,8 @@ router.post('/', upload.single('file'), async (req, res) => {
         try {
           // Маппинг колонок для файла Wildberries
           const wbTripNumber = String(row['№'] || '');  // Номер рейса (в Excel число)
-          const loadingDate = parseDate(row['Дата открытия']);  // Формат: DD-MM-YYYY HH:MM
-          const unloadingDate = parseDate(row['Дата закрытия']);
+          const loadingDT = parseDateTime(row['Дата открытия']); const loadingDate = loadingDT.date; const loadingTime = loadingDT.time;  // Формат: DD-MM-YYYY HH:MM
+          const unloadingDT = parseDateTime(row['Дата закрытия']); const unloadingDate = unloadingDT.date; const unloadingTime = unloadingDT.time;
           const vehicleNumber = row['Номер ТС'] || '';
           const driverName = row['ФИО Водителя'] || '';  // С заглавной В!
           const routeName = row['Маршрут'] || '';
@@ -109,14 +109,14 @@ router.post('/', upload.single('file'), async (req, res) => {
           // Вставка данных
           await client.query(
             `INSERT INTO trips (
-              wb_trip_number, loading_date, unloading_date, vehicle_number,
+              wb_trip_number, loading_date, loading_time, unloading_date, unloading_time, vehicle_number,
               driver_name, route_name, trip_amount, distance_km,
               has_penalty, penalty_amount, containers_count, distribution_center, import_batch_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
             [
               wbTripNumber,
-              loadingDate,
-              unloadingDate,
+              loadingDate, loadingTime,
+              unloadingDate, unloadingTime,
               vehicleNumber,
               driverName,
               routeName,
@@ -217,3 +217,34 @@ function parseDate(dateValue) {
 }
 
 module.exports = router;
+
+// Парсинг даты и времени из Excel WB
+function parseDateTime(dateValue) {
+  if (!dateValue) return { date: null, time: null };
+  
+  // Excel число
+  if (typeof dateValue === "number") {
+    const excelEpoch = new Date(1899, 11, 30);
+    const dt = new Date(excelEpoch.getTime() + dateValue * 86400000);
+    const h = String(dt.getHours()).padStart(2, "0");
+    const m = String(dt.getMinutes()).padStart(2, "0");
+    return { date: dt.toISOString().split("T")[0], time: h + ":" + m };
+  }
+  
+  // Строка "19-01-2026 00:12"
+  if (typeof dateValue === "string") {
+    const match = dateValue.match(/(\d{2})[-.](\d{2})[-.](\d{4})\s+(\d{2}):(\d{2})/);
+    if (match) {
+      return { 
+        date: match[3] + "-" + match[2] + "-" + match[1], 
+        time: match[4] + ":" + match[5] 
+      };
+    }
+    // Только дата
+    const dateOnly = dateValue.match(/(\d{2})[-.](\d{2})[-.](\d{4})/);
+    if (dateOnly) {
+      return { date: dateOnly[3] + "-" + dateOnly[2] + "-" + dateOnly[1], time: null };
+    }
+  }
+  return { date: null, time: null };
+}
