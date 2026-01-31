@@ -248,3 +248,33 @@ function parseDateTime(dateValue) {
   }
   return { date: null, time: null };
 }
+
+// POST /upload/preview - предварительный просмотр файла WB
+router.post("/preview", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "Файл не загружен" });
+    }
+
+    const workbook = xlsx.readFile(req.file.path);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const data = xlsx.utils.sheet_to_json(worksheet);
+
+    // Удаляем файл после чтения
+    const fs = require("fs");
+    fs.unlinkSync(req.file.path);
+
+    const columns = data.length > 0 ? Object.keys(data[0]) : [];
+    const sampleRows = data.slice(0, 10);
+
+    res.json({
+      success: true,
+      total_rows: data.length,
+      columns,
+      sample_rows: sampleRows
+    });
+  } catch (err) {
+    res.status(500).json({ message: String(err) });
+  }
+});

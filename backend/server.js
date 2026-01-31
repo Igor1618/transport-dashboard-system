@@ -36,7 +36,9 @@ const vehiclesRoutes = require('./routes/vehicles');
 const usersRoutes = require('./routes/users');
 const analyticsRoutes = require('./routes/analytics');
 const reportsRoutes = require("./routes/reports");
-const fuelRoutes = require(./routes/fuel);
+const fuelRoutes = require("./routes/fuel");
+const cardsRoutes = require("./routes/cards");
+const fuelNormsRoutes = require("./routes/fuelNorms");
 const driversRoutes = require('./routes/drivers');
 
 app.use('/auth', authRoutes);
@@ -51,7 +53,9 @@ app.use('/drivers', driversRoutes);
 app.use('/users', usersRoutes);
 app.use('/analytics', analyticsRoutes);
 app.use("/reports", reportsRoutes);
-app.use(/fuel, fuelRoutes);
+app.use("/fuel", fuelRoutes);
+app.use("/cards", cardsRoutes);
+app.use("/fuel-norms", fuelNormsRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

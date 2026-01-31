@@ -1,268 +1,111 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const pool = require('../config/database');
+const pool = require("../config/database");
 
-// GET /api/vehicles/canonical
-// Получение списка канонических (правильных) номеров машин
-router.get('/canonical', async (req, res) => {
+// Список машин с нормами
+router.get("/list", async (req, res) => {
   try {
-    // Функция для нормализации номера (кириллица -> латиница)
-    const normalizeNumber = (number) => {
-      const cyrillicToLatin = {
-        'А': 'A', 'В': 'B', 'Е': 'E', 'К': 'K', 'М': 'M', 'Н': 'H',
-        'О': 'O', 'Р': 'P', 'С': 'C', 'Т': 'T', 'У': 'Y', 'Х': 'X',
-        'а': 'A', 'в': 'B', 'е': 'E', 'к': 'K', 'м': 'M', 'н': 'H',
-        'о': 'O', 'р': 'P', 'с': 'C', 'т': 'T', 'у': 'Y', 'х': 'X'
-      };
+    const result = await pool.query(`
+      SELECT id, license_plate, model, internal_number, vehicle_type,
+             fuel_norm_summer, fuel_norm_autumn, fuel_norm_winter
+      FROM vehicles 
+      ORDER BY license_plate
+    `);
+    res.json({ vehicles: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
 
-      return number
-        .trim()
-        .toUpperCase()
-        .split('')
-        .map(char => cyrillicToLatin[char] || char)
-        .join('');
-    };
+// Список типов машин
+router.get("/types", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM vehicle_types ORDER BY name");
+    res.json({ types: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
 
-    // Функция расчета расстояния Левенштейна
-    const levenshteinDistance = (str1, str2) => {
-      const len1 = str1.length;
-      const len2 = str2.length;
-      const dp = Array(len1 + 1).fill(null).map(() => Array(len2 + 1).fill(0));
+// Обновить машину
+router.post("/update", async (req, res) => {
+  const { id, vehicle_type, fuel_norm_summer, fuel_norm_autumn, fuel_norm_winter } = req.body;
+  if (!id) return res.status(400).json({ error: "id required" });
+  
+  try {
+    await pool.query(`
+      UPDATE vehicles SET 
+        vehicle_type = $2,
+        fuel_norm_summer = $3,
+        fuel_norm_autumn = $4,
+        fuel_norm_winter = $5,
+        updated_at = NOW()
+      WHERE id = $1
+    `, [id, vehicle_type || null, fuel_norm_summer || null, fuel_norm_autumn || null, fuel_norm_winter || null]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
 
-      for (let i = 0; i <= len1; i++) dp[i][0] = i;
-      for (let j = 0; j <= len2; j++) dp[0][j] = j;
-
-      for (let i = 1; i <= len1; i++) {
-        for (let j = 1; j <= len2; j++) {
-          if (str1[i - 1] === str2[j - 1]) {
-            dp[i][j] = dp[i - 1][j - 1];
-          } else {
-            dp[i][j] = Math.min(
-              dp[i - 1][j] + 1,
-              dp[i][j - 1] + 1,
-              dp[i - 1][j - 1] + 1
-            );
-          }
-        }
-      }
-      return dp[len1][len2];
-    };
-
-    // Получаем все номера с количеством рейсов
-    const query = `
-      SELECT
-        vehicle_number,
-        COUNT(*) as trips_count
-      FROM trips
-      GROUP BY vehicle_number
-      ORDER BY trips_count DESC
-    `;
-
-    const result = await pool.query(query);
-    const allNumbers = result.rows;
-
-    // Группируем похожие номера
-    const processed = new Set();
-    const canonicalList = [];
-
-    for (const vehicle of allNumbers) {
-      if (processed.has(vehicle.vehicle_number)) continue;
-
-      const normalized = normalizeNumber(vehicle.vehicle_number);
-      const similarGroup = [vehicle];
-
-      // Ищем похожие номера (расстояние = 1)
-      for (const other of allNumbers) {
-        if (vehicle.vehicle_number === other.vehicle_number) continue;
-        if (processed.has(other.vehicle_number)) continue;
-
-        const otherNormalized = normalizeNumber(other.vehicle_number);
-
-        // Только для номеров одинаковой длины
-        if (normalized.length === otherNormalized.length) {
-          const distance = levenshteinDistance(normalized, otherNormalized);
-
-          // Если расстояние = 1 (опечатка)
-          if (distance === 1) {
-            similarGroup.push(other);
-            processed.add(other.vehicle_number);
-          }
-        }
-      }
-
-      // Помечаем главный номер как обработанный
-      processed.add(vehicle.vehicle_number);
-
-      // Из группы выбираем номер с наибольшим количеством рейсов
-      const canonical = similarGroup.reduce((prev, curr) =>
-        Number(curr.trips_count) > Number(prev.trips_count) ? curr : prev
+// Сохранить тип машины
+router.post("/types/save", async (req, res) => {
+  const { id, name, fuel_norm_summer, fuel_norm_autumn, fuel_norm_winter } = req.body;
+  try {
+    if (id) {
+      await pool.query(
+        "UPDATE vehicle_types SET name=$2, fuel_norm_summer=$3, fuel_norm_autumn=$4, fuel_norm_winter=$5 WHERE id=$1",
+        [id, name, fuel_norm_summer, fuel_norm_autumn, fuel_norm_winter]
       );
-
-      // Добавляем в canonical list только нормализованный номер
-      canonicalList.push(normalizeNumber(canonical.vehicle_number));
+    } else {
+      await pool.query(
+        "INSERT INTO vehicle_types (name, fuel_norm_summer, fuel_norm_autumn, fuel_norm_winter) VALUES ($1,$2,$3,$4)",
+        [name, fuel_norm_summer, fuel_norm_autumn, fuel_norm_winter]
+      );
     }
-
-    res.json(canonicalList);
-  } catch (error) {
-    console.error('Ошибка получения канонических номеров:', error);
-    res.status(500).json({ message: 'Ошибка сервера' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
   }
 });
 
-// GET /api/vehicles/stats - статистика по автомобилям
-router.get('/stats', async (req, res) => {
+// Получить норму для машины (с учётом индивидуальных норм)
+router.get("/norm", async (req, res) => {
+  const { vehicle, season } = req.query;
+  if (!vehicle) return res.status(400).json({ error: "vehicle required" });
+  
+  const s = season || "winter";
+  const normField = s === "summer" ? "fuel_norm_summer" : s === "autumn" ? "fuel_norm_autumn" : "fuel_norm_winter";
+  
   try {
-    const { month } = req.query;
-
-    let query = `
-      SELECT
-        t.vehicle_number,
-        COUNT(t.id)::integer as trips_count,
-        COALESCE(SUM(t.distance_km), 0)::numeric as total_distance,
-        COALESCE(SUM(t.trip_amount), 0)::numeric as total_revenue,
-        COALESCE(SUM(t.trip_amount * 1.2), 0)::numeric as total_revenue_with_vat,
-        COUNT(DISTINCT t.driver_name)::integer as drivers_count,
-        COUNT(DISTINCT DATE_TRUNC('day', t.loading_date))::integer as working_days,
-        COALESCE(ROUND(SUM(t.trip_amount)::numeric / NULLIF(SUM(t.distance_km), 0), 2), 0)::numeric as revenue_per_km,
-        COALESCE(ROUND(SUM(t.trip_amount * 1.2)::numeric / NULLIF(SUM(t.distance_km), 0), 2), 0)::numeric as revenue_per_km_with_vat,
-        COALESCE(ROUND(COUNT(t.id)::numeric / NULLIF(COUNT(DISTINCT DATE_TRUNC('day', t.loading_date)), 0), 2), 0)::numeric as trips_per_day
-      FROM trips t
-    `;
-
-    const params = [];
-
-    // Фильтр по месяцу
-    if (month) {
-      query += ` WHERE DATE_TRUNC('month', t.loading_date) = DATE_TRUNC('month', $1::date)`;
-      params.push(`${month}-01`);
-    }
-
-    query += `
-      GROUP BY t.vehicle_number
-      ORDER BY total_revenue DESC
-    `;
-
-    const result = await pool.query(query, params);
-
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Ошибка получения статистики по автомобилям:', error);
-    res.status(500).json({ message: 'Ошибка сервера' });
-  }
-});
-
-// GET /api/vehicles/:vehicleNumber/trips - детализация рейсов автомобиля
-router.get('/:vehicleNumber/trips', async (req, res) => {
-  try {
-    const { vehicleNumber } = req.params;
-    const { month } = req.query;
-
-    let query = `
-      SELECT
-        t.id,
-        t.wb_trip_number,
-        t.loading_date,
-        t.driver_name,
-        t.route_name,
-        t.distance_km,
-        t.trip_amount as revenue,
-        (t.trip_amount * 1.2) as revenue_with_vat,
-        t.penalty_amount
-      FROM trips t
-      WHERE t.vehicle_number = $1
-    `;
-
-    const params = [vehicleNumber];
-
-    // Фильтр по месяцу
-    if (month) {
-      query += ` AND DATE_TRUNC('month', t.loading_date) = DATE_TRUNC('month', $2::date)`;
-      params.push(`${month}-01`);
-    }
-
-    query += ` ORDER BY t.loading_date DESC`;
-
-    const result = await pool.query(query, params);
-
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Ошибка загрузки рейсов автомобиля:', error);
-    res.status(500).json({ message: 'Ошибка сервера' });
-  }
-});
-
-
-// ===== ДОКУМЕНТЫ МАШИН =====
-
-// GET /api/vehicles/docs/:id
-router.get("/docs/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await pool.query(
-      "SELECT * FROM vehicles WHERE id = $1",
-      [id]
+    // Сначала ищем индивидуальную норму машины
+    const vRes = await pool.query(
+      "SELECT vehicle_type, " + normField + " as norm FROM vehicles WHERE license_plate ILIKE $1 OR id = $1 LIMIT 1",
+      ["%" + vehicle.replace(/\s/g, "") + "%"]
     );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: "Машина не найдена" });
-    }
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error("Ошибка:", error);
-    res.status(500).json({ message: "Ошибка сервера" });
-  }
-});
-
-// PATCH /api/vehicles/docs/:id
-router.patch("/docs/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const fields = ["sts_number", "sts_date", "pts_number", "vin", "year", "owner", "color", "notes"];
-    const updates = [];
-    const values = [];
-    let idx = 1;
     
-    for (const field of fields) {
-      if (req.body[field] !== undefined) {
-        updates.push(field + " = $" + idx);
-        values.push(req.body[field]);
-        idx++;
+    if (vRes.rows[0]) {
+      const v = vRes.rows[0];
+      if (v.norm) {
+        return res.json({ norm: parseFloat(v.norm), source: "individual", season: s });
+      }
+      
+      // Если нет индивидуальной — берём по типу
+      if (v.vehicle_type) {
+        const tRes = await pool.query(
+          "SELECT " + normField + " as norm FROM vehicle_types WHERE name = $1",
+          [v.vehicle_type]
+        );
+        if (tRes.rows[0]) {
+          return res.json({ norm: parseFloat(tRes.rows[0].norm), source: "type", type: v.vehicle_type, season: s });
+        }
       }
     }
     
-    if (updates.length === 0) {
-      return res.status(400).json({ message: "Нет данных для обновления" });
-    }
-    
-    values.push(id);
-    const result = await pool.query(
-      "UPDATE vehicles SET " + updates.join(", ") + " WHERE id = $" + idx + " RETURNING *",
-      values
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: "Машина не найдена" });
-    }
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error("Ошибка:", error);
-    res.status(500).json({ message: "Ошибка сервера" });
-  }
-});
-
-// GET /api/vehicles/search/:query
-router.get("/search/:query", async (req, res) => {
-  try {
-    const { query } = req.params;
-    const searchTerm = "%" + query.toUpperCase() + "%";
-    
-    const result = await pool.query(
-      "SELECT v.*, (SELECT d.full_name FROM vehicle_assignments va JOIN drivers d ON d.id = va.driver_id WHERE va.vehicle_id = v.id AND va.is_current = true LIMIT 1) as current_driver, (SELECT d.phone FROM vehicle_assignments va JOIN drivers d ON d.id = va.driver_id WHERE va.vehicle_id = v.id AND va.is_current = true LIMIT 1) as driver_phone FROM vehicles v WHERE UPPER(v.id) LIKE $1 OR UPPER(v.license_plate) LIKE $1 LIMIT 10",
-      [searchTerm]
-    );
-    res.json(result.rows);
-  } catch (error) {
-    console.error("Ошибка:", error);
-    res.status(500).json({ message: "Ошибка сервера" });
+    // Дефолт
+    res.json({ norm: 30, source: "default", season: s });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
   }
 });
 
