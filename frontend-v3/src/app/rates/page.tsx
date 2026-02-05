@@ -12,13 +12,13 @@ interface RouteRate {
 }
 
 async function fetchRates() {
-  const res = await fetch('/rest/v1/route_rates?order=route_name.asc');
+  const res = await fetch('/api/reports/tariffs/rates');
   if (!res.ok) throw new Error('API error');
   return res.json();
 }
 
 async function createRate(rate: Partial<RouteRate>) {
-  const res = await fetch('/rest/v1/route_rates', {
+  const res = await fetch('/api/reports/tariffs/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
     body: JSON.stringify(rate),
@@ -28,7 +28,7 @@ async function createRate(rate: Partial<RouteRate>) {
 }
 
 async function updateRate(id: number, rate: Partial<RouteRate>) {
-  const res = await fetch(`/rest/v1/route_rates?id=eq.${id}`, {
+  const res = await fetch(`/api/reports/tariffs/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
     body: JSON.stringify(rate),
@@ -38,7 +38,7 @@ async function updateRate(id: number, rate: Partial<RouteRate>) {
 }
 
 async function deleteRate(id: number) {
-  const res = await fetch(`/rest/v1/route_rates?id=eq.${id}`, {
+  const res = await fetch(`/api/reports/tariffs/${id}`, {
     method: 'DELETE',
   });
   if (!res.ok) throw new Error('Delete failed');

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import Link from "next/link";
 import { ChevronRight, Search, Calendar, Users, TrendingUp, AlertTriangle, Route } from "lucide-react";
+import { useAuth } from "@/components/AuthProvider";
 
 const MONTHS = [
   "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
@@ -76,6 +77,9 @@ export default function DriversPage() {
   });
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  
+  const { user } = useAuth();
+  const isAccountant = user?.role === "accountant";
 
   const month = `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}-01`;
   
@@ -241,14 +245,18 @@ export default function DriversPage() {
             {filtered.length}
           </div>
         </div>
-        <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50 text-center">
-          <div className="text-slate-400 text-xs">Выручка</div>
-          <div className="text-blue-400 font-bold">{formatMoney(totals.revenue)} ₽</div>
-        </div>
-        <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50 text-center">
-          <div className="text-slate-400 text-xs">Маржа</div>
-          <div className={`font-bold ${totals.margin >= 0 ? "text-green-400" : "text-red-400"}`}>{formatMoney(totals.margin)} ₽</div>
-        </div>
+        {!isAccountant && (
+          <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50 text-center">
+            <div className="text-slate-400 text-xs">Выручка</div>
+            <div className="text-blue-400 font-bold">{formatMoney(totals.revenue)} ₽</div>
+          </div>
+        )}
+        {!isAccountant && (
+          <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50 text-center">
+            <div className="text-slate-400 text-xs">Маржа</div>
+            <div className={`font-bold ${totals.margin >= 0 ? "text-green-400" : "text-red-400"}`}>{formatMoney(totals.margin)} ₽</div>
+          </div>
+        )}
         <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50 text-center">
           <div className="text-slate-400 text-xs">Рейсов</div>
           <div className="text-white font-bold">{totals.trips}</div>
@@ -279,17 +287,21 @@ export default function DriversPage() {
                     <ChevronRight className="w-4 h-4 text-slate-500" />
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-2 text-xs">
-                  <div>
-                    <span className="text-slate-500">Выручка</span>
-                    <p className="text-blue-400 font-medium">{formatMoney(d.total_revenue)}</p>
-                  </div>
-                  <div>
-                    <span className="text-slate-500">Маржа</span>
-                    <p className={`font-medium ${d.margin >= 0 ? "text-green-400" : "text-red-400"}`}>
-                      {formatMoney(d.margin)}
-                    </p>
-                  </div>
+                <div className={`grid ${isAccountant ? "grid-cols-2" : "grid-cols-4"} gap-2 text-xs`}>
+                  {!isAccountant && (
+                    <div>
+                      <span className="text-slate-500">Выручка</span>
+                      <p className="text-blue-400 font-medium">{formatMoney(d.total_revenue)}</p>
+                    </div>
+                  )}
+                  {!isAccountant && (
+                    <div>
+                      <span className="text-slate-500">Маржа</span>
+                      <p className={`font-medium ${d.margin >= 0 ? "text-green-400" : "text-red-400"}`}>
+                        {formatMoney(d.margin)}
+                      </p>
+                    </div>
+                  )}
                   <div>
                     <span className="text-slate-500">Рейсов</span>
                     <p className="text-white font-medium">
@@ -316,9 +328,9 @@ export default function DriversPage() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Водитель</th>
                     <th className="px-4 py-3 text-center text-xs font-medium text-slate-400 uppercase">Тип</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase">Рейсов</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase">Выручка</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase">Расходы</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase">Маржа</th>
+                    {!isAccountant && <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase">Выручка</th>}
+                    {!isAccountant && <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase">Расходы</th>}
+                    {!isAccountant && <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase">Маржа</th>}
                     <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase">Штрафы</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase">Пробег</th>
                     <th className="px-4 py-3"></th>
@@ -337,11 +349,13 @@ export default function DriversPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right text-slate-300">{(d.trf_trips || 0) + (d.wb_trips || 0)}</td>
-                      <td className="px-4 py-3 text-right text-blue-400">{formatMoney(d.total_revenue)}</td>
-                      <td className="px-4 py-3 text-right text-yellow-400">{formatMoney(d.expenses)}</td>
-                      <td className={`px-4 py-3 text-right font-medium ${d.margin >= 0 ? "text-green-400" : "text-red-400"}`}>
-                        {formatMoney(d.margin)}
-                      </td>
+                      {!isAccountant && <td className="px-4 py-3 text-right text-blue-400">{formatMoney(d.total_revenue)}</td>}
+                      {!isAccountant && <td className="px-4 py-3 text-right text-yellow-400">{formatMoney(d.expenses)}</td>}
+                      {!isAccountant && (
+                        <td className={`px-4 py-3 text-right font-medium ${d.margin >= 0 ? "text-green-400" : "text-red-400"}`}>
+                          {formatMoney(d.margin)}
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-right text-red-400">
                         {d.wb_penalties > 0 ? formatMoney(d.wb_penalties) : '—'}
                       </td>

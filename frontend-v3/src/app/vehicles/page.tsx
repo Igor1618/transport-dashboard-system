@@ -12,6 +12,9 @@ interface Vehicle {
   fuel_norm_summer: number | null;
   fuel_norm_autumn: number | null;
   fuel_norm_winter: number | null;
+  is_active: boolean;
+  last_trip_date: string | null;
+  last_contract_date: string | null;
 }
 
 interface VehicleType {
@@ -31,6 +34,22 @@ export default function VehiclesPage() {
   const [filter, setFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
+  
+  // Модальное окно тарифов
+  const [showTariffs, setShowTariffs] = useState(false);
+  const [selectedType, setSelectedType] = useState("");
+  const [tariffs, setTariffs] = useState<{season: string; fuel_consumption: number; rate: number}[]>([]);
+  
+  const loadTariffs = async (typeName: string) => {
+    setSelectedType(typeName);
+    setShowTariffs(true);
+    try {
+      const res = await fetch(`/api/tariffs/list?vehicle_type=${encodeURIComponent(typeName)}`);
+      const data = await res.json();
+      setTariffs((data.tariffs || []).map((t: any) => ({ season: t.season, fuel_consumption: Number(t.fuel_consumption), rate: Number(t.rate) })));
+    } catch (e) { setTariffs([]); }
+  };
 
   useEffect(() => {
     loadData();
@@ -40,7 +59,7 @@ export default function VehiclesPage() {
     setLoading(true);
     try {
       const [vRes, tRes] = await Promise.all([
-        fetch("/api/vehicles/list"),
+        fetch("/api/vehicles/list-with-activity"),
         fetch("/api/vehicles/types")
       ]);
       const vData = await vRes.json();
@@ -104,6 +123,9 @@ export default function VehiclesPage() {
     const matchType = !typeFilter || v.vehicle_type === typeFilter;
     return matchText && matchType;
   });
+  
+  const activeVehicles = filtered.filter(v => v.is_active);
+  const inactiveVehicles = filtered.filter(v => !v.is_active);
 
   const getTypeColor = (type: string | null) => {
     if (!type) return "bg-slate-600";
@@ -121,7 +143,7 @@ export default function VehiclesPage() {
           <Link href="/fuel" className="text-slate-400 hover:text-white"><ArrowLeft className="w-5 h-5" /></Link>
           <Truck className="w-6 h-6 text-cyan-400" />
           <h1 className="text-xl font-bold">Справочник машин</h1>
-          <span className="text-slate-400 ml-auto">{vehicles.length} машин</span>
+          <span className="text-slate-400">{activeVehicles.length} активных / {inactiveVehicles.length} неактивных</span><Link href="/vehicles/new" className="ml-auto bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg text-sm">+ Добавить</Link>
         </div>
       </div>
 
@@ -148,10 +170,11 @@ export default function VehiclesPage() {
           </select>
         </div>
 
-        {/* Типы с нормами */}
+        {/* Типы с нормами — кликабельные */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {types.map(t => (
-            <div key={t.id} className={"rounded-lg p-3 " + getTypeColor(t.name)}>
+            <div key={t.id} onClick={() => loadTariffs(t.name)} 
+              className={"rounded-lg p-3 cursor-pointer hover:opacity-90 transition " + getTypeColor(t.name)}>
               <div className="font-semibold">{t.name}</div>
               <div className="text-sm opacity-80">
                 ☀️{t.fuel_norm_summer} 🍂{t.fuel_norm_autumn} ❄️{t.fuel_norm_winter}
@@ -160,6 +183,66 @@ export default function VehiclesPage() {
             </div>
           ))}
         </div>
+        
+        {/* Модальное окно тарифов с редактированием */}
+        {showTariffs && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setShowTariffs(false)}>
+            <div className="bg-slate-800 rounded-xl p-6 max-w-2xl w-full max-h-[80vh] overflow-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-white">💰 Тарифы: {selectedType}</h2>
+                <button onClick={() => setShowTariffs(false)} className="text-slate-400 hover:text-white text-2xl">&times;</button>
+              </div>
+              <div className="space-y-6">
+                {["Лето", "Межсезон", "Зима"].map(season => {
+                  const seasonTariffs = tariffs.filter(t => t.season === season).sort((a, b) => b.fuel_consumption - a.fuel_consumption);
+                  return (
+                    <div key={season} className="bg-slate-700/30 rounded-lg p-3">
+                      <div className="text-sm font-semibold text-slate-300 mb-2">
+                        {season === "Лето" ? "☀️" : season === "Межсезон" ? "🍂" : "❄️"} {season}
+                      </div>
+                      <div className="space-y-1">
+                        {seasonTariffs.map((t, i) => (
+                          <div key={i} className="flex items-center gap-2 text-sm">
+                            <span className="text-slate-400">≤</span>
+                            <input type="number" value={t.fuel_consumption} className="w-16 bg-slate-600 rounded px-2 py-1 text-yellow-400 text-center"
+                              onChange={e => {
+                                const newVal = parseFloat(e.target.value);
+                                setTariffs(tariffs.map((tt, ii) => tt === t ? {...tt, fuel_consumption: newVal} : tt));
+                              }} />
+                            <span className="text-slate-400">л →</span>
+                            <input type="number" step="0.1" value={t.rate} className="w-16 bg-slate-600 rounded px-2 py-1 text-green-400 text-center"
+                              onChange={e => {
+                                const newVal = parseFloat(e.target.value);
+                                setTariffs(tariffs.map((tt, ii) => tt === t ? {...tt, rate: newVal} : tt));
+                              }} />
+                            <span className="text-slate-400">₽/км</span>
+                            <button onClick={async () => {
+                              await fetch(`/api/tariffs/by-params?vehicle_type=${encodeURIComponent(selectedType)}&season=${encodeURIComponent(season)}&fuel_consumption=${t.fuel_consumption}`, {method: "DELETE"});
+                              setTariffs(tariffs.filter(tt => tt !== t));
+                            }} className="text-red-400 hover:text-red-300 ml-auto">✕</button>
+                          </div>
+                        ))}
+                        <button onClick={() => setTariffs([...tariffs, {season, fuel_consumption: 20, rate: 6}])}
+                          className="text-xs text-blue-400 hover:text-blue-300 mt-1">+ Добавить</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <button onClick={async () => {
+                for (const t of tariffs) {
+                  await fetch("/api/tariffs/save", {
+                    method: "POST", headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({vehicle_type: selectedType, season: t.season, fuel_consumption: t.fuel_consumption, rate: t.rate})
+                  });
+                }
+                alert("Сохранено!"); setShowTariffs(false);
+              }} className="w-full mt-4 bg-green-600 hover:bg-green-500 text-white py-2 rounded-lg font-semibold">
+                💾 Сохранить тарифы
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Таблица */}
         {loading ? (
@@ -179,10 +262,10 @@ export default function VehiclesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700">
-                {filtered.map(v => (
+                {activeVehicles.map(v => (
                   <tr key={v.id} className="hover:bg-slate-700/30">
                     <td className="p-3">
-                      <div className="font-mono text-cyan-400">{v.license_plate}</div>
+                      <Link href={"/vehicles/" + v.id} className="font-mono text-cyan-400 hover:underline">{v.license_plate}</Link>
                       {v.internal_number && <div className="text-xs text-slate-400">#{v.internal_number}</div>}
                     </td>
                     <td className="p-3 text-slate-300">{v.model}</td>
@@ -280,6 +363,57 @@ export default function VehiclesPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        
+        {/* Неактивные машины */}
+        {inactiveVehicles.length > 0 && (
+          <div className="mt-6">
+            <button 
+              onClick={() => setShowInactive(!showInactive)}
+              className="flex items-center gap-2 text-slate-400 hover:text-white mb-3"
+            >
+              {showInactive ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              <span>📦 Неактивные ТС ({inactiveVehicles.length})</span>
+            </button>
+            {showInactive && (
+              <div className="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-slate-700/30">
+                    <tr>
+                      <th className="text-left p-3 text-slate-500">Номер</th>
+                      <th className="text-left p-3 text-slate-500">Модель</th>
+                      <th className="text-left p-3 text-slate-500">Тип</th>
+                      <th className="text-center p-3 text-slate-500">Последний рейс</th>
+                      <th className="text-center p-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-700/50">
+                    {inactiveVehicles.map(v => (
+                      <tr key={v.id} className="hover:bg-slate-700/20 opacity-60">
+                        <td className="p-3">
+                          <Link href={"/vehicles/" + v.id} className="font-mono text-slate-400 hover:text-cyan-400 hover:underline">{v.license_plate}</Link>
+                        </td>
+                        <td className="p-3 text-slate-500">{v.model}</td>
+                        <td className="p-3">
+                          <span className="px-2 py-1 rounded text-xs bg-slate-700 text-slate-400">{v.vehicle_type || "—"}</span>
+                        </td>
+                        <td className="p-3 text-center text-slate-500 text-sm">
+                          {v.last_trip_date || v.last_contract_date 
+                            ? new Date(v.last_trip_date || v.last_contract_date || "").toLocaleDateString("ru-RU")
+                            : "—"}
+                        </td>
+                        <td className="p-3 text-center">
+                          <Link href={"/vehicles/" + v.id} className="text-slate-500 hover:text-white">
+                            <Settings className="w-4 h-4" />
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>

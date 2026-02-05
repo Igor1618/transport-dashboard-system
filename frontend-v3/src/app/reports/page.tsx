@@ -18,9 +18,14 @@ interface DriverReport {
   date_from: string;
   date_to: string;
   total_expenses: number;
+  fuel_amount: number;
   driver_accruals: number;
   mileage: number;
+  updated_by?: string;
 }
+
+// Расходы = топливо + компенсации (всё кроме зарплаты водителю)
+const getTotalExpenses = (r: DriverReport) => (r.fuel_amount || 0) + (r.total_expenses || 0);
 
 function formatMoney(value: number | null): string {
   if (!value) return "0 ₽";
@@ -141,7 +146,7 @@ export default function ReportsPage() {
       return 0;
     });
 
-  const totalExpenses = filteredReports.reduce((sum, r) => sum + (r.total_expenses || 0), 0);
+  const totalExpenses = filteredReports.reduce((sum, r) => sum + getTotalExpenses(r), 0);
   const totalAccruals = filteredReports.reduce((sum, r) => sum + (r.driver_accruals || 0), 0);
   const totalMileage = filteredReports.reduce((sum, r) => sum + (r.mileage || 0), 0);
 
@@ -259,6 +264,7 @@ export default function ReportsPage() {
                 </th>
                 <th className="text-right p-3 cursor-pointer hover:bg-slate-700/50" onClick={() => handleSort("mileage")}>
                   ПРОБЕГ <SortIcon field="mileage" />
+                <th className="text-left p-3">АВТОР</th>
                 </th>
               </tr>
             </thead>
@@ -278,9 +284,10 @@ export default function ReportsPage() {
                     <td className="p-3 text-white">{r.driver_name || "—"}</td>
                     <td className="p-3 text-slate-300">{r.vehicle_number}</td>
                     <td className="p-3 text-slate-400">{formatDate(r.date_from)} — {formatDate(r.date_to)}</td>
-                    <td className="p-3 text-right text-red-400">{formatMoney(r.total_expenses)}</td>
+                    <td className="p-3 text-right text-red-400">{formatMoney(getTotalExpenses(r))}</td>
                     <td className="p-3 text-right text-green-400">{formatMoney(r.driver_accruals)}</td>
                     <td className="p-3 text-right text-cyan-400">{r.mileage ? r.mileage.toLocaleString("ru-RU") + " км" : "0 км"}</td>
+                    <td className="p-3 text-slate-500 text-xs">{r.updated_by || "—"}</td>
                   </tr>
                 ))
               )}

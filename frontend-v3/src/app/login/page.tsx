@@ -31,7 +31,7 @@ export default function LoginPage() {
 
       // Сохраняем пользователя
       localStorage.setItem('user', JSON.stringify(data.user));
-      router.push('/');
+      window.location.href = ('/');
     } catch {
       setError('Ошибка соединения с сервером');
     } finally {

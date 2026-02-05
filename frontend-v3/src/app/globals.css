@@ -12,3 +12,40 @@ body {
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
+
+/* Стили для печати отчёта */
+@media print {
+  body {
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  /* Скрываем всё кроме печатной формы */
+  body > * {
+    display: none !important;
+  }
+  
+  #print-report {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: white !important;
+    color: black !important;
+    padding: 20mm !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  
+  #print-report * {
+    color: black !important;
+    background: white !important;
+  }
+  
+  #print-report .text-green-700 { color: #15803d !important; }
+  #print-report .text-red-700 { color: #b91c1c !important; }
+  #print-report .text-orange-700 { color: #c2410c !important; }
+}
