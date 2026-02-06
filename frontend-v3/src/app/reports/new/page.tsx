@@ -8,7 +8,7 @@ import { ArrowLeft, Truck, User, Save, Loader2, Zap, Plus, Trash2, RefreshCw, Fu
 interface Driver { name: string; }
 interface Vehicle { number: string; trips?: number; vehicle_type?: string; }
 interface WbTrip { loading_date: string; loading_time?: string; unloading_date?: string; unloading_time?: string; route_name: string; driver_rate: number; }
-interface RfContract { number: string; date: string; route: string; }
+interface RfContract { number: string; date: string; route: string; loading_date?: string; unloading_date?: string; amount?: string; }
 interface FuelBySource { source: string; liters: number; amount: number; count: number; }
 interface Expense { name: string; amount: number; }
 interface Payment { date: string; amount: number; type: string; description: string; }
@@ -248,10 +248,10 @@ export default function NewReportPage() {
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 чтобы включить оба дня
       setRfDays(diffDays > 0 ? diffDays : 0);
     } else if (rfContracts.length > 0) {
-      // Fallback: по датам договоров если период не задан
-      const dates = rfContracts.map(c => c.date).sort();
-      const from = new Date(dates[0]);
-      const to = new Date(dates[dates.length - 1]);
+      // Fallback: по датам погрузки/выгрузки если период не задан
+      const allDates = rfContracts.flatMap(c => [c.loading_date, c.unloading_date, c.date].filter(Boolean)).map(d => d!.slice(0,10)).sort();
+      const from = new Date(allDates[0]);
+      const to = new Date(allDates[allDates.length - 1]);
       const diffDays = Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1;
       setRfDays(diffDays > 0 ? diffDays : 0);
     } else {
@@ -1100,12 +1100,19 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
           {rfContracts.length > 0 ? (
             <>
               <div className="space-y-1 mb-3 text-xs">
-                {rfContracts.map((c, i) => (
+                {rfContracts.map((c, i) => {
+                  const ld = c.loading_date ? new Date(c.loading_date) : null;
+                  const ud = c.unloading_date ? new Date(c.unloading_date) : null;
+                  const fmtD = (d: Date) => `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}`;
+                  const fmtDT = (d: Date) => `${fmtD(d)} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+                  const dateStr = ld && ud ? `${fmtDT(ld)} → ${fmtDT(ud)}` : ld ? fmtD(ld) : c.date?.slice(0,10);
+                  return (
                   <div key={i} className="bg-slate-700/50 rounded px-2 py-1">
-                    <span className="text-slate-400">{c.date?.slice(0,10)}</span>
+                    <span className="text-slate-400">{dateStr}</span>
                     <span className="text-slate-300 ml-2">{c.route}</span>
                   </div>
-                ))}
+                  );
+                })}
               </div>
               <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 mb-3">
                 <div className="flex justify-between items-center mb-2">
