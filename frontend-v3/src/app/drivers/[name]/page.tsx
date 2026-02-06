@@ -1,4 +1,5 @@
 "use client";
+import { formatDate, formatDateTime, formatShortDate } from "@/lib/dates";
 
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -61,9 +62,6 @@ function formatMoney(n: number) {
   return Math.round(n) + " ₽";
 }
 
-function formatDate(date: string) {
-  return new Date(date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
-}
 
 function StatCard({ title, value, icon: Icon, color }: any) {
   return (

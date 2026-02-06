@@ -1,4 +1,5 @@
 "use client";
+import { formatDate, formatDateTime, formatShortDate } from "@/lib/dates";
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -32,9 +33,6 @@ function formatMoney(value: number | null): string {
   return new Intl.NumberFormat("ru-RU").format(value) + " ₽";
 }
 
-function formatDate(date: string): string {
-  return new Date(date).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
-}
 
 type SortField = "number" | "driver_name" | "vehicle_number" | "date_to" | "total_expenses" | "driver_accruals" | "mileage";
 type SortDir = "asc" | "desc";
@@ -283,7 +281,7 @@ export default function ReportsPage() {
                     <td className="p-3 text-cyan-400 font-mono">{r.number}</td>
                     <td className="p-3 text-white">{r.driver_name || "—"}</td>
                     <td className="p-3 text-slate-300">{r.vehicle_number}</td>
-                    <td className="p-3 text-slate-400">{formatDate(r.date_from)} — {formatDate(r.date_to)}</td>
+                    <td className="p-3 text-slate-400">{formatShortDate(r.date_from)} — {formatShortDate(r.date_to)}</td>
                     <td className="p-3 text-right text-red-400">{formatMoney(getTotalExpenses(r))}</td>
                     <td className="p-3 text-right text-green-400">{formatMoney(r.driver_accruals)}</td>
                     <td className="p-3 text-right text-cyan-400">{r.mileage ? r.mileage.toLocaleString("ru-RU") + " км" : "0 км"}</td>
@@ -311,7 +309,7 @@ export default function ReportsPage() {
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="text-cyan-400 font-mono text-sm">{r.number}</span>
-                <span className="text-slate-400 text-xs">{formatDate(r.date_from)} — {formatDate(r.date_to)}</span>
+                <span className="text-slate-400 text-xs">{formatShortDate(r.date_from)} — {formatShortDate(r.date_to)}</span>
               </div>
               <div className="text-white font-medium mb-1">{r.driver_name || "—"}</div>
               <div className="text-slate-400 text-sm mb-3">{r.vehicle_number}</div>

@@ -1,4 +1,5 @@
 "use client";
+import { formatDate, formatDateTime, formatShortDate } from "@/lib/dates";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { ArrowLeft, Upload, Trash2, FileText, Users, DollarSign, Calendar, Loader2 } from "lucide-react";
@@ -172,7 +173,7 @@ export default function SalaryPage() {
                         <div className="font-medium">Реестр №{reg.register_number}</div>
                         <div className="text-sm text-slate-400 flex items-center gap-2">
                           <Calendar size={14} />
-                          {new Date(reg.register_date).toLocaleDateString("ru-RU")}
+                          {formatDate(reg.register_date)}
                         </div>
                       </div>
                       <div className="text-right">

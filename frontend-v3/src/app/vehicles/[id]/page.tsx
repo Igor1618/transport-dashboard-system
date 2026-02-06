@@ -1,4 +1,5 @@
 "use client";
+import { formatDate, formatDateTime, formatShortDate } from "@/lib/dates";
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -253,11 +254,14 @@ export default function VehicleEditPage() {
   const save = async () => {
     setSaving(true);
     try {
+      const payload = isNew ? vehicle : { id, ...vehicle };
+      console.log('[SAVE] Sending:', JSON.stringify(payload).substring(0, 1000));
+      console.log('[SAVE] Doc fields:', { sts_date: vehicle.sts_date, pts_date: vehicle.pts_date, osago_expires: vehicle.osago_expires, osago_number: vehicle.osago_number, diagnostics_expires: vehicle.diagnostics_expires, tachograph_expires: vehicle.tachograph_expires });
       const url = isNew ? "/api/vehicles/create" : "/api/vehicles/update";
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(isNew ? vehicle : { id, ...vehicle })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (data.success || data.vehicle) {
@@ -412,7 +416,7 @@ export default function VehicleEditPage() {
                         {gpsMileage.days.slice(0, 7).map((d, i) => (
                           <div key={d.date} className="flex justify-between text-sm">
                             <span className="text-slate-400">
-                              {i === 0 ? "Сегодня" : i === 1 ? "Вчера" : new Date(d.date).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}
+                              {i === 0 ? "Сегодня" : i === 1 ? "Вчера" : formatShortDate(d.date)}
                             </span>
                             <span className={d.km > 0 ? "text-green-400 font-semibold" : "text-slate-500"}>{d.km} км</span>
                           </div>
@@ -452,7 +456,7 @@ export default function VehicleEditPage() {
                         {currentState.lastTransactions.map((t, i) => (
                           <div key={i} className="flex justify-between text-sm bg-slate-700/30 rounded px-2 py-1">
                             <span className="text-slate-400">
-                              {new Date(t.transaction_date).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}
+                              {formatShortDate(t.transaction_date)}
                               <span className="text-slate-600 ml-2">{t.source}</span>
                             </span>
                             <span className="text-green-400 font-medium">+{Math.round(t.quantity)} л</span>
@@ -627,7 +631,7 @@ export default function VehicleEditPage() {
                               <div className="space-y-1">
                                 {cardTransactions[c.card_number].map((t: any, ti: number) => (
                                   <div key={ti} className="flex justify-between text-sm">
-                                    <span className="text-slate-400">{new Date(t.date).toLocaleDateString("ru-RU")}</span>
+                                    <span className="text-slate-400">{formatDate(t.date)}</span>
                                     <span className="text-yellow-400">{t.liters?.toFixed(1)} л</span>
                                     <span className="text-green-400">{t.amount?.toLocaleString("ru-RU")} ₽</span>
                                   </div>
@@ -657,7 +661,7 @@ export default function VehicleEditPage() {
                     <div>
                       <div className="font-medium">{d.driver_name}</div>
                       <div className="text-sm text-slate-400">
-                        {new Date(d.date_from).toLocaleDateString("ru-RU")} — {new Date(d.date_to).toLocaleDateString("ru-RU")}
+                        {formatDate(d.date_from)} — {formatDate(d.date_to)}
                       </div>
                     </div>
                     <div className="text-cyan-400">{d.mileage?.toLocaleString("ru-RU") || "—"} км</div>
@@ -680,7 +684,7 @@ export default function VehicleEditPage() {
                   <div key={i} className="p-3 bg-slate-700/30 rounded">
                     <div className="flex justify-between">
                       <span className="font-medium">{m.maintenance_type}</span>
-                      <span className="text-slate-400">{new Date(m.maintenance_date).toLocaleDateString("ru-RU")}</span>
+                      <span className="text-slate-400">{formatDate(m.maintenance_date)}</span>
                     </div>
                     {m.description && <div className="text-sm text-slate-400 mt-1">{m.description}</div>}
                     {m.cost && <div className="text-sm text-red-400 mt-1">{m.cost.toLocaleString("ru-RU")} ₽</div>}
@@ -703,7 +707,7 @@ export default function VehicleEditPage() {
                   <div key={i} className="p-3 bg-slate-700/30 rounded text-sm">
                     <div className="flex justify-between text-slate-400">
                       <span>{h.field_name}</span>
-                      <span>{new Date(h.changed_at).toLocaleString("ru-RU")}</span>
+                      <span>{formatDateTime(h.changed_at)}</span>
                     </div>
                     <div className="mt-1">
                       <span className="text-red-400 line-through">{h.old_value || "—"}</span>

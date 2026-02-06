@@ -1,4 +1,5 @@
 'use client';
+import { formatDate } from '@/lib/dates';
 
 import { useState, useEffect, useMemo } from 'react';
 import { FileText, Truck, Calendar, Building2, Search, Filter, ChevronDown, ChevronUp } from 'lucide-react';
@@ -33,10 +34,6 @@ const formatMoney = (amount: number) => {
   return `${amount.toLocaleString('ru-RU')} ₽`;
 };
 
-const formatDate = (dateStr: string) => {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
-};
 
 // Проверка на реестр РВБ
 const isRvbRegistry = (item: Contract) => {
