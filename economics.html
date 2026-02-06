@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Экономика автопарка | TL196</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
+        .container { max-width: 1600px; margin: 0 auto; padding: 20px; }
+        h1 { font-size: 24px; margin-bottom: 20px; color: #38bdf8; }
+        .filters { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+        .filters select, .filters input { padding: 10px 15px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #e2e8f0; font-size: 14px; }
+        .filters button { padding: 10px 20px; border-radius: 8px; border: none; background: #3b82f6; color: white; cursor: pointer; font-weight: 600; }
+        .filters button:hover { background: #2563eb; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab { padding: 12px 24px; border-radius: 8px; border: none; background: #1e293b; color: #94a3b8; cursor: pointer; font-weight: 600; transition: all 0.2s; }
+        .tab.active { background: #3b82f6; color: white; }
+        .tab:hover:not(.active) { background: #334155; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }
+        .stat-card { background: #1e293b; border-radius: 12px; padding: 20px; }
+        .stat-card .label { font-size: 12px; color: #94a3b8; text-transform: uppercase; margin-bottom: 5px; }
+        .stat-card .value { font-size: 28px; font-weight: 700; }
+        .stat-card .value.green { color: #22c55e; }
+        .stat-card .value.blue { color: #3b82f6; }
+        .stat-card .value.yellow { color: #eab308; }
+        .stat-card .value.red { color: #ef4444; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px; }
+        @media (max-width: 1200px) { .grid { grid-template-columns: 1fr; } }
+        .card { background: #1e293b; border-radius: 12px; padding: 20px; }
+        .card h3 { font-size: 16px; color: #94a3b8; margin-bottom: 15px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #334155; }
+        th { color: #94a3b8; font-weight: 600; font-size: 11px; text-transform: uppercase; }
+        tr:hover { background: #334155; }
+        .positive { color: #22c55e; }
+        .negative { color: #ef4444; }
+        .chart-container { height: 300px; }
+        .loading { text-align: center; padding: 40px; color: #94a3b8; }
+        .number { font-variant-numeric: tabular-nums; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Экономика автопарка</h1>
+        
+        <div class="filters">
+            <select id="periodSelect">
+                <option value="2024-11">Ноябрь 2024</option>
+                <option value="2024-10">Октябрь 2024</option>
+                <option value="2024-09">Сентябрь 2024</option>
+                <option value="2024-12">Декабрь 2024</option>
+                <option value="2025-01">Январь 2025</option>
+            </select>
+            <button onclick="loadData()">Загрузить</button>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('vehicles')">🚛 По машинам</button>
+            <button class="tab" onclick="showTab('drivers')">👤 По водителям</button>
+        </div>
+
+        <div class="stats" id="stats">
+            <div class="stat-card"><div class="label">Выручка</div><div class="value blue" id="totalRevenue">—</div></div>
+            <div class="stat-card"><div class="label">Расходы</div><div class="value yellow" id="totalExpenses">—</div></div>
+            <div class="stat-card"><div class="label">Маржа</div><div class="value green" id="totalMargin">—</div></div>
+            <div class="stat-card"><div class="label">Рентабельность</div><div class="value" id="profitability">—</div></div>
+            <div class="stat-card"><div class="label">Топливо</div><div class="value red" id="totalFuel">—</div></div>
+            <div class="stat-card"><div class="label">Пробег</div><div class="value" id="totalMileage">—</div></div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3>📈 Топ машины по марже</h3>
+                <div class="chart-container"><canvas id="marginChart"></canvas></div>
+            </div>
+            <div class="card">
+                <h3>⛽ Топ машины по расходу топлива (л/100км)</h3>
+                <div class="chart-container"><canvas id="fuelChart"></canvas></div>
+            </div>
+        </div>
+
+        <div class="card" id="vehiclesTab">
+            <h3>🚛 Экономика по машинам</h3>
+            <table id="vehiclesTable">
+                <thead>
+                    <tr>
+                        <th>Машина</th>
+                        <th>Рейсов</th>
+                        <th>Выручка</th>
+                        <th>Расходы</th>
+                        <th>Топливо</th>
+                        <th>Пробег</th>
+                        <th>Маржа</th>
+                        <th>Руб/км</th>
+                    </tr>
+                </thead>
+                <tbody id="vehiclesBody"><tr><td colspan="8" class="loading">Загрузка...</td></tr></tbody>
+            </table>
+        </div>
+
+        <div class="card" id="driversTab" style="display:none;">
+            <h3>👤 Экономика по водителям</h3>
+            <table id="driversTable">
+                <thead>
+                    <tr>
+                        <th>Водитель</th>
+                        <th>Рейсов</th>
+                        <th>Выручка</th>
+                        <th>Расходы</th>
+                        <th>Начислено</th>
+                        <th>Выплачено</th>
+                        <th>Пробег</th>
+                        <th>Маржа</th>
+                    </tr>
+                </thead>
+                <tbody id="driversBody"><tr><td colspan="8" class="loading">Загрузка...</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://pqvtvocsqhazaraknvnz.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxdnR2b2NzcWhemFyYWtudm56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzE2NjkxMDcsImV4cCI6MjA0NzI0NTEwN30.f3qnR6VfPvNjWiMfCPLiPbHr4UkPK8eDHzBxbRNJvXw';
+
+        let marginChart, fuelChart;
+        let vehiclesData = [], driversData = [];
+
+        function formatMoney(n) {
+            if (!n) return '0';
+            return new Intl.NumberFormat('ru-RU').format(Math.round(n)) + ' ₽';
+        }
+
+        function formatNumber(n) {
+            if (!n) return '0';
+            return new Intl.NumberFormat('ru-RU').format(Math.round(n));
+        }
+
+        async function loadData() {
+            const period = document.getElementById('periodSelect').value;
+            const [year, month] = period.split('-');
+            const startDate = `${year}-${month}-01`;
+            const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+
+            // Load vehicles economics
+            const vRes = await fetch(`${SUPABASE_URL}/rest/v1/vehicle_economics?month=eq.${startDate}&order=margin.desc`, {
+                headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+            });
+            vehiclesData = await vRes.json();
+
+            // Load drivers economics
+            const dRes = await fetch(`${SUPABASE_URL}/rest/v1/driver_economics?month=eq.${startDate}&order=margin.desc`, {
+                headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+            });
+            driversData = await dRes.json();
+
+            updateStats();
+            updateCharts();
+            updateTables();
+        }
+
+        function updateStats() {
+            const totalRevenue = vehiclesData.reduce((s, v) => s + (v.revenue || 0), 0);
+            const totalExpenses = vehiclesData.reduce((s, v) => s + (v.expenses || 0), 0);
+            const totalMargin = vehiclesData.reduce((s, v) => s + (v.margin || 0), 0);
+            const totalFuel = vehiclesData.reduce((s, v) => s + (v.fuel_cost || 0), 0);
+            const totalMileage = vehiclesData.reduce((s, v) => s + (v.mileage || 0), 0);
+            const profitability = totalRevenue > 0 ? ((totalMargin / totalRevenue) * 100).toFixed(1) : 0;
+
+            document.getElementById('totalRevenue').textContent = formatMoney(totalRevenue);
+            document.getElementById('totalExpenses').textContent = formatMoney(totalExpenses);
+            document.getElementById('totalMargin').textContent = formatMoney(totalMargin);
+            document.getElementById('totalFuel').textContent = formatMoney(totalFuel);
+            document.getElementById('totalMileage').textContent = formatNumber(totalMileage) + ' км';
+            document.getElementById('profitability').textContent = profitability + '%';
+            document.getElementById('profitability').className = 'value ' + (profitability > 50 ? 'green' : profitability > 30 ? 'yellow' : 'red');
+        }
+
+        function updateCharts() {
+            const top10 = vehiclesData.slice(0, 10);
+            const labels = top10.map(v => v.vehicle_number || v.vehicle_id);
+            const margins = top10.map(v => v.margin || 0);
+            
+            if (marginChart) marginChart.destroy();
+            marginChart = new Chart(document.getElementById('marginChart'), {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Маржа',
+                        data: margins,
+                        backgroundColor: '#22c55e'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { ticks: { color: '#94a3b8' } }, x: { ticks: { color: '#94a3b8' } } }
+                }
+            });
+
+            const withFuel = vehiclesData.filter(v => v.fuel_per_100km > 0).slice(0, 10);
+            if (fuelChart) fuelChart.destroy();
+            fuelChart = new Chart(document.getElementById('fuelChart'), {
+                type: 'bar',
+                data: {
+                    labels: withFuel.map(v => v.vehicle_number || v.vehicle_id),
+                    datasets: [{
+                        label: 'л/100км',
+                        data: withFuel.map(v => v.fuel_per_100km),
+                        backgroundColor: '#ef4444'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { ticks: { color: '#94a3b8' } }, x: { ticks: { color: '#94a3b8' } } }
+                }
+            });
+        }
+
+        function updateTables() {
+            // Vehicles table
+            document.getElementById('vehiclesBody').innerHTML = vehiclesData.map(v => `
+                <tr>
+                    <td><strong>${v.vehicle_number || v.vehicle_id}</strong></td>
+                    <td class="number">${v.trips_count || 0}</td>
+                    <td class="number">${formatMoney(v.revenue)}</td>
+                    <td class="number">${formatMoney(v.expenses)}</td>
+                    <td class="number">${formatMoney(v.fuel_cost)}</td>
+                    <td class="number">${formatNumber(v.mileage)} км</td>
+                    <td class="number ${v.margin > 0 ? 'positive' : 'negative'}">${formatMoney(v.margin)}</td>
+                    <td class="number">${v.revenue_per_km || 0} ₽</td>
+                </tr>
+            `).join('') || '<tr><td colspan="8">Нет данных</td></tr>';
+
+            // Drivers table
+            document.getElementById('driversBody').innerHTML = driversData.map(d => `
+                <tr>
+                    <td><strong>${d.driver_name || d.driver_id}</strong></td>
+                    <td class="number">${d.trips_count || 0}</td>
+                    <td class="number">${formatMoney(d.revenue)}</td>
+                    <td class="number">${formatMoney(d.expenses)}</td>
+                    <td class="number">${formatMoney(d.accruals)}</td>
+                    <td class="number">${formatMoney(d.payments)}</td>
+                    <td class="number">${formatNumber(d.mileage)} км</td>
+                    <td class="number ${d.margin > 0 ? 'positive' : 'negative'}">${formatMoney(d.margin)}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="8">Нет данных</td></tr>';
+        }
+
+        function showTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('vehiclesTab').style.display = tab === 'vehicles' ? 'block' : 'none';
+            document.getElementById('driversTab').style.display = tab === 'drivers' ? 'block' : 'none';
+        }
+
+        // Initial load
+        loadData();
+    </script>
+</body>
+</html>

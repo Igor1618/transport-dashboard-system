@@ -93,7 +93,7 @@ async function upsertContract(c) {
       vehicle_id, vehicle_number, driver_id, driver_name, responsible_logist, 
       route, payment_term, payment_condition, amount, synced_at)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
-    ON CONFLICT (number, date) DO UPDATE SET
+    ON CONFLICT (number) WHERE number IS NOT NULL AND number != '' DO UPDATE SET
       organization = EXCLUDED.organization,
       contractor_id = EXCLUDED.contractor_id,
       contractor_name = EXCLUDED.contractor_name,

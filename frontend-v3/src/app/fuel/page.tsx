@@ -1,4 +1,5 @@
 "use client";
+import { formatDate } from "@/lib/dates";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Fuel, Upload, CreditCard, Truck, ChevronDown, ChevronRight, Search, Save, X, AlertTriangle } from "lucide-react";
@@ -300,7 +301,7 @@ export default function FuelPage() {
               <tbody>
                 {transactions.slice(0, 50).map(tx => (
                   <tr key={tx.id} className="border-t border-slate-700/50">
-                    <td className="p-2">{new Date(tx.transaction_date).toLocaleDateString("ru-RU")}</td>
+                    <td className="p-2">{formatDate(tx.transaction_date)}</td>
                     <td className="p-2">{tx.source}</td>
                     <td className="p-2">{tx.vehicle_number || <span className="text-orange-400">—</span>}</td>
                     <td className="p-2 text-right text-cyan-400">{Number(tx.quantity).toFixed(0)}</td>

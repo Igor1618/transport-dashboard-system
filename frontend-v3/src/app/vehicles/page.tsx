@@ -1,4 +1,5 @@
 "use client";
+import { formatDate } from "@/lib/dates";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, Truck, Fuel, Settings, Save, ChevronDown, ChevronUp } from "lucide-react";
@@ -475,7 +476,7 @@ export default function VehiclesPage() {
                           </td>
                           <td className="p-3 text-center text-slate-500 text-sm">
                             {v.last_trip_date || v.last_contract_date 
-                              ? new Date(v.last_trip_date || v.last_contract_date || "").toLocaleDateString("ru-RU")
+                              ? formatDate(v.last_trip_date || v.last_contract_date)
                               : "—"}
                           </td>
                           <td className="p-3 text-center">
@@ -501,7 +502,7 @@ export default function VehiclesPage() {
                       </div>
                       {(v.last_trip_date || v.last_contract_date) && (
                         <div className="text-slate-500 text-xs mt-1">
-                          Последний рейс: {new Date(v.last_trip_date || v.last_contract_date || "").toLocaleDateString("ru-RU")}
+                          Последний рейс: {formatDate(v.last_trip_date || v.last_contract_date)}
                         </div>
                       )}
                     </div>

@@ -1,4 +1,5 @@
 "use client";
+import { formatDate } from "@/lib/dates";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -191,7 +192,7 @@ export default function FuelUploadPage() {
                 <tbody className="text-slate-300">
                   {preview.map((t, i) => (
                     <tr key={i} className="border-b border-slate-700/50">
-                      <td className="py-2">{t.transaction_date}</td>
+                      <td className="py-2">{formatDate(t.transaction_date)}</td>
                       <td className="py-2">{t.vehicle_number || t.card_number}</td>
                       <td className="py-2 text-right">{t.quantity}</td>
                       <td className="py-2 text-right">{t.amount.toLocaleString()} ₽</td>
