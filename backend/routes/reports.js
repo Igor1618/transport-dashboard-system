@@ -292,7 +292,7 @@ router.get("/driver-vehicles", async (req, res) => {
       WHERE driver_name ILIKE $1
         AND ($2::date IS NULL OR loading_date >= $2)
         AND ($3::date IS NULL OR loading_date <= $3)
-      GROUP BY norm
+      GROUP BY normalize_vehicle_number(vehicle_number)
       ORDER BY trips DESC
     `, [driver, from || null, to || null]);
     
@@ -665,14 +665,15 @@ router.get("/fuel/detail", async (req, res) => {
     
     const bySource = await pool.query(`
       SELECT 
-        source,
-        SUM(quantity)::numeric as liters,
-        SUM(amount)::numeric as amount,
-        COUNT(*)::int as count
-      FROM fuel_transactions 
-      WHERE LOWER(REPLACE(vehicle_number, ' ', '')) LIKE LOWER($1)
-        AND transaction_date >= $2 AND transaction_date <= $3
-      GROUP BY source
+        COALESCE(fc.source, ft.source) as source,
+        SUM(ft.quantity)::numeric as liters,
+        SUM(ft.amount)::numeric as amount,
+        COUNT(DISTINCT (ft.card_number, ft.transaction_date, ft.quantity))::int as count
+      FROM fuel_transactions ft
+      LEFT JOIN fuel_cards fc ON ft.card_number = fc.card_number
+      WHERE LOWER(REPLACE(ft.vehicle_number, ' ', '')) LIKE LOWER($1)
+        AND ft.transaction_date >= $2 AND ft.transaction_date <= $3
+      GROUP BY COALESCE(fc.source, ft.source)
       ORDER BY amount DESC
     `, [veh, from, to]);
     
@@ -738,7 +739,7 @@ router.get("/vehicle-suggestions", async (req, res) => {
           AND ($2::date IS NULL OR loading_date >= $2)
           AND ($3::date IS NULL OR loading_date <= $3)
           AND vehicle_number IS NOT NULL AND vehicle_number != ''
-        GROUP BY norm
+        GROUP BY normalize_vehicle_number(vehicle_number)
         UNION ALL
         SELECT normalize_vehicle_number(vehicle_number) as norm, MAX(vehicle_number) as vehicle_number, COUNT(*) as cnt
         FROM contracts 
@@ -746,9 +747,9 @@ router.get("/vehicle-suggestions", async (req, res) => {
           AND ($2::date IS NULL OR date >= $2)
           AND ($3::date IS NULL OR date <= $3)
           AND vehicle_number IS NOT NULL AND vehicle_number != ''
-        GROUP BY norm
+        GROUP BY normalize_vehicle_number(vehicle_number)
       ) combined
-      GROUP BY norm
+      GROUP BY normalize_vehicle_number(vehicle_number)
       ORDER BY trips DESC
       LIMIT 5
     `, ['%' + driver + '%', from || null, to || null]);
@@ -770,16 +771,17 @@ router.get("/fuel/transactions", async (req, res) => {
     const veh = "%" + vehicle + "%";
     
     const result = await pool.query(`
-      SELECT 
+      SELECT DISTINCT ON (card_number, transaction_date, quantity)
         transaction_date as date,
-        source,
+        COALESCE(fc.source, ft.source) as source,
         quantity as liters,
-        amount,
-        card_number
-      FROM fuel_transactions 
-      WHERE LOWER(REPLACE(vehicle_number, ' ', '')) LIKE LOWER($1)
-        AND transaction_date >= $2 AND transaction_date <= $3
-      ORDER BY transaction_date
+        ft.amount,
+        ft.card_number
+      FROM fuel_transactions ft
+      LEFT JOIN fuel_cards fc ON ft.card_number = fc.card_number
+      WHERE LOWER(REPLACE(ft.vehicle_number, ' ', '')) LIKE LOWER($1)
+        AND ft.transaction_date >= $2 AND ft.transaction_date <= $3
+      ORDER BY card_number, transaction_date, quantity, ft.id
     `, [veh, from, to]);
     
     res.json({ transactions: result.rows });
