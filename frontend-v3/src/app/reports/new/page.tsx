@@ -637,9 +637,11 @@ export default function NewReportPage() {
   const totalExpenses = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0); // Компенсация (+)
   const totalPayments = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0); // Выдано (-)
   const totalExtraWorks = extraWorks.reduce((sum, w) => sum + ((Number(w.count) || 0) * (Number(w.rate) || 0)), 0); // Доп. работы (+)
-  const rfDriverPay = Math.round((rfGpsMileage || 0) * (rfRatePerKm || 0));
-  const rfDailyPay = (rfDays || 0) * (rfDailyRate || 0); // Суточные РФ (+)
-  const rfBonus = bonusEnabled ? Math.round((rfGpsMileage || 0) * (bonusRate || 0)) : 0; // Премия ТК (+)
+  // RF начисления только если есть реальные периоды (с датами и пробегом)
+  const hasRfPeriods = rfPeriods.some(p => p.from && p.to && p.mileage > 0);
+  const rfDriverPay = hasRfPeriods ? Math.round((rfGpsMileage || 0) * (rfRatePerKm || 0)) : 0;
+  const rfDailyPay = hasRfPeriods ? (rfDays || 0) * (rfDailyRate || 0) : 0; // Суточные РФ (+)
+  const rfBonus = hasRfPeriods && bonusEnabled ? Math.round((rfGpsMileage || 0) * (bonusRate || 0)) : 0; // Премия ТК (+)
   const totalDriverPay = (Number(wbTotals.driver_rate) || 0) + rfDriverPay + rfDailyPay + rfBonus + (totalIdleData.amount || 0);
   const totalToPay = totalDriverPay + totalExpenses + totalExtraWorks - totalPayments;
   
