@@ -161,8 +161,8 @@ export default function ReportsPage() {
           </h1>
           <p className="text-slate-400 text-sm">Отчёты из 1С за период</p>
         </div>
-        <Link href="/reports/new" className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-700 px-4 py-2 rounded-lg font-medium transition">
-          <Plus className="w-5 h-5" /> Создать отчёт
+        <Link href="/reports/new" className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-700 px-3 py-2 rounded-lg font-medium transition text-sm sm:text-base sm:px-4">
+          <Plus className="w-5 h-5" /> <span className="hidden sm:inline">Создать</span> <span className="sm:hidden">Новый</span>
         </Link>
       </div>
 
@@ -188,8 +188,8 @@ export default function ReportsPage() {
 
         {mode === "month" ? (
           <div className="flex items-center gap-2 flex-wrap">
-            <Calendar className="w-5 h-5 text-slate-400" />
-            <select value={selectedMonth} onChange={e => setSelectedMonth(Number(e.target.value))} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white">
+            <Calendar className="w-5 h-5 text-slate-400 hidden sm:block" />
+            <select value={selectedMonth} onChange={e => setSelectedMonth(Number(e.target.value))} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white flex-1 sm:flex-none min-w-0">
               {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
             </select>
             <select value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white">
@@ -198,10 +198,10 @@ export default function ReportsPage() {
           </div>
         ) : (
           <div className="flex items-center gap-2 flex-wrap">
-            <Calendar className="w-5 h-5 text-slate-400" />
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+            <Calendar className="w-5 h-5 text-slate-400 hidden sm:block" />
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white flex-1 sm:flex-none min-w-0" />
             <span className="text-slate-400">—</span>
-            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white" />
+            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white flex-1 sm:flex-none min-w-0" />
           </div>
         )}
 
@@ -219,27 +219,27 @@ export default function ReportsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
-          <div className="text-slate-400 text-sm">Отчётов</div>
-          <div className="text-2xl font-bold text-white">{filteredReports.length}</div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+        <div className="bg-slate-800/50 rounded-xl p-3 sm:p-4 border border-slate-700/50">
+          <div className="text-slate-400 text-xs sm:text-sm">Отчётов</div>
+          <div className="text-xl sm:text-2xl font-bold text-white">{filteredReports.length}</div>
         </div>
-        <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
-          <div className="text-slate-400 text-sm">Общие расходы</div>
-          <div className="text-xl font-bold text-red-400">{formatMoney(totalExpenses)}</div>
+        <div className="bg-slate-800/50 rounded-xl p-3 sm:p-4 border border-slate-700/50">
+          <div className="text-slate-400 text-xs sm:text-sm">Расходы</div>
+          <div className="text-base sm:text-xl font-bold text-red-400">{formatMoney(totalExpenses)}</div>
         </div>
-        <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
-          <div className="text-slate-400 text-sm">Начисления</div>
-          <div className="text-xl font-bold text-green-400">{formatMoney(totalAccruals)}</div>
+        <div className="bg-slate-800/50 rounded-xl p-3 sm:p-4 border border-slate-700/50">
+          <div className="text-slate-400 text-xs sm:text-sm">Начисления</div>
+          <div className="text-base sm:text-xl font-bold text-green-400">{formatMoney(totalAccruals)}</div>
         </div>
-        <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
-          <div className="text-slate-400 text-sm">Пробег</div>
-          <div className="text-xl font-bold text-cyan-400">{totalMileage.toLocaleString("ru-RU")} км</div>
+        <div className="bg-slate-800/50 rounded-xl p-3 sm:p-4 border border-slate-700/50">
+          <div className="text-slate-400 text-xs sm:text-sm">Пробег</div>
+          <div className="text-base sm:text-xl font-bold text-cyan-400">{totalMileage.toLocaleString("ru-RU")} км</div>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 overflow-hidden">
+      {/* Table - Desktop */}
+      <div className="hidden md:block bg-slate-800/50 rounded-xl border border-slate-700/50 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-900/50">
@@ -294,6 +294,45 @@ export default function ReportsPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Cards - Mobile */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <div className="p-8 text-center text-slate-400">Загрузка...</div>
+        ) : filteredReports.length === 0 ? (
+          <div className="p-8 text-center text-slate-400">Нет отчётов за выбранный период</div>
+        ) : (
+          filteredReports.map(r => (
+            <div
+              key={r.id}
+              onClick={() => router.push("/reports/" + r.id)}
+              className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-4 cursor-pointer active:bg-slate-700/30 transition"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-cyan-400 font-mono text-sm">{r.number}</span>
+                <span className="text-slate-400 text-xs">{formatDate(r.date_from)} — {formatDate(r.date_to)}</span>
+              </div>
+              <div className="text-white font-medium mb-1">{r.driver_name || "—"}</div>
+              <div className="text-slate-400 text-sm mb-3">{r.vehicle_number}</div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <div className="text-xs text-slate-500">Расходы</div>
+                  <div className="text-red-400 text-sm font-medium">{formatMoney(getTotalExpenses(r))}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500">Начисления</div>
+                  <div className="text-green-400 text-sm font-medium">{formatMoney(r.driver_accruals)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500">Пробег</div>
+                  <div className="text-cyan-400 text-sm font-medium">{r.mileage ? r.mileage.toLocaleString("ru-RU") : "0"} км</div>
+                </div>
+              </div>
+              {r.updated_by && <div className="text-slate-600 text-xs mt-2 text-right">{r.updated_by}</div>}
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

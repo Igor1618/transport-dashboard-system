@@ -882,16 +882,16 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-4">
-        <Link href="/reports" className="flex items-center gap-2 text-slate-400 hover:text-white"><ArrowLeft className="w-4 h-4" /> Назад</Link>
+      <div className="flex items-center justify-between mb-3 sm:mb-4">
+        <Link href="/reports" className="flex items-center gap-2 text-slate-400 hover:text-white min-h-[44px]"><ArrowLeft className="w-4 h-4" /> Назад</Link>
         {isEditMode && (
-          <button onClick={handleDelete} className="text-red-400 hover:text-red-300 hover:bg-red-900/30 px-3 py-1 rounded flex items-center gap-1">
+          <button onClick={handleDelete} className="text-red-400 hover:text-red-300 hover:bg-red-900/30 px-3 py-2 rounded flex items-center gap-1 min-h-[44px]">
             <Trash2 className="w-4 h-4" /> Удалить
           </button>
         )}
       </div>
 
-      <h1 className="text-2xl font-bold text-white mb-6">{isEditMode ? `Отчёт #${reportId?.slice(0,8)}` : 'Новый отчёт'}</h1>
+      <h1 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6">{isEditMode ? `Отчёт #${reportId?.slice(0,8)}` : 'Новый отчёт'}</h1>
       {saved && <div className="bg-green-500/20 border border-green-500 rounded-lg p-4 mb-6 text-green-400">✅ Сохранено!</div>}
 
       <div className="space-y-6">
@@ -975,8 +975,8 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
           </div>
 
           <button onClick={handleAutoFill} disabled={autoLoading || !driverName || !dateFrom || !dateTo}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white px-4 py-2 rounded-lg w-full justify-center">
-            {autoLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />} Загрузить
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white px-4 py-3 sm:py-2 rounded-lg w-full justify-center min-h-[44px] text-base sm:text-sm">
+            {autoLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />} Загрузить
           </button>
         </div>
 
@@ -984,8 +984,8 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
         {gpsMileage > 0 && (
           <div className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 rounded-xl p-4 border border-blue-500/30">
             <div className="text-center mb-3">
-              <span className="text-slate-400 text-sm">Общий GPS за период</span>
-              <div className="text-3xl font-bold text-white">{gpsMileage.toLocaleString()} км</div>
+              <span className="text-slate-400 text-xs sm:text-sm">Общий GPS за период</span>
+              <div className="text-2xl sm:text-3xl font-bold text-white">{gpsMileage.toLocaleString()} км</div>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center text-sm">
               <div><span className="text-purple-400 font-bold">{wbGpsMileage.toLocaleString()}</span><div className="text-slate-500 text-xs">WB</div></div>
@@ -1067,14 +1067,16 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
                       {idleHours > 0 && idleHours <= 8 && (
                         <div className="text-xs text-slate-500 px-2">↓ отдых {idleHours} ч.</div>
                       )}
-                      <div className="flex justify-between bg-slate-700/50 rounded px-2 py-1">
-                        <span className="text-slate-400 text-xs w-32">
-                          {shortDate(t.loading_date)}{t.loading_time ? ` ${t.loading_time.slice(0,5)}` : ''}
-                          →{shortDate(t.unloading_date || t.loading_date)}{t.unloading_time ? ` ${t.unloading_time.slice(0,5)}` : ''}
-                          {tripHours > 0 && <span className="text-slate-500"> ({tripHours}ч)</span>}
-                        </span>
-                        <span className="flex-1 truncate text-slate-300 text-xs mx-2">{t.route_name}</span>
-                        <span className="text-green-400">{Number(t.driver_rate).toLocaleString()}</span>
+                      <div className="bg-slate-700/50 rounded px-2 py-1.5">
+                        <div className="flex justify-between items-start">
+                          <span className="text-slate-400 text-xs shrink-0">
+                            {shortDate(t.loading_date)}{t.loading_time ? ` ${t.loading_time.slice(0,5)}` : ''}
+                            →{shortDate(t.unloading_date || t.loading_date)}{t.unloading_time ? ` ${t.unloading_time.slice(0,5)}` : ''}
+                            {tripHours > 0 && <span className="text-slate-500"> ({tripHours}ч)</span>}
+                          </span>
+                          <span className="text-green-400 text-sm shrink-0 ml-2">{Number(t.driver_rate).toLocaleString()}</span>
+                        </div>
+                        <div className="text-slate-300 text-xs truncate mt-0.5">{t.route_name}</div>
                       </div>
                     </div>
                   );
@@ -1198,20 +1200,20 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
                 {/* Выбор ставки */}
                 <div className="bg-slate-700/50 rounded-lg p-3">
                   <div className="text-xs text-slate-400 mb-2">💰 Расчёт ставки</div>
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
                     <span className="text-slate-400 text-sm">Тип:</span>
                     {selectedVehicleType ? (
                       <span className="text-white font-medium">{selectedVehicleType}</span>
                     ) : (
                       <select value={selectedVehicleType} onChange={e => setSelectedVehicleType(e.target.value)}
-                        className="bg-slate-600 text-white rounded px-2 py-1 text-xs border border-slate-500 flex-1">
+                        className="bg-slate-600 text-white rounded px-2 py-1.5 text-xs border border-slate-500 flex-1 min-w-0">
                         <option value="">Выберите тип</option>
                         {vehicleTypes.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                     )}
-                    <span className="text-slate-500">|</span>
+                    <span className="text-slate-500 hidden sm:inline">|</span>
                     <select value={selectedSeason} onChange={e => setSelectedSeason(e.target.value)}
-                      className="bg-slate-600 text-white rounded px-2 py-1 text-xs border border-slate-500">
+                      className="bg-slate-600 text-white rounded px-2 py-1.5 text-xs border border-slate-500">
                       <option value="Зима">Зима</option>
                       <option value="Межсезон">Межсезон</option>
                       <option value="Лето">Лето</option>
@@ -1280,10 +1282,10 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
                   {tariffRates.length > 0 && (
                     <div className="mb-2">
                       <div className="text-xs text-slate-500 mb-1">Ставки по расходу:</div>
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-wrap gap-1.5">
                         {tariffRates.slice(0, 8).map((t, i) => (
                           <button key={i} onClick={() => setRfRatePerKm(Number(t.rate))}
-                            className={`px-2 py-1 rounded text-xs ${rfRatePerKm === Number(t.rate) ? 'bg-green-600 text-white' : Number(avgFuelConsumption) <= t.fuel_consumption && Number(avgFuelConsumption) > (tariffRates[i-1]?.fuel_consumption || 0) ? 'bg-yellow-600 text-white ring-2 ring-yellow-400' : 'bg-slate-600 text-slate-300 hover:bg-slate-500'}`}>
+                            className={`px-2 py-1.5 sm:py-1 rounded text-xs min-h-[36px] sm:min-h-0 ${rfRatePerKm === Number(t.rate) ? 'bg-green-600 text-white' : Number(avgFuelConsumption) <= t.fuel_consumption && Number(avgFuelConsumption) > (tariffRates[i-1]?.fuel_consumption || 0) ? 'bg-yellow-600 text-white ring-2 ring-yellow-400' : 'bg-slate-600 text-slate-300 hover:bg-slate-500'}`}>
                             {t.fuel_consumption}л→{t.rate}₽
                           </button>
                         ))}
@@ -1389,7 +1391,7 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
           <div className="flex justify-between items-center mb-3">
             <h2 className="text-lg font-semibold text-cyan-400">⛽ Топливо</h2>
             <button onClick={loadFuel} disabled={fuelLoading || !vehicleNumber || !dateFrom || !dateTo}
-              className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 text-white px-3 py-1 rounded text-sm flex items-center gap-1">
+              className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 text-white px-3 py-2 sm:py-1 rounded text-sm flex items-center gap-1 min-h-[44px] sm:min-h-0">
               {fuelLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} Загрузить
             </button>
           </div>
@@ -1518,19 +1520,21 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
                     <span>{showFuelDetails ? '▲' : '▼'}</span>
                   </button>
                   {showFuelDetails && (
-                    <div className="mt-2 max-h-60 overflow-y-auto">
-                      <div className="grid grid-cols-5 gap-1 text-xs text-slate-500 px-2 py-1 border-b border-slate-700 mb-1 sticky top-0 bg-slate-800">
-                        <span>Дата</span><span>Источник</span><span>Карта</span><span className="text-right">Литры</span><span className="text-right">Сумма</span>
-                      </div>
-                      {fuelTransactions.map((t, i) => (
-                        <div key={i} className="grid grid-cols-5 gap-1 bg-slate-900/50 rounded px-2 py-1 text-xs">
-                          <span className="text-slate-400">{t.date}</span>
-                          <span className="text-slate-500">{t.source}</span>
-                          <span className="text-slate-600 truncate" title={t.card_number}>{t.card_number || '—'}</span>
-                          <span className="text-cyan-400 text-right">{Number(t.liters).toLocaleString()} л</span>
-                          <span className="text-slate-300 text-right">{Number(t.amount).toLocaleString()} ₽</span>
+                    <div className="mt-2 max-h-60 overflow-y-auto overflow-x-auto">
+                      <div className="min-w-[400px]">
+                        <div className="grid grid-cols-5 gap-1 text-xs text-slate-500 px-2 py-1 border-b border-slate-700 mb-1 sticky top-0 bg-slate-800">
+                          <span>Дата</span><span>Источник</span><span>Карта</span><span className="text-right">Литры</span><span className="text-right">Сумма</span>
                         </div>
-                      ))}
+                        {fuelTransactions.map((t, i) => (
+                          <div key={i} className="grid grid-cols-5 gap-1 bg-slate-900/50 rounded px-2 py-1 text-xs">
+                            <span className="text-slate-400">{t.date}</span>
+                            <span className="text-slate-500">{t.source}</span>
+                            <span className="text-slate-600 truncate" title={t.card_number}>{t.card_number || '—'}</span>
+                            <span className="text-cyan-400 text-right">{Number(t.liters).toLocaleString()} л</span>
+                            <span className="text-slate-300 text-right">{Number(t.amount).toLocaleString()} ₽</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1566,11 +1570,11 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
         {/* Суточные РФ */}
         <div className="bg-slate-800 rounded-xl p-4 border border-yellow-500/30">
           <h2 className="font-semibold text-yellow-400 mb-2">Суточные РФ</h2>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <input type="number" value={rfDays} onChange={e => { setRfDays(Number(e.target.value) || 0); setRfDaysManual(true); }} className="w-16 bg-slate-700 text-white rounded px-2 py-1 border border-slate-600 text-sm text-center" />
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <input type="number" value={rfDays} onChange={e => { setRfDays(Number(e.target.value) || 0); setRfDaysManual(true); }} className="w-16 bg-slate-700 text-white rounded px-2 py-2 sm:py-1 border border-slate-600 text-sm text-center" />
               <span className="text-slate-400">дн ×</span>
-              <input type="number" value={rfDailyRate} onChange={e => setRfDailyRate(Number(e.target.value) || 0)} className="w-20 bg-slate-700 text-white rounded px-2 py-1 border border-slate-600 text-sm text-center" />
+              <input type="number" value={rfDailyRate} onChange={e => setRfDailyRate(Number(e.target.value) || 0)} className="w-20 bg-slate-700 text-white rounded px-2 py-2 sm:py-1 border border-slate-600 text-sm text-center" />
               <span className="text-slate-400">₽</span>
             </div>
             <span className="text-yellow-400 font-bold text-lg">+{rfDailyPay.toLocaleString()} ₽</span>
@@ -1580,16 +1584,16 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
         {/* Премия ТК */}
         {rfGpsMileage > 0 && (
           <div className={`bg-slate-800 rounded-xl p-4 border ${bonusEnabled ? 'border-emerald-500/30' : 'border-slate-600'}`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 cursor-pointer">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <label className="flex items-center gap-2 cursor-pointer min-h-[44px]">
                   <input type="checkbox" checked={bonusEnabled} onChange={e => setBonusEnabled(e.target.checked)} className="w-5 h-5 rounded bg-slate-700 border-slate-600 text-emerald-500 focus:ring-emerald-500" />
                   <span className={`font-semibold ${bonusEnabled ? 'text-emerald-400' : 'text-slate-500'}`}>🏆 Премия ТК</span>
                 </label>
                 {bonusEnabled && (
                   <div className="flex items-center gap-1 text-sm text-slate-400">
                     <span>{rfGpsMileage.toLocaleString()} км ×</span>
-                    <input type="number" step="0.1" value={bonusRate} onChange={e => setBonusRate(parseFloat(e.target.value) || 0)} className="w-12 bg-slate-700 text-white rounded px-1 py-0.5 border border-slate-600 text-center text-xs" />
+                    <input type="number" step="0.1" value={bonusRate} onChange={e => setBonusRate(parseFloat(e.target.value) || 0)} className="w-14 bg-slate-700 text-white rounded px-2 py-1.5 sm:py-0.5 border border-slate-600 text-center text-xs" />
                     <span>₽</span>
                   </div>
                 )}
@@ -1612,20 +1616,22 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
               </div>
             </div>
           ))}
-          <div className="flex gap-2 mt-2">
+          <div className="flex flex-col sm:flex-row gap-2 mt-2">
             <input list="work-types-list" placeholder="Название работы..." value={workSearch} 
               onChange={e => { 
                 setWorkSearch(e.target.value); 
                 const found = workTypes.find(t => t.name === e.target.value);
                 if (found) setNewWorkRate(found.default_rate);
               }}
-              className="flex-1 bg-slate-700 text-white rounded px-2 py-1 border border-slate-600 text-sm" />
+              className="flex-1 bg-slate-700 text-white rounded px-3 py-2 sm:py-1 border border-slate-600 text-sm" />
             <datalist id="work-types-list">
               {workTypes.map(t => <option key={t.id} value={t.name}>{t.name} ({t.default_rate}₽)</option>)}
             </datalist>
-            <input type="number" placeholder="Кол" value={newWorkCount} onChange={e => setNewWorkCount(e.target.value ? Number(e.target.value) : "")} className="w-14 bg-slate-700 text-white rounded px-2 py-1 border border-slate-600 text-sm text-center" />
-            <input type="number" placeholder="₽" value={newWorkRate} onChange={e => setNewWorkRate(e.target.value ? Number(e.target.value) : "")} className="w-16 bg-slate-700 text-white rounded px-2 py-1 border border-slate-600 text-sm text-center" />
-            <button onClick={addExtraWork} disabled={!workSearch} className="bg-green-600 disabled:bg-slate-600 text-white px-3 py-1 rounded"><Plus className="w-4 h-4" /></button>
+            <div className="flex gap-2">
+              <input type="number" placeholder="Кол" value={newWorkCount} onChange={e => setNewWorkCount(e.target.value ? Number(e.target.value) : "")} className="w-20 sm:w-14 bg-slate-700 text-white rounded px-2 py-2 sm:py-1 border border-slate-600 text-sm text-center flex-1 sm:flex-none" />
+              <input type="number" placeholder="₽" value={newWorkRate} onChange={e => setNewWorkRate(e.target.value ? Number(e.target.value) : "")} className="w-20 sm:w-16 bg-slate-700 text-white rounded px-2 py-2 sm:py-1 border border-slate-600 text-sm text-center flex-1 sm:flex-none" />
+              <button onClick={addExtraWork} disabled={!workSearch} className="bg-green-600 disabled:bg-slate-600 text-white px-4 sm:px-3 py-2 sm:py-1 rounded min-h-[44px] sm:min-h-0"><Plus className="w-4 h-4" /></button>
+            </div>
           </div>
           <p className="text-xs text-slate-500 mt-1">Введите новое название чтобы добавить в справочник</p>
         </div>
@@ -1643,28 +1649,30 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
               </div>
             </div>
           ))}
-          <div className="flex gap-2 mt-2">
+          <div className="flex flex-col sm:flex-row gap-2 mt-2">
             <input list="comp-types-list" placeholder="Название расхода..." value={compSearch}
               onChange={e => { 
                 setCompSearch(e.target.value); 
                 const found = compTypes.find(t => t.name === e.target.value);
                 if (found) setNewExpenseAmount(found.default_rate);
               }}
-              className="flex-1 bg-slate-700 text-white rounded px-2 py-1 border border-slate-600 text-sm" />
+              className="flex-1 bg-slate-700 text-white rounded px-3 py-2 sm:py-1 border border-slate-600 text-sm" />
             <datalist id="comp-types-list">
               {compTypes.map(t => <option key={t.id} value={t.name}>{t.name} ({t.default_rate}₽)</option>)}
             </datalist>
-            <input type="number" placeholder="₽" value={newExpenseAmount} onChange={e => setNewExpenseAmount(e.target.value ? Number(e.target.value) : "")} className="w-20 bg-slate-700 text-white rounded px-3 py-1 border border-slate-600 text-sm" />
-            <button onClick={addExpenseItem} disabled={!compSearch} className="bg-cyan-600 disabled:bg-slate-600 text-white px-3 py-1 rounded"><Plus className="w-4 h-4" /></button>
+            <div className="flex gap-2">
+              <input type="number" placeholder="₽" value={newExpenseAmount} onChange={e => setNewExpenseAmount(e.target.value ? Number(e.target.value) : "")} className="flex-1 sm:w-20 sm:flex-none bg-slate-700 text-white rounded px-3 py-2 sm:py-1 border border-slate-600 text-sm" />
+              <button onClick={addExpenseItem} disabled={!compSearch} className="bg-cyan-600 disabled:bg-slate-600 text-white px-4 sm:px-3 py-2 sm:py-1 rounded min-h-[44px] sm:min-h-0"><Plus className="w-4 h-4" /></button>
+            </div>
           </div>
         </div>
 
         {/* Выдано (-) */}
         <div className="bg-slate-800 rounded-xl p-4 border border-orange-500/30">
-          <div className="flex justify-between items-center mb-1">
+          <div className="flex justify-between items-center mb-1 gap-2">
             <h2 className="font-semibold text-orange-400">💵 Выдано</h2>
             {driverName && (
-              <button onClick={loadSalaryPayments} className="text-xs bg-orange-600/20 text-orange-300 px-2 py-1 rounded hover:bg-orange-600/40">
+              <button onClick={loadSalaryPayments} className="text-xs bg-orange-600/20 text-orange-300 px-3 py-1.5 rounded hover:bg-orange-600/40 min-h-[36px]">
                 📋 Из ведомостей
               </button>
             )}
@@ -1679,17 +1687,21 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
               </div>
             </div>
           ))}
-          <div className="flex flex-wrap gap-2 mt-2">
-            <input type="date" value={newPaymentDate} onChange={e => setNewPaymentDate(e.target.value)} className="bg-slate-700 text-white rounded px-2 py-1 border border-slate-600 text-sm" />
-            <select value={newPaymentType} onChange={e => setNewPaymentType(e.target.value)} className="bg-slate-700 text-white rounded px-2 py-1 border border-slate-600 text-sm">
-              <option value="advance">Аванс</option>
-              <option value="daily">Суточные</option>
-              <option value="card">На карту</option>
-              <option value="cash">На руки</option>
-            </select>
-            <input placeholder="Комментарий" value={newPaymentDesc} onChange={e => setNewPaymentDesc(e.target.value)} className="flex-1 min-w-[80px] bg-slate-700 text-white rounded px-2 py-1 border border-slate-600 text-sm" />
-            <input type="number" placeholder="₽" value={newPaymentAmount} onChange={e => setNewPaymentAmount(e.target.value ? Number(e.target.value) : "")} className="w-20 bg-slate-700 text-white rounded px-2 py-1 border border-slate-600 text-sm" />
-            <button onClick={addPayment} className="bg-orange-600 text-white px-3 py-1 rounded"><Plus className="w-4 h-4" /></button>
+          <div className="space-y-2 sm:space-y-0 mt-2">
+            <div className="flex gap-2 mb-2 sm:mb-0">
+              <input type="date" value={newPaymentDate} onChange={e => setNewPaymentDate(e.target.value)} className="flex-1 sm:flex-none bg-slate-700 text-white rounded px-2 py-2 sm:py-1 border border-slate-600 text-sm" />
+              <select value={newPaymentType} onChange={e => setNewPaymentType(e.target.value)} className="flex-1 sm:flex-none bg-slate-700 text-white rounded px-2 py-2 sm:py-1 border border-slate-600 text-sm">
+                <option value="advance">Аванс</option>
+                <option value="daily">Суточные</option>
+                <option value="card">На карту</option>
+                <option value="cash">На руки</option>
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <input placeholder="Комментарий" value={newPaymentDesc} onChange={e => setNewPaymentDesc(e.target.value)} className="flex-1 min-w-0 bg-slate-700 text-white rounded px-3 py-2 sm:py-1 border border-slate-600 text-sm" />
+              <input type="number" placeholder="₽" value={newPaymentAmount} onChange={e => setNewPaymentAmount(e.target.value ? Number(e.target.value) : "")} className="w-24 sm:w-20 bg-slate-700 text-white rounded px-2 py-2 sm:py-1 border border-slate-600 text-sm" />
+              <button onClick={addPayment} className="bg-orange-600 text-white px-4 sm:px-3 py-2 sm:py-1 rounded min-h-[44px] sm:min-h-0"><Plus className="w-4 h-4" /></button>
+            </div>
           </div>
         </div>
 
@@ -1707,20 +1719,20 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
           </div>
           <div className="text-center border-t border-slate-700 pt-3 mb-3">
             <div className="text-slate-400 text-xs">К выплате</div>
-            <div className={`text-3xl font-bold ${totalToPay >= 0 ? 'text-green-400' : 'text-red-400'}`}>{isNaN(totalToPay) ? 0 : totalToPay.toLocaleString()} ₽</div>
+            <div className={`text-2xl sm:text-3xl font-bold ${totalToPay >= 0 ? 'text-green-400' : 'text-red-400'}`}>{isNaN(totalToPay) ? 0 : totalToPay.toLocaleString()} ₽</div>
             {rfGpsMileage > 0 && <div className="text-slate-500 text-xs mt-1">Заработок: {earnPerKm} ₽/км</div>}
           </div>
-          <button onClick={handleSave} disabled={loading} className="bg-green-600 hover:bg-green-700 disabled:bg-slate-600 text-white px-6 py-3 rounded-lg w-full flex items-center justify-center gap-2">
+          <button onClick={handleSave} disabled={loading} className="bg-green-600 hover:bg-green-700 disabled:bg-slate-600 text-white px-6 py-4 sm:py-3 rounded-lg w-full flex items-center justify-center gap-2 text-base sm:text-sm min-h-[48px]">
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} Сохранить
           </button>
         </div>
 
         {/* Текстовый отчёт для водителя */}
         <div className="bg-slate-800 rounded-xl p-4 border border-slate-600">
-          <div className="flex justify-between items-center mb-2">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2">
             <h2 className="font-semibold text-slate-300">📋 Отчёт для водителя</h2>
-            <div className="flex gap-2">
-              <button onClick={() => { navigator.clipboard.writeText(reportText); alert("Скопировано!"); }} className="bg-slate-600 hover:bg-slate-500 text-white px-3 py-1 rounded text-sm">Копировать</button>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <button onClick={() => { navigator.clipboard.writeText(reportText); alert("Скопировано!"); }} className="flex-1 sm:flex-none bg-slate-600 hover:bg-slate-500 text-white px-3 py-2 sm:py-1 rounded text-sm min-h-[44px] sm:min-h-0">Копировать</button>
               <button onClick={() => {
                 const printWindow = window.open('', '_blank');
                 if (printWindow) {
@@ -1787,7 +1799,7 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
                   printWindow.document.close();
                   printWindow.print();
                 }
-              }} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-sm">🖨️ Печать</button>
+              }} className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 sm:py-1 rounded text-sm min-h-[44px] sm:min-h-0">🖨️ Печать</button>
             </div>
           </div>
           <div className="mb-2">

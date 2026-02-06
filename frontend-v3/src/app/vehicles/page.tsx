@@ -139,28 +139,31 @@ export default function VehiclesPage() {
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       <div className="bg-slate-800 border-b border-slate-700 px-4 py-3">
-        <div className="max-w-6xl mx-auto flex items-center gap-4">
-          <Link href="/fuel" className="text-slate-400 hover:text-white"><ArrowLeft className="w-5 h-5" /></Link>
-          <Truck className="w-6 h-6 text-cyan-400" />
-          <h1 className="text-xl font-bold">Справочник машин</h1>
-          <span className="text-slate-400">{activeVehicles.length} активных / {inactiveVehicles.length} неактивных</span><Link href="/vehicles/new" className="ml-auto bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg text-sm">+ Добавить</Link>
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
+            <Link href="/fuel" className="text-slate-400 hover:text-white"><ArrowLeft className="w-5 h-5" /></Link>
+            <Truck className="w-6 h-6 text-cyan-400" />
+            <h1 className="text-lg sm:text-xl font-bold">Справочник машин</h1>
+            <Link href="/vehicles/new" className="ml-auto bg-green-600 hover:bg-green-700 px-3 sm:px-4 py-2 rounded-lg text-sm">+ Добавить</Link>
+          </div>
+          <div className="text-slate-400 text-xs sm:text-sm mt-1 ml-8 sm:ml-12">{activeVehicles.length} активных / {inactiveVehicles.length} неактивных</div>
         </div>
       </div>
 
       <div className="max-w-6xl mx-auto p-4 space-y-4">
         {/* Фильтры */}
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
           <input
             type="text"
             placeholder="Поиск по номеру, модели..."
             value={filter}
             onChange={e => setFilter(e.target.value)}
-            className="flex-1 min-w-[200px] bg-slate-800 border border-slate-600 rounded-lg px-4 py-2"
+            className="flex-1 min-w-0 bg-slate-800 border border-slate-600 rounded-lg px-4 py-2"
           />
           <select
             value={typeFilter}
             onChange={e => setTypeFilter(e.target.value)}
-            className="bg-slate-800 border border-slate-600 rounded-lg px-4 py-2"
+            className="bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 w-full sm:w-auto"
           >
             <option value="">Все типы</option>
             {types.map(t => (
@@ -171,7 +174,7 @@ export default function VehiclesPage() {
         </div>
 
         {/* Типы с нормами — кликабельные */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
           {types.map(t => (
             <div key={t.id} onClick={() => loadTariffs(t.name)} 
               className={"rounded-lg p-3 cursor-pointer hover:opacity-90 transition " + getTypeColor(t.name)}>
@@ -244,126 +247,196 @@ export default function VehiclesPage() {
           </div>
         )}
 
-        {/* Таблица */}
+        {/* Таблица — Desktop */}
         {loading ? (
           <div className="text-center py-10 text-slate-400">Загрузка...</div>
         ) : (
-          <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-slate-700/50">
-                <tr>
-                  <th className="text-left p-3">Номер</th>
-                  <th className="text-left p-3">Модель</th>
-                  <th className="text-left p-3">Тип</th>
-                  <th className="text-center p-3">☀️ Лето</th>
-                  <th className="text-center p-3">🍂 Осень</th>
-                  <th className="text-center p-3">❄️ Зима</th>
-                  <th className="text-center p-3"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-700">
-                {activeVehicles.map(v => (
-                  <tr key={v.id} className="hover:bg-slate-700/30">
-                    <td className="p-3">
-                      <Link href={"/vehicles/" + v.id} className="font-mono text-cyan-400 hover:underline">{v.license_plate}</Link>
-                      {v.internal_number && <div className="text-xs text-slate-400">#{v.internal_number}</div>}
-                    </td>
-                    <td className="p-3 text-slate-300">{v.model}</td>
-                    <td className="p-3">
-                      {editingId === v.id ? (
-                        <select
-                          value={editData.vehicle_type || ""}
-                          onChange={e => applyTypeNorms(e.target.value)}
-                          className="bg-slate-700 border border-slate-500 rounded px-2 py-1 text-sm"
-                        >
-                          <option value="">—</option>
-                          {types.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-                        </select>
-                      ) : (
-                        <span className={"px-2 py-1 rounded text-xs " + getTypeColor(v.vehicle_type)}>
-                          {v.vehicle_type || "—"}
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-3 text-center">
-                      {editingId === v.id ? (
-                        <input
-                          type="number"
-                          step="0.1"
-                          value={editData.fuel_norm_summer || ""}
-                          onChange={e => setEditData({...editData, fuel_norm_summer: parseFloat(e.target.value) || null})}
-                          className="w-16 bg-slate-700 border border-slate-500 rounded px-2 py-1 text-sm text-center"
-                          placeholder="—"
-                        />
-                      ) : (
-                        <span className={v.fuel_norm_summer ? "text-yellow-400" : "text-slate-500"}>
-                          {v.fuel_norm_summer || "—"}
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-3 text-center">
-                      {editingId === v.id ? (
-                        <input
-                          type="number"
-                          step="0.1"
-                          value={editData.fuel_norm_autumn || ""}
-                          onChange={e => setEditData({...editData, fuel_norm_autumn: parseFloat(e.target.value) || null})}
-                          className="w-16 bg-slate-700 border border-slate-500 rounded px-2 py-1 text-sm text-center"
-                          placeholder="—"
-                        />
-                      ) : (
-                        <span className={v.fuel_norm_autumn ? "text-orange-400" : "text-slate-500"}>
-                          {v.fuel_norm_autumn || "—"}
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-3 text-center">
-                      {editingId === v.id ? (
-                        <input
-                          type="number"
-                          step="0.1"
-                          value={editData.fuel_norm_winter || ""}
-                          onChange={e => setEditData({...editData, fuel_norm_winter: parseFloat(e.target.value) || null})}
-                          className="w-16 bg-slate-700 border border-slate-500 rounded px-2 py-1 text-sm text-center"
-                          placeholder="—"
-                        />
-                      ) : (
-                        <span className={v.fuel_norm_winter ? "text-blue-400" : "text-slate-500"}>
-                          {v.fuel_norm_winter || "—"}
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-3 text-center">
-                      {editingId === v.id ? (
-                        <div className="flex gap-1">
-                          <button
-                            onClick={saveEdit}
-                            disabled={saving}
-                            className="bg-green-600 hover:bg-green-700 px-2 py-1 rounded text-xs"
+          <>
+            <div className="hidden lg:block bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-slate-700/50">
+                  <tr>
+                    <th className="text-left p-3">Номер</th>
+                    <th className="text-left p-3">Модель</th>
+                    <th className="text-left p-3">Тип</th>
+                    <th className="text-center p-3">☀️ Лето</th>
+                    <th className="text-center p-3">🍂 Осень</th>
+                    <th className="text-center p-3">❄️ Зима</th>
+                    <th className="text-center p-3"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700">
+                  {activeVehicles.map(v => (
+                    <tr key={v.id} className="hover:bg-slate-700/30">
+                      <td className="p-3">
+                        <Link href={"/vehicles/" + v.id} className="font-mono text-cyan-400 hover:underline">{v.license_plate}</Link>
+                        {v.internal_number && <div className="text-xs text-slate-400">#{v.internal_number}</div>}
+                      </td>
+                      <td className="p-3 text-slate-300">{v.model}</td>
+                      <td className="p-3">
+                        {editingId === v.id ? (
+                          <select
+                            value={editData.vehicle_type || ""}
+                            onChange={e => applyTypeNorms(e.target.value)}
+                            className="bg-slate-700 border border-slate-500 rounded px-2 py-1 text-sm"
                           >
-                            {saving ? "..." : "✓"}
-                          </button>
+                            <option value="">—</option>
+                            {types.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                          </select>
+                        ) : (
+                          <span className={"px-2 py-1 rounded text-xs " + getTypeColor(v.vehicle_type)}>
+                            {v.vehicle_type || "—"}
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 text-center">
+                        {editingId === v.id ? (
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={editData.fuel_norm_summer || ""}
+                            onChange={e => setEditData({...editData, fuel_norm_summer: parseFloat(e.target.value) || null})}
+                            className="w-16 bg-slate-700 border border-slate-500 rounded px-2 py-1 text-sm text-center"
+                            placeholder="—"
+                          />
+                        ) : (
+                          <span className={v.fuel_norm_summer ? "text-yellow-400" : "text-slate-500"}>
+                            {v.fuel_norm_summer || "—"}
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 text-center">
+                        {editingId === v.id ? (
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={editData.fuel_norm_autumn || ""}
+                            onChange={e => setEditData({...editData, fuel_norm_autumn: parseFloat(e.target.value) || null})}
+                            className="w-16 bg-slate-700 border border-slate-500 rounded px-2 py-1 text-sm text-center"
+                            placeholder="—"
+                          />
+                        ) : (
+                          <span className={v.fuel_norm_autumn ? "text-orange-400" : "text-slate-500"}>
+                            {v.fuel_norm_autumn || "—"}
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 text-center">
+                        {editingId === v.id ? (
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={editData.fuel_norm_winter || ""}
+                            onChange={e => setEditData({...editData, fuel_norm_winter: parseFloat(e.target.value) || null})}
+                            className="w-16 bg-slate-700 border border-slate-500 rounded px-2 py-1 text-sm text-center"
+                            placeholder="—"
+                          />
+                        ) : (
+                          <span className={v.fuel_norm_winter ? "text-blue-400" : "text-slate-500"}>
+                            {v.fuel_norm_winter || "—"}
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 text-center">
+                        {editingId === v.id ? (
+                          <div className="flex gap-1">
+                            <button
+                              onClick={saveEdit}
+                              disabled={saving}
+                              className="bg-green-600 hover:bg-green-700 px-2 py-1 rounded text-xs"
+                            >
+                              {saving ? "..." : "✓"}
+                            </button>
+                            <button
+                              onClick={cancelEdit}
+                              className="bg-slate-600 hover:bg-slate-500 px-2 py-1 rounded text-xs"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
                           <button
-                            onClick={cancelEdit}
-                            className="bg-slate-600 hover:bg-slate-500 px-2 py-1 rounded text-xs"
+                            onClick={() => startEdit(v)}
+                            className="text-slate-400 hover:text-white"
                           >
-                            ✕
+                            <Settings className="w-4 h-4" />
                           </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => startEdit(v)}
-                          className="text-slate-400 hover:text-white"
-                        >
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Cards — Mobile */}
+            <div className="lg:hidden space-y-2">
+              {activeVehicles.map(v => (
+                <div key={v.id} className="bg-slate-800 rounded-xl border border-slate-700 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <Link href={"/vehicles/" + v.id} className="font-mono text-cyan-400 hover:underline text-base">{v.license_plate}</Link>
+                      {v.internal_number && <span className="text-xs text-slate-400 ml-2">#{v.internal_number}</span>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={"px-2 py-1 rounded text-xs " + getTypeColor(v.vehicle_type)}>
+                        {v.vehicle_type || "—"}
+                      </span>
+                      {editingId !== v.id && (
+                        <button onClick={() => startEdit(v)} className="text-slate-400 hover:text-white p-1">
                           <Settings className="w-4 h-4" />
                         </button>
                       )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  </div>
+                  <div className="text-slate-300 text-sm mb-2">{v.model}</div>
+                  {editingId === v.id ? (
+                    <div className="space-y-2 pt-2 border-t border-slate-700">
+                      <select
+                        value={editData.vehicle_type || ""}
+                        onChange={e => applyTypeNorms(e.target.value)}
+                        className="w-full bg-slate-700 border border-slate-500 rounded px-3 py-2 text-sm"
+                      >
+                        <option value="">— Тип —</option>
+                        {types.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                      </select>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="text-xs text-slate-500">☀️ Лето</label>
+                          <input type="number" step="0.1" value={editData.fuel_norm_summer || ""} onChange={e => setEditData({...editData, fuel_norm_summer: parseFloat(e.target.value) || null})}
+                            className="w-full bg-slate-700 border border-slate-500 rounded px-2 py-1.5 text-sm text-center" placeholder="—" />
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500">🍂 Осень</label>
+                          <input type="number" step="0.1" value={editData.fuel_norm_autumn || ""} onChange={e => setEditData({...editData, fuel_norm_autumn: parseFloat(e.target.value) || null})}
+                            className="w-full bg-slate-700 border border-slate-500 rounded px-2 py-1.5 text-sm text-center" placeholder="—" />
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500">❄️ Зима</label>
+                          <input type="number" step="0.1" value={editData.fuel_norm_winter || ""} onChange={e => setEditData({...editData, fuel_norm_winter: parseFloat(e.target.value) || null})}
+                            className="w-full bg-slate-700 border border-slate-500 rounded px-2 py-1.5 text-sm text-center" placeholder="—" />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={saveEdit} disabled={saving} className="flex-1 bg-green-600 hover:bg-green-700 py-2 rounded text-sm font-medium">
+                          {saving ? "..." : "✓ Сохранить"}
+                        </button>
+                        <button onClick={cancelEdit} className="flex-1 bg-slate-600 hover:bg-slate-500 py-2 rounded text-sm">
+                          Отмена
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex gap-3 text-xs">
+                      <span className={v.fuel_norm_summer ? "text-yellow-400" : "text-slate-600"}>☀️{v.fuel_norm_summer || "—"}</span>
+                      <span className={v.fuel_norm_autumn ? "text-orange-400" : "text-slate-600"}>🍂{v.fuel_norm_autumn || "—"}</span>
+                      <span className={v.fuel_norm_winter ? "text-blue-400" : "text-slate-600"}>❄️{v.fuel_norm_winter || "—"}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
         )}
         
         {/* Неактивные машины */}
@@ -377,42 +450,64 @@ export default function VehiclesPage() {
               <span>📦 Неактивные ТС ({inactiveVehicles.length})</span>
             </button>
             {showInactive && (
-              <div className="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-slate-700/30">
-                    <tr>
-                      <th className="text-left p-3 text-slate-500">Номер</th>
-                      <th className="text-left p-3 text-slate-500">Модель</th>
-                      <th className="text-left p-3 text-slate-500">Тип</th>
-                      <th className="text-center p-3 text-slate-500">Последний рейс</th>
-                      <th className="text-center p-3"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-700/50">
-                    {inactiveVehicles.map(v => (
-                      <tr key={v.id} className="hover:bg-slate-700/20 opacity-60">
-                        <td className="p-3">
-                          <Link href={"/vehicles/" + v.id} className="font-mono text-slate-400 hover:text-cyan-400 hover:underline">{v.license_plate}</Link>
-                        </td>
-                        <td className="p-3 text-slate-500">{v.model}</td>
-                        <td className="p-3">
-                          <span className="px-2 py-1 rounded text-xs bg-slate-700 text-slate-400">{v.vehicle_type || "—"}</span>
-                        </td>
-                        <td className="p-3 text-center text-slate-500 text-sm">
-                          {v.last_trip_date || v.last_contract_date 
-                            ? new Date(v.last_trip_date || v.last_contract_date || "").toLocaleDateString("ru-RU")
-                            : "—"}
-                        </td>
-                        <td className="p-3 text-center">
-                          <Link href={"/vehicles/" + v.id} className="text-slate-500 hover:text-white">
-                            <Settings className="w-4 h-4" />
-                          </Link>
-                        </td>
+              <>
+                {/* Desktop table */}
+                <div className="hidden lg:block bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-slate-700/30">
+                      <tr>
+                        <th className="text-left p-3 text-slate-500">Номер</th>
+                        <th className="text-left p-3 text-slate-500">Модель</th>
+                        <th className="text-left p-3 text-slate-500">Тип</th>
+                        <th className="text-center p-3 text-slate-500">Последний рейс</th>
+                        <th className="text-center p-3"></th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-slate-700/50">
+                      {inactiveVehicles.map(v => (
+                        <tr key={v.id} className="hover:bg-slate-700/20 opacity-60">
+                          <td className="p-3">
+                            <Link href={"/vehicles/" + v.id} className="font-mono text-slate-400 hover:text-cyan-400 hover:underline">{v.license_plate}</Link>
+                          </td>
+                          <td className="p-3 text-slate-500">{v.model}</td>
+                          <td className="p-3">
+                            <span className="px-2 py-1 rounded text-xs bg-slate-700 text-slate-400">{v.vehicle_type || "—"}</span>
+                          </td>
+                          <td className="p-3 text-center text-slate-500 text-sm">
+                            {v.last_trip_date || v.last_contract_date 
+                              ? new Date(v.last_trip_date || v.last_contract_date || "").toLocaleDateString("ru-RU")
+                              : "—"}
+                          </td>
+                          <td className="p-3 text-center">
+                            <Link href={"/vehicles/" + v.id} className="text-slate-500 hover:text-white">
+                              <Settings className="w-4 h-4" />
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Mobile cards */}
+                <div className="lg:hidden space-y-2">
+                  {inactiveVehicles.map(v => (
+                    <div key={v.id} className="bg-slate-800/50 rounded-xl border border-slate-700 p-3 opacity-60">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Link href={"/vehicles/" + v.id} className="font-mono text-slate-400 hover:text-cyan-400 hover:underline">{v.license_plate}</Link>
+                          <span className="text-slate-500 text-sm ml-2">{v.model}</span>
+                        </div>
+                        <span className="px-2 py-1 rounded text-xs bg-slate-700 text-slate-400">{v.vehicle_type || "—"}</span>
+                      </div>
+                      {(v.last_trip_date || v.last_contract_date) && (
+                        <div className="text-slate-500 text-xs mt-1">
+                          Последний рейс: {new Date(v.last_trip_date || v.last_contract_date || "").toLocaleDateString("ru-RU")}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         )}
