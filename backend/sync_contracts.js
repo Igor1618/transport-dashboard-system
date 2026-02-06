@@ -10,16 +10,18 @@ const API = "http://91.144.150.120:8180/tk/hs/TransportAPI/api/v1";
 const AUTH = { username: "TransportAPI", password: "TransportAPI_SecretPass" };
 
 async function main() {
-  console.log("=== 1C Sync ===");
+  console.log("=== Sync contracts with loading_date/unloading_date ===");
+  
+  // Синхронизируем за последние 90 дней
   const now = new Date();
   const dateTo = now.toISOString().slice(0,10);
-  const dateFrom = new Date(now - 30*24*60*60*1000).toISOString().slice(0,10);
+  const dateFrom = new Date(now - 90*24*60*60*1000).toISOString().slice(0,10);
   console.log("Period:", dateFrom, "->", dateTo);
   
-  const r = await axios.get(API + "/contracts", { auth: AUTH, params: { dateFrom, dateTo }, timeout: 60000 });
+  const r = await axios.get(API + "/contracts", { auth: AUTH, params: { dateFrom, dateTo }, timeout: 120000 });
   console.log("Received:", r.data.length, "contracts");
   
-  let n = 0, errors = 0;
+  let updated = 0, errors = 0;
   for (const c of r.data) {
     try {
       await pool.query(`
@@ -45,27 +47,14 @@ async function main() {
           c.loading_date || null,
           c.unloading_date || null
         ]);
-      n++;
+      updated++;
     } catch (e) { 
       errors++; 
-      if (errors <= 2) console.error("Err:", e.message.slice(0, 80)); 
+      if (errors <= 3) console.error("Err:", e.message.slice(0, 100)); 
     }
   }
   
-  // Также обновляем по number (для старых записей)
-  let upd = 0;
-  for (const c of r.data) {
-    if (!c.number || !c.loading_date) continue;
-    try {
-      const res = await pool.query(
-        "UPDATE contracts SET loading_date = $1, unloading_date = $2, updated_at = NOW() WHERE number = $3 AND loading_date IS NULL",
-        [c.loading_date, c.unloading_date || null, c.number]
-      );
-      if (res.rowCount > 0) upd++;
-    } catch (e) {}
-  }
-  
-  console.log("\n✅ Synced:", n, "| Updated by number:", upd, "| Errors:", errors);
+  console.log("\n✅ Updated:", updated, "| Errors:", errors);
   await pool.end();
 }
 main().catch(e => console.error(e));

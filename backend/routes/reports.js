@@ -380,7 +380,8 @@ router.get("/contracts-rf", async (req, res) => {
   if (!from || !to) return res.status(400).json({ error: "from/to required" });
   
   try {
-    let whereClause = "WHERE c.date >= $1 AND c.date <= $2";
+    // Фильтруем по loading_date/unloading_date (fallback на date если нет дат погрузки)
+    let whereClause = "WHERE (COALESCE(c.loading_date::date, c.date) <= $2 AND COALESCE(c.unloading_date::date, c.loading_date::date, c.date) >= $1)";
     const params = [from, to];
     let paramIdx = 3;
     
@@ -405,7 +406,7 @@ router.get("/contracts-rf", async (req, res) => {
         c.unloading_date
       FROM contracts c
       ${whereClause}
-      ORDER BY c.date
+      ORDER BY COALESCE(c.loading_date, c.date)
     `, params);
     
     const contracts = result.rows;
@@ -605,7 +606,8 @@ router.get("/contracts-rf-v2", async (req, res) => {
   if (!from || !to) return res.status(400).json({ error: "from/to required" });
   
   try {
-    let whereClause = "WHERE c.date >= $1 AND c.date <= $2";
+    // Фильтруем по loading_date/unloading_date (fallback на date если нет дат погрузки)
+    let whereClause = "WHERE (COALESCE(c.loading_date::date, c.date) <= $2 AND COALESCE(c.unloading_date::date, c.loading_date::date, c.date) >= $1)";
     const params = [from, to];
     let paramIdx = 3;
     
@@ -630,7 +632,7 @@ router.get("/contracts-rf-v2", async (req, res) => {
         c.unloading_date
       FROM contracts c
       ${whereClause}
-      ORDER BY c.date
+      ORDER BY COALESCE(c.loading_date, c.date)
     `, params);
     
     const contracts = result.rows;
