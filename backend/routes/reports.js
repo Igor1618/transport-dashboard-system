@@ -72,13 +72,13 @@ function normalizeVehicle(v) {
 // Список водителей
 router.post("/save", async (req, res) => {
   const { driver_name, vehicle_number, date_from, date_to, mileage, fuel_quantity, fuel_amount, total_expenses, driver_accruals, driver_payments, rf_periods, user_name, vehicle_type, season, rate_per_km,
-    rf_mileage, rf_rate, rf_days, rf_daily_rate, rf_fuel_start, rf_fuel_end, fuel_rf, wb_totals, bonus_enabled, bonus_rate, wb_rate, wb_trips, wb_trips_data, fuel_by_source, wb_gps_mileage, wb_days, gps_mileage, extra_works, expenses, payments, comment } = req.body;
+    rf_mileage, rf_rate, rf_days, rf_daily_rate, rf_fuel_start, rf_fuel_end, fuel_rf, wb_totals, bonus_enabled, bonus_rate, wb_rate, wb_trips, wb_trips_data, fuel_by_source, rf_contracts_data, wb_gps_mileage, wb_days, gps_mileage, extra_works, expenses, payments, comment } = req.body;
   
   try {
     const numResult = await pool.query(`SELECT COALESCE(MAX(CAST(number AS INTEGER)), 0) + 1 as next FROM driver_reports WHERE number ~ '^[0-9]+$'`);
     const number = String(numResult.rows[0].next).padStart(9, "0");
     
-    const expense_categories = JSON.stringify({ rf_mileage, rf_rate, rf_days, rf_daily_rate, rf_fuel_start, rf_fuel_end, fuel_rf, wb_totals, bonus_enabled, bonus_rate, wb_rate, wb_trips, wb_trips_data, fuel_by_source, wb_gps_mileage, wb_days, gps_mileage, extra_works, expenses, payments, comment });
+    const expense_categories = JSON.stringify({ rf_mileage, rf_rate, rf_days, rf_daily_rate, rf_fuel_start, rf_fuel_end, fuel_rf, wb_totals, bonus_enabled, bonus_rate, wb_rate, wb_trips, wb_trips_data, fuel_by_source, rf_contracts_data, wb_gps_mileage, wb_days, gps_mileage, extra_works, expenses, payments, comment });
     
     await pool.query(`
       INSERT INTO driver_reports (id, number, driver_name, vehicle_number, date_from, date_to, mileage, fuel_quantity, fuel_amount, total_expenses, driver_accruals, driver_payments, rf_periods, vehicle_type, season, rate_per_km, expense_categories, created_by, updated_by, synced_at)
@@ -95,14 +95,14 @@ router.post("/save", async (req, res) => {
 router.post("/update", async (req, res) => {
   console.log("[UPDATE] Body:", JSON.stringify(req.body, null, 2));
   const { id, user_name, driver_name, vehicle_number, date_from, date_to, mileage, fuel_quantity, fuel_amount, total_expenses, driver_accruals, driver_payments, rf_periods, vehicle_type, season, rate_per_km, fuel_start, fuel_end,
-    rf_mileage, rf_rate, rf_days, rf_daily_rate, rf_fuel_start, rf_fuel_end, fuel_rf, wb_totals, bonus_enabled, bonus_rate, wb_rate, wb_trips, wb_trips_data, fuel_by_source, wb_gps_mileage, wb_days, gps_mileage, extra_works, expenses, payments, comment } = req.body;
+    rf_mileage, rf_rate, rf_days, rf_daily_rate, rf_fuel_start, rf_fuel_end, fuel_rf, wb_totals, bonus_enabled, bonus_rate, wb_rate, wb_trips, wb_trips_data, fuel_by_source, rf_contracts_data, wb_gps_mileage, wb_days, gps_mileage, extra_works, expenses, payments, comment } = req.body;
   
   if (!id) {
     return res.status(400).json({ error: "id is required" });
   }
   
   try {
-    const expense_categories = JSON.stringify({ rf_mileage, rf_rate, rf_days, rf_daily_rate, rf_fuel_start, rf_fuel_end, fuel_rf, wb_totals, bonus_enabled, bonus_rate, wb_rate, wb_trips, wb_trips_data, fuel_by_source, wb_gps_mileage, wb_days, gps_mileage, extra_works, expenses, payments, comment });
+    const expense_categories = JSON.stringify({ rf_mileage, rf_rate, rf_days, rf_daily_rate, rf_fuel_start, rf_fuel_end, fuel_rf, wb_totals, bonus_enabled, bonus_rate, wb_rate, wb_trips, wb_trips_data, fuel_by_source, rf_contracts_data, wb_gps_mileage, wb_days, gps_mileage, extra_works, expenses, payments, comment });
     
     await pool.query(`
       UPDATE driver_reports SET
@@ -806,6 +806,35 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
+
+// Типы работ и компенсаций
+router.get("/work-types", async (req, res) => {
+  const { category } = req.query;
+  try {
+    let query = "SELECT * FROM work_types";
+    const params = [];
+    if (category) {
+      query += " WHERE category = \$1";
+      params.push(category);
+    }
+    query += " ORDER BY id";
+    const result = await pool.query(query, params);
+    res.json({ types: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// Типы машин (для тарифов) — ДОЛЖЕН быть ДО tariffs/:id
+router.get("/tariffs/vehicle-types", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT name FROM vehicle_types ORDER BY name");
+    res.json({ types: result.rows.map(r => r.name) });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 module.exports = router;
 module.exports.IMEI_MAP = IMEI_MAP;
 
@@ -882,9 +911,10 @@ router.get("/telematics/fuel-level", async (req, res) => {
     }
     
     // Конвертируем MSK → UTC (datetime в московском времени)
-    // Запрашиваем на короткий период (1 минута) чтобы получить уровень на момент
-    const fromDate = new Date(datetime + ":00+03:00"); // MSK
-    const toDate = new Date(fromDate.getTime() + 60000); // +1 минута
+    // Запрашиваем окно в 2 часа (1ч до и 1ч после) — GPS может не иметь данных за конкретную минуту
+    const centerDate = new Date(datetime + ":00+03:00"); // MSK
+    const fromDate = new Date(centerDate.getTime() - 3600000); // -1 час
+    const toDate = new Date(centerDate.getTime() + 3600000); // +1 час
     const fromUtc = fromDate.toISOString().slice(0, 19) + "Z";
     const toUtc = toDate.toISOString().slice(0, 19) + "Z";
     
@@ -903,9 +933,9 @@ router.get("/telematics/fuel-level", async (req, res) => {
         return res.json({ level: null, hasSensor: false, message: "Датчик топлива не установлен" });
       }
       const level = parseFloat(String(val).replace(",", "."));
-      // Если уровень <= 0 — считаем что датчика нет
-      if (level <= 0) {
-        return res.json({ level: null, hasSensor: false, message: "Датчик топлива не установлен" });
+      // Уровень 0 — может быть реальным значением (бак пустой)
+      if (level < 0) {
+        return res.json({ level: 0, hasSensor: true, imei });
       }
       return res.json({ level: Math.round(level), hasSensor: true, imei });
     }
@@ -915,3 +945,5 @@ router.get("/telematics/fuel-level", async (req, res) => {
     res.status(500).json({ error: String(err), hasSensor: false });
   }
 });
+
+// Типы работ и компенсаций
