@@ -30,6 +30,7 @@ const statsRoutes = require('./routes/stats');
 const tripsRoutes = require('./routes/trips');
 const salaryRoutes = require('./routes/salary');
 const uploadRoutes = require('./routes/upload');
+const uploadSmartRoutes = require('./routes/upload_smart');
 const importHistoryRoutes = require('./routes/importHistory');
 const routesRoutes = require('./routes/routes');
 const vehiclesRoutes = require('./routes/vehicles');
@@ -46,9 +47,12 @@ app.use('/stats', statsRoutes);
 app.use('/trips', tripsRoutes);
 app.use('/salary', salaryRoutes);
 app.use('/upload', uploadRoutes);
+app.use('/upload-smart', uploadSmartRoutes);
 app.use('/import-history', importHistoryRoutes);
 app.use('/routes', routesRoutes);
 app.use('/vehicles', vehiclesRoutes);
+app.use("/api/tariffs", require("./routes/tariffs"));
+app.use("/tariffs", require("./routes/tariffs"));
 app.use('/drivers', driversRoutes);
 app.use('/users', usersRoutes);
 app.use('/analytics', analyticsRoutes);
@@ -100,3 +104,6 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+// Tariffs API
+app.use("/api/tariffs", require("./routes/tariffs"));
+app.use("/tariffs", require("./routes/tariffs"));

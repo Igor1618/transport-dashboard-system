@@ -70,6 +70,68 @@ function normalizeVehicle(v) {
 }
 
 // Список водителей
+router.post("/save", async (req, res) => {
+  const { driver_name, vehicle_number, date_from, date_to, mileage, fuel_quantity, fuel_amount, total_expenses, driver_accruals, driver_payments, rf_periods, user_name, vehicle_type, season, rate_per_km,
+    rf_mileage, rf_rate, rf_days, rf_daily_rate, rf_fuel_start, rf_fuel_end, fuel_rf, wb_totals, bonus_enabled, bonus_rate, wb_rate, wb_trips, extra_works, expenses, payments, comment } = req.body;
+  
+  try {
+    const numResult = await pool.query(`SELECT COALESCE(MAX(CAST(number AS INTEGER)), 0) + 1 as next FROM driver_reports WHERE number ~ '^[0-9]+$'`);
+    const number = String(numResult.rows[0].next).padStart(9, "0");
+    
+    const expense_categories = JSON.stringify({ rf_mileage, rf_rate, rf_days, rf_daily_rate, rf_fuel_start, rf_fuel_end, fuel_rf, wb_totals, bonus_enabled, bonus_rate, wb_rate, wb_trips, extra_works, expenses, payments, comment });
+    
+    await pool.query(`
+      INSERT INTO driver_reports (id, number, driver_name, vehicle_number, date_from, date_to, mileage, fuel_quantity, fuel_amount, total_expenses, driver_accruals, driver_payments, rf_periods, vehicle_type, season, rate_per_km, expense_categories, created_by, updated_by, synced_at)
+      VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $17, NOW())
+    `, [number, driver_name, vehicle_number, date_from, date_to, mileage || 0, fuel_quantity || 0, fuel_amount || 0, total_expenses || 0, driver_accruals || 0, driver_payments || 0, JSON.stringify(rf_periods || []), vehicle_type || null, season || null, rate_per_km || null, expense_categories, user_name || null]);
+    
+    res.json({ success: true, number });
+  } catch (err) {
+    console.error("Save error:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+router.post("/update", async (req, res) => {
+  console.log("[UPDATE] Body:", JSON.stringify(req.body, null, 2));
+  const { id, user_name, driver_name, vehicle_number, date_from, date_to, mileage, fuel_quantity, fuel_amount, total_expenses, driver_accruals, driver_payments, rf_periods, vehicle_type, season, rate_per_km, fuel_start, fuel_end,
+    rf_mileage, rf_rate, rf_days, rf_daily_rate, rf_fuel_start, rf_fuel_end, fuel_rf, wb_totals, bonus_enabled, bonus_rate, wb_rate, wb_trips, extra_works, expenses, payments, comment } = req.body;
+  
+  if (!id) {
+    return res.status(400).json({ error: "id is required" });
+  }
+  
+  try {
+    const expense_categories = JSON.stringify({ rf_mileage, rf_rate, rf_days, rf_daily_rate, rf_fuel_start, rf_fuel_end, fuel_rf, wb_totals, bonus_enabled, bonus_rate, wb_rate, wb_trips, extra_works, expenses, payments, comment });
+    
+    await pool.query(`
+      UPDATE driver_reports SET
+        driver_name = COALESCE($2, driver_name),
+        vehicle_number = COALESCE($3, vehicle_number),
+        date_from = COALESCE($4, date_from),
+        date_to = COALESCE($5, date_to),
+        mileage = COALESCE($6, mileage),
+        fuel_quantity = COALESCE($7, fuel_quantity),
+        fuel_amount = COALESCE($8, fuel_amount),
+        total_expenses = COALESCE($9, total_expenses),
+        driver_accruals = COALESCE($10, driver_accruals),
+        driver_payments = COALESCE($11, driver_payments),
+        rf_periods = COALESCE($12, rf_periods),
+        vehicle_type = COALESCE($13, vehicle_type),
+        season = COALESCE($14, season),
+        rate_per_km = COALESCE($15, rate_per_km),
+        expense_categories = $16,
+        updated_by = COALESCE($17, updated_by),
+        updated_at = NOW()
+      WHERE id = $1
+    `, [id, driver_name, vehicle_number, date_from, date_to, mileage, fuel_quantity, fuel_amount, total_expenses, driver_accruals, driver_payments, rf_periods ? JSON.stringify(rf_periods) : null, vehicle_type || null, season || null, rate_per_km || null, expense_categories, user_name || null]);
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Update error:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
 router.get("/drivers", async (req, res) => {
   try {
     const result = await pool.query(`
@@ -119,7 +181,21 @@ router.get("/telematics/mileage", async (req, res) => {
     
     const fetch = require("node-fetch");
     const auth = Buffer.from("btl43api:p5318").toString("base64");
-    const url = `http://lserver43.ru:8091/do.calc.vars?imei=${imei}&vars=Distance&from=${from}T00:00:00Z&to=${to}T23:59:59Z`;
+    // Конвертируем MSK → UTC (всё время в московском часовом поясе)
+    function mskToUtc(dateStr, isEnd = false) {
+      if (!dateStr.includes("T")) {
+        // Только дата — добавляем время (00:00 или 23:59) в MSK
+        const time = isEnd ? "T23:59:59+03:00" : "T00:00:00+03:00";
+        const d = new Date(dateStr + time);
+        return d.toISOString().slice(0, 19) + "Z";
+      }
+      // Дата со временем — считаем что это MSK
+      const d = new Date(dateStr + ":00+03:00");
+      return d.toISOString().slice(0, 19) + "Z";
+    }
+    const fromTime = mskToUtc(from, false);
+    const toTime = mskToUtc(to, true);
+    const url = `http://lserver43.ru:8091/do.calc.vars?imei=${imei}&vars=Distance&from=${fromTime}&to=${toTime}`;
     
     const response = await fetch(url, {
       headers: { "Authorization": "Basic " + auth }
@@ -158,25 +234,8 @@ router.get("/trips", async (req, res) => {
 });
 
 // Сохранить отчёт
-router.post("/save", async (req, res) => {
-  const { driver_name, vehicle_number, date_from, date_to, mileage, fuel_quantity, fuel_amount, total_expenses, driver_accruals } = req.body;
-  
-  try {
-    const numResult = await pool.query(`SELECT COALESCE(MAX(CAST(number AS INTEGER)), 0) + 1 as next FROM driver_reports WHERE number ~ '^[0-9]+$'`);
-    const number = String(numResult.rows[0].next).padStart(9, "0");
-    
-    await pool.query(`
-      INSERT INTO driver_reports (number, driver_name, vehicle_number, date_from, date_to, mileage, fuel_quantity, fuel_amount, total_expenses, driver_accruals, synced_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-    `, [number, driver_name, vehicle_number, date_from, date_to, mileage || 0, fuel_quantity || 0, fuel_amount || 0, total_expenses || 0, driver_accruals || 0]);
-    
-    res.json({ success: true, number });
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
-});
 
-module.exports = router;
+
 
 // Топливо за период
 router.get("/fuel", async (req, res) => {
@@ -210,7 +269,7 @@ router.post("/fuel/import", async (req, res) => {
     try {
       await pool.query(`
         INSERT INTO fuel_transactions (source, card_number, vehicle_number, driver_name, transaction_date, transaction_time, fuel_type, quantity, price_per_liter, amount, station_name, raw_data)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         ON CONFLICT DO NOTHING
       `, [t.source, t.card_number, t.vehicle_number, t.driver_name, t.transaction_date, t.transaction_time, t.fuel_type, t.quantity, t.price_per_liter, t.amount, t.station_name, JSON.stringify(t.raw_data || {})]);
       imported++;
@@ -228,12 +287,12 @@ router.get("/driver-vehicles", async (req, res) => {
   try {
     // Ищем в trips по водителю за период
     const result = await pool.query(`
-      SELECT DISTINCT vehicle_number, COUNT(*) as trips
+      SELECT normalize_vehicle_number(vehicle_number) as number, COUNT(*) as trips, MAX(vehicle_number) as vehicle_number
       FROM trips 
       WHERE driver_name ILIKE $1
         AND ($2::date IS NULL OR loading_date >= $2)
         AND ($3::date IS NULL OR loading_date <= $3)
-      GROUP BY vehicle_number
+      GROUP BY norm
       ORDER BY trips DESC
     `, [driver, from || null, to || null]);
     
@@ -273,7 +332,7 @@ router.get("/trips-detail", async (req, res) => {
     
     if (driver) {
       whereClause += ` AND t.driver_name ILIKE $${paramIdx}`;
-      params.push(driver);
+      params.push("%" + driver + "%");
       paramIdx++;
     }
     if (vehicle) {
@@ -327,7 +386,7 @@ router.get("/contracts-rf", async (req, res) => {
     
     if (driver) {
       whereClause += ` AND c.driver_name ILIKE $${paramIdx}`;
-      params.push(driver);
+      params.push("%" + driver + "%");
       paramIdx++;
     }
     if (vehicle) {
@@ -407,7 +466,7 @@ router.post("/telematics/mileage-by-dates", async (req, res) => {
     
     // Группируем последовательные даты в диапазоны для оптимизации
     for (const date of uniqueDates) {
-      const url = `http://lserver43.ru:8091/do.calc.vars?imei=${imei}&vars=Distance&from=${date}T00:00:00Z&to=${date}T23:59:59Z`;
+      const fromDate = new Date(date + "T00:00:00+03:00"); const toDate = new Date(date + "T23:59:59+03:00"); const url = `http://lserver43.ru:8091/do.calc.vars?imei=${imei}&vars=Distance&from=${fromDate.toISOString().slice(0,19)}Z&to=${toDate.toISOString().slice(0,19)}Z`;
       try {
         const response = await fetch(url, { headers: { "Authorization": "Basic " + auth }, timeout: 5000 });
         const data = await response.json();
@@ -500,7 +559,7 @@ router.get("/trips-detail-v2", async (req, res) => {
     
     if (driver) {
       whereClause += ` AND t.driver_name ILIKE $${paramIdx}`;
-      params.push(driver);
+      params.push("%" + driver + "%");
       paramIdx++;
     }
     if (vehicle) {
@@ -511,7 +570,9 @@ router.get("/trips-detail-v2", async (req, res) => {
     const result = await pool.query(`
       SELECT 
         TO_CHAR(t.loading_date, 'YYYY-MM-DD') as loading_date,
+        TO_CHAR(t.loading_time, 'HH24:MI') as loading_time,
         TO_CHAR(t.unloading_date, 'YYYY-MM-DD') as unloading_date,
+        TO_CHAR(t.unloading_time, 'HH24:MI') as unloading_time,
         t.vehicle_number,
         t.route_name,
         t.distance_km,
@@ -548,7 +609,7 @@ router.get("/contracts-rf-v2", async (req, res) => {
     
     if (driver) {
       whereClause += ` AND c.driver_name ILIKE $${paramIdx}`;
-      params.push(driver);
+      params.push("%" + driver + "%");
       paramIdx++;
     }
     if (vehicle) {
@@ -603,7 +664,7 @@ router.get("/fuel/detail", async (req, res) => {
         SUM(amount)::numeric as amount,
         COUNT(*)::int as count
       FROM fuel_transactions 
-      WHERE LOWER(REPLACE(vehicle_number,  , )) LIKE LOWER($1)
+      WHERE LOWER(REPLACE(vehicle_number, ' ', '')) LIKE LOWER($1)
         AND transaction_date >= $2 AND transaction_date <= $3
       GROUP BY source
       ORDER BY amount DESC
@@ -615,7 +676,7 @@ router.get("/fuel/detail", async (req, res) => {
         COALESCE(SUM(amount), 0)::numeric as amount,
         COUNT(*)::int as count
       FROM fuel_transactions 
-      WHERE LOWER(REPLACE(vehicle_number,  , )) LIKE LOWER($1)
+      WHERE LOWER(REPLACE(vehicle_number, ' ', '')) LIKE LOWER($1)
         AND transaction_date >= $2 AND transaction_date <= $3
     `, [veh, from, to]);
     
@@ -628,4 +689,223 @@ router.get("/fuel/detail", async (req, res) => {
   }
 });
 
+
+// Обновление существующего отчёта
+
+
+
+// Подсказка водителей по машине и датам
+router.get("/driver-suggestions", async (req, res) => {
+  const { vehicle, from, to } = req.query;
+  if (!vehicle || !from || !to) {
+    return res.json({ drivers: [] });
+  }
+  try {
+    const result = await pool.query(`
+      SELECT DISTINCT driver_name, COUNT(*) as trips
+      FROM trips 
+      WHERE normalize_vehicle_number(vehicle_number) = normalize_vehicle_number($1)
+        AND loading_date >= $2 AND loading_date <= $3
+        AND driver_name IS NOT NULL AND driver_name != ''
+      GROUP BY driver_name
+      ORDER BY trips DESC
+      LIMIT 5
+    `, [vehicle, from, to]);
+    res.json({ drivers: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// Подсказка машин по водителю
+router.get("/vehicle-suggestions", async (req, res) => {
+  const { driver, from, to } = req.query;
+  if (!driver) {
+    return res.json({ vehicles: [] });
+  }
+  try {
+    const result = await pool.query(`
+      SELECT MAX(vehicle_number) as vehicle_number, SUM(cnt) as trips FROM (
+        SELECT normalize_vehicle_number(vehicle_number) as norm, MAX(vehicle_number) as vehicle_number, COUNT(*) as cnt
+        FROM trips 
+        WHERE driver_name ILIKE $1
+          AND ($2::date IS NULL OR loading_date >= $2)
+          AND ($3::date IS NULL OR loading_date <= $3)
+          AND vehicle_number IS NOT NULL AND vehicle_number != ''
+        GROUP BY norm
+        UNION ALL
+        SELECT normalize_vehicle_number(vehicle_number) as norm, MAX(vehicle_number) as vehicle_number, COUNT(*) as cnt
+        FROM contracts 
+        WHERE driver_name ILIKE $1
+          AND ($2::date IS NULL OR date >= $2)
+          AND ($3::date IS NULL OR date <= $3)
+          AND vehicle_number IS NOT NULL AND vehicle_number != ''
+        GROUP BY norm
+      ) combined
+      GROUP BY norm
+      ORDER BY trips DESC
+      LIMIT 5
+    `, ['%' + driver + '%', from || null, to || null]);
+    res.json({ vehicles: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+
+// Детальные транзакции топлива
+router.get("/fuel/transactions", async (req, res) => {
+  const { vehicle, from, to } = req.query;
+  if (!vehicle || !from || !to) {
+    return res.status(400).json({ error: "vehicle, from, to required" });
+  }
+  
+  try {
+    const veh = "%" + vehicle + "%";
+    
+    const result = await pool.query(`
+      SELECT 
+        transaction_date as date,
+        source,
+        quantity as liters,
+        amount,
+        card_number
+      FROM fuel_transactions 
+      WHERE LOWER(REPLACE(vehicle_number, ' ', '')) LIKE LOWER($1)
+        AND transaction_date >= $2 AND transaction_date <= $3
+      ORDER BY transaction_date
+    `, [veh, from, to]);
+    
+    res.json({ transactions: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+
+// Удаление отчёта
+router.delete("/:id", async (req, res) => {
+  const { id } = req.params;
+  
+  if (!id) {
+    return res.status(400).json({ error: "id is required" });
+  }
+  
+  try {
+    await pool.query(`DELETE FROM driver_reports WHERE id = $1`, [id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Delete error:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 module.exports = router;
+module.exports.IMEI_MAP = IMEI_MAP;
+
+// === ТАРИФЫ WB ===
+
+// GET /reports/tariffs/rates - список тарифов
+router.get("/tariffs/rates", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT id, route_name, rate_per_trip, is_active FROM route_rates ORDER BY route_name");
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// POST /reports/tariffs/create - создать тариф
+router.post("/tariffs/create", async (req, res) => {
+  try {
+    const { route_name, rate_per_trip, is_active } = req.body;
+    const result = await pool.query(
+      "INSERT INTO route_rates (route_name, rate_per_trip, is_active) VALUES ($1, $2, $3) RETURNING *",
+      [route_name, rate_per_trip || 0, is_active !== false]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// PATCH /reports/tariffs/:id - обновить тариф
+router.patch("/tariffs/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { route_name, rate_per_trip, is_active } = req.body;
+    const sets = [];
+    const values = [];
+    let idx = 1;
+    if (route_name !== undefined) { sets.push(`route_name = $${idx++}`); values.push(route_name); }
+    if (rate_per_trip !== undefined) { sets.push(`rate_per_trip = $${idx++}`); values.push(rate_per_trip); }
+    if (is_active !== undefined) { sets.push(`is_active = $${idx++}`); values.push(is_active); }
+    if (sets.length === 0) return res.json({});
+    values.push(id);
+    const result = await pool.query(`UPDATE route_rates SET ${sets.join(", ")} WHERE id = $${idx} RETURNING *`, values);
+    res.json(result.rows[0] || {});
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// DELETE /reports/tariffs/:id - удалить тариф
+router.delete("/tariffs/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query("DELETE FROM route_rates WHERE id = $1", [id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// Уровень топлива в баке на момент времени
+router.get("/telematics/fuel-level", async (req, res) => {
+  const { vehicle, datetime } = req.query;
+  if (!vehicle || !datetime) {
+    return res.status(400).json({ error: "Missing params: vehicle, datetime" });
+  }
+  
+  try {
+    const normalized = normalizeVehicle(vehicle);
+    const imei = IMEI_MAP[normalized];
+    
+    if (!imei) {
+      return res.json({ level: null, error: "IMEI not found", hasSensor: false });
+    }
+    
+    // Конвертируем MSK → UTC (datetime в московском времени)
+    // Запрашиваем на короткий период (1 минута) чтобы получить уровень на момент
+    const fromDate = new Date(datetime + ":00+03:00"); // MSK
+    const toDate = new Date(fromDate.getTime() + 60000); // +1 минута
+    const fromUtc = fromDate.toISOString().slice(0, 19) + "Z";
+    const toUtc = toDate.toISOString().slice(0, 19) + "Z";
+    
+    const fetch = require("node-fetch");
+    const auth = Buffer.from("btl43api:p5318").toString("base64");
+    const url = `http://lserver43.ru:8091/do.calc.vars?imei=${imei}&vars=FuelLevel&from=${fromUtc}&to=${toUtc}`;
+    
+    const response = await fetch(url, {
+      headers: { "Authorization": "Basic " + auth }
+    });
+    const data = await response.json();
+    
+    if (data.result?.values?.[0]?.vars?.[0]?.varValue) {
+      const val = data.result.values[0].vars[0].varValue;
+      if (val === "-" || val === "Undefined") {
+        return res.json({ level: null, hasSensor: false, message: "Датчик топлива не установлен" });
+      }
+      const level = parseFloat(String(val).replace(",", "."));
+      // Если уровень <= 0 — считаем что датчика нет
+      if (level <= 0) {
+        return res.json({ level: null, hasSensor: false, message: "Датчик топлива не установлен" });
+      }
+      return res.json({ level: Math.round(level), hasSensor: true, imei });
+    }
+    
+    res.json({ level: null, hasSensor: false, message: "Нет данных" });
+  } catch (err) {
+    res.status(500).json({ error: String(err), hasSensor: false });
+  }
+});

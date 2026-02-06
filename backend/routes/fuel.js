@@ -48,7 +48,7 @@ router.post("/preview", upload.single("file"), async (req, res) => {
     else if (source === "ТК Движение") result = await previewTKDvizhenie(data, source);
     else result = await previewE100(data, source);
     fs.unlinkSync(req.file.path);
-    res.json(result);
+    result = await enrichPreviewWithDriverVehicles(result); res.json(result);
   } catch (err) { res.status(500).json({ success: false, message: String(err) }); }
 });
 
@@ -386,33 +386,88 @@ async function parseE100Detailed(data, source) {
 async function parseTatneftDetailed(data, source) {
   var imported = 0, duplicates = 0, errors = 0;
   var errorDetails = [], duplicateDetails = [];
+  var currentCard = null;
   
-  for (var i = 2; i < data.length; i++) {
-    var row = data[i]; 
-    if (!row || row.length < 15) { errors++; errorDetails.push({ row: i+1, reason: "Недостаточно колонок" }); continue; }
-    try {
-      var dateVal = row[0], cardNumber = String(row[1] || "").trim(), holder = String(row[2] || "");
-      var station = String(row[9] || ""), fuelType = String(row[10] || "ДТ");
-      var quantity = parseFloat(row[11]) || 0, price = parseFloat(row[13]) || 0, amount = parseFloat(row[14]) || 0;
-      var transactionDate = parseExcelDate(dateVal);
+  // Определяем формат: новый (Оборот по картам) или старый
+  var isNewFormat = false;
+  for (var i = 0; i < Math.min(10, data.length); i++) {
+    var row = data[i];
+    if (row && row[1] && String(row[1]).includes("Оборот по картам")) {
+      isNewFormat = true;
+      break;
+    }
+  }
+  
+  console.log("Татнефть формат:", isNewFormat ? "новый" : "старый");
+  
+  if (isNewFormat) {
+    for (var i = 0; i < data.length; i++) {
+      var row = data[i];
+      if (!row) continue;
       
-      if (!transactionDate) { errors++; errorDetails.push({ row: i+1, reason: "Неверная дата" }); continue; }
-      if (quantity <= 0) { errors++; errorDetails.push({ row: i+1, reason: "Количество <= 0" }); continue; }
+      var col1 = row[1];
       
-      if (await checkDuplicate(source, cardNumber, transactionDate, amount)) {
-        duplicates++;
-        duplicateDetails.push({ row: i+1, card: cardNumber, date: transactionDate, amount: amount });
+      // Номер карты — 16 цифр
+      if (typeof col1 === "string" && /^\d{16}$/.test(col1.trim())) {
+        currentCard = col1.trim();
         continue;
       }
       
-      var vehicleNumber = await findVehicleByCard(cardNumber, source);
-      if (!vehicleNumber) { var m = holder.match(/:\s*[А-Яа-яA-Za-z]+\/(\d+)/); if (m) vehicleNumber = await findVehicleByInternal(m[1]); }
+      var dateVal = col1;
+      var qty = row[4];
+      var price = row[6];
+      var amount = row[7];
+      var station = row[9] || "";
       
-      await pool.query("INSERT INTO fuel_transactions (source, card_number, vehicle_number, driver_name, transaction_date, fuel_type, quantity, price_per_liter, amount, station_name) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", 
-        [source, cardNumber, vehicleNumber, null, transactionDate, fuelType, quantity, price, amount, station]);
-      await autoCreateCard(cardNumber, source, vehicleNumber, null, holder);
-      imported++;
-    } catch (err) { errors++; errorDetails.push({ row: i+1, reason: String(err).substring(0, 100) }); }
+      if (typeof dateVal === "number" && dateVal > 40000 && dateVal < 50000 && qty && currentCard) {
+        var transactionDate = parseExcelDate(dateVal);
+        var quantity = Math.abs(parseFloat(qty) || 0);
+        var totalAmount = Math.abs(parseFloat(amount) || 0);
+        var priceVal = parseFloat(price) || 0;
+        
+        if (!transactionDate) { errors++; errorDetails.push({ row: i+1, reason: "Неверная дата: " + dateVal }); continue; }
+        if (quantity <= 0) { errors++; errorDetails.push({ row: i+1, reason: "Количество <= 0" }); continue; }
+        
+        if (await checkDuplicate(source, currentCard, transactionDate, totalAmount)) {
+          duplicates++; duplicateDetails.push({ row: i+1, card: currentCard, date: transactionDate, amount: totalAmount }); continue;
+        }
+        
+        var vehicleNumber = await findVehicleByCard(currentCard, source);
+        
+        try {
+          await pool.query("INSERT INTO fuel_transactions (source, card_number, vehicle_number, driver_name, transaction_date, fuel_type, quantity, price_per_liter, amount, station_name) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", 
+            [source, currentCard, vehicleNumber, null, transactionDate, "ДТ", quantity, priceVal, totalAmount, String(station)]);
+          await autoCreateCard(currentCard, source, vehicleNumber, null, null);
+          imported++;
+        } catch (err) { errors++; errorDetails.push({ row: i+1, reason: String(err).substring(0, 100) }); }
+      }
+    }
+  } else {
+    for (var i = 2; i < data.length; i++) {
+      var row = data[i]; 
+      if (!row || row.length < 15) { errors++; errorDetails.push({ row: i+1, reason: "Недостаточно колонок" }); continue; }
+      try {
+        var dateVal = row[0], cardNumber = String(row[1] || "").trim(), holder = String(row[2] || "");
+        var station = String(row[9] || ""), fuelType = String(row[10] || "ДТ");
+        var quantity = parseFloat(row[11]) || 0, price = parseFloat(row[13]) || 0, amount = parseFloat(row[14]) || 0;
+        var transactionDate = parseExcelDate(dateVal);
+        
+        if (!transactionDate) { errors++; errorDetails.push({ row: i+1, reason: "Неверная дата" }); continue; }
+        if (quantity <= 0) { errors++; errorDetails.push({ row: i+1, reason: "Количество <= 0" }); continue; }
+        
+        if (await checkDuplicate(source, cardNumber, transactionDate, amount)) {
+          duplicates++; duplicateDetails.push({ row: i+1, card: cardNumber, date: transactionDate, amount: amount }); continue;
+        }
+        
+        var vehicleNumber = await findVehicleByCard(cardNumber, source);
+        if (!vehicleNumber) { var m = holder.match(/:\s*[А-Яа-яA-Za-z]+\/(\d+)/); if (m) vehicleNumber = await findVehicleByInternal(m[1]); }
+        
+        await pool.query("INSERT INTO fuel_transactions (source, card_number, vehicle_number, driver_name, transaction_date, fuel_type, quantity, price_per_liter, amount, station_name) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", 
+          [source, cardNumber, vehicleNumber, null, transactionDate, fuelType, quantity, price, amount, station]);
+        await autoCreateCard(cardNumber, source, vehicleNumber, null, holder);
+        imported++;
+      } catch (err) { errors++; errorDetails.push({ row: i+1, reason: String(err).substring(0, 100) }); }
+    }
   }
   return { imported, duplicates, errors, errorDetails: errorDetails.slice(0, 20), duplicateDetails: duplicateDetails.slice(0, 20) };
 }
@@ -497,4 +552,41 @@ async function parseTKDvizhenieDetailed(data, source) {
     } catch (err) { errors++; errorDetails.push({ row: i+1, reason: String(err).substring(0, 100) }); }
   }
   return { imported, duplicates, errors, errorDetails: errorDetails.slice(0, 20), duplicateDetails: duplicateDetails.slice(0, 20) };
+}
+
+// Вспомогательная функция: найти машины водителя
+async function findDriverVehicles(driverName) {
+  if (!driverName) return [];
+  try {
+    const result = await pool.query(`
+      SELECT DISTINCT vehicle_number, MAX(date_to) as last_date
+      FROM driver_reports 
+      WHERE driver_name ILIKE $1
+        AND vehicle_number IS NOT NULL AND vehicle_number != 
+      GROUP BY vehicle_number
+      ORDER BY last_date DESC
+      LIMIT 3
+    `, ["%" + driverName.trim() + "%"]);
+    return result.rows.map(r => r.vehicle_number);
+  } catch (e) {
+    return [];
+  }
+}
+
+// Обогатить превью машинами водителей  
+async function enrichPreviewWithDriverVehicles(result) {
+  if (!result.cards) return result;
+  
+  for (const card of result.cards) {
+    // Если есть водитель, но нет машины — ищем машины водителя
+    if (card.driver_name && !card.vehicle_number && !card.vehicle_hint) {
+      const vehicles = await findDriverVehicles(card.driver_name);
+      if (vehicles.length > 0) {
+        card.driver_vehicles = vehicles;
+        card.vehicle_hint = vehicles[0]; // Предлагаем последнюю
+      }
+    }
+  }
+  
+  return result;
 }
