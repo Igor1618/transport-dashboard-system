@@ -210,6 +210,11 @@ export default function NewReportPage() {
                 setWbTrips(details.wb_trips_data);
                 console.log('[LOAD] wb_trips_data:', details.wb_trips_data.length, 'trips');
               }
+              // Восстановление заявок РФ
+              if (details.rf_contracts_data && Array.isArray(details.rf_contracts_data)) {
+                setRfContracts(details.rf_contracts_data);
+                console.log('[LOAD] rf_contracts_data:', details.rf_contracts_data.length, 'contracts');
+              }
               // Восстановление топлива по источникам
               if (details.fuel_by_source && Array.isArray(details.fuel_by_source)) {
                 setFuelBySource(details.fuel_by_source);
@@ -479,14 +484,21 @@ export default function NewReportPage() {
         console.log('[loadRfGps] FuelLevel start:', startData, 'end:', endData);
         
         // Не перезаписываем если уже заполнено вручную
-        if (startData.hasSensor && startData.level > 0 && !rfFuelStartTank) {
+        if (startData.hasSensor && startData.level >= 0 && !rfFuelStartTank) {
           setRfFuelStartTank(startData.level);
         }
         if (!startData.hasSensor && !rfFuelStartTank) {
           setHasFuelSensor(false);
         }
-        if (endData.hasSensor && endData.level > 0 && !rfFuelEndTank) {
+        if (endData.hasSensor && endData.level >= 0 && !rfFuelEndTank) {
           setRfFuelEndTank(endData.level);
+        }
+        // Устанавливаем также общие остатки в баке
+        if (startData.hasSensor && startData.level >= 0 && !fuelStartTank) {
+          setFuelStartTank(startData.level);
+        }
+        if (endData.hasSensor && endData.level >= 0 && !fuelEndTank) {
+          setFuelEndTank(endData.level);
         }
         setHasFuelSensor(startData.hasSensor || endData.hasSensor);
       } catch (e) {
@@ -591,6 +603,24 @@ export default function NewReportPage() {
         const fuelData = await fuelRes.json();
         setFuelBySource(fuelData.by_source || []);
         setFuelTotal(fuelData.total || { liters: 0, amount: 0, count: 0 });
+        
+        // Остатки в баке по датчику
+        try {
+          const [startFuelRes, endFuelRes] = await Promise.all([
+            fetch(`/api/reports/telematics/fuel-level?vehicle=${encodeURIComponent(vehicleNumber)}&datetime=${dateFrom}`),
+            fetch(`/api/reports/telematics/fuel-level?vehicle=${encodeURIComponent(vehicleNumber)}&datetime=${dateTo}`)
+          ]);
+          const startFuel = await startFuelRes.json();
+          const endFuel = await endFuelRes.json();
+          console.log('[autoFill] FuelLevel start:', startFuel, 'end:', endFuel);
+          if (startFuel.hasSensor && startFuel.level >= 0 && !fuelStartTank) {
+            setFuelStartTank(startFuel.level);
+          }
+          if (endFuel.hasSensor && endFuel.level >= 0 && !fuelEndTank) {
+            setFuelEndTank(endFuel.level);
+          }
+          setHasFuelSensor(startFuel.hasSensor || endFuel.hasSensor);
+        } catch (e) { console.error('[autoFill] FuelLevel error:', e); }
       }
     } catch (err) { console.error(err); }
     setAutoLoading(false);
@@ -715,7 +745,7 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
           date: p.register_date?.split('T')[0] || '',
           amount: Number(p.amount),
           type: 'salary',
-          description: `Реестр №${p.register_number}`
+          description: `Реестр №${p.register_number}${p.payment_purpose ? ' — ' + p.payment_purpose : ''}`
         }));
         setPayments([...payments, ...newPayments]);
         alert(`Загружено ${data.payments.length} выплат на сумму ${data.total.toLocaleString()} ₽`);
@@ -801,6 +831,7 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
           wb_trips: wbTotals.count,
           wb_trips_data: wbTrips, // Массив рейсов WB для восстановления
           fuel_by_source: fuelBySource, // Топливо по источникам
+          rf_contracts_data: rfContracts, // Заявки РФ для восстановления
           wb_gps_mileage: wbGpsMileage,
           wb_days: wbDays,
           gps_mileage: gpsMileage,
