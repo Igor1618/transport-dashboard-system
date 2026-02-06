@@ -72,13 +72,13 @@ function normalizeVehicle(v) {
 // Список водителей
 router.post("/save", async (req, res) => {
   const { driver_name, vehicle_number, date_from, date_to, mileage, fuel_quantity, fuel_amount, total_expenses, driver_accruals, driver_payments, rf_periods, user_name, vehicle_type, season, rate_per_km,
-    rf_mileage, rf_rate, rf_days, rf_daily_rate, rf_fuel_start, rf_fuel_end, fuel_rf, wb_totals, bonus_enabled, bonus_rate, wb_rate, wb_trips, extra_works, expenses, payments, comment } = req.body;
+    rf_mileage, rf_rate, rf_days, rf_daily_rate, rf_fuel_start, rf_fuel_end, fuel_rf, wb_totals, bonus_enabled, bonus_rate, wb_rate, wb_trips, wb_trips_data, fuel_by_source, wb_gps_mileage, wb_days, gps_mileage, extra_works, expenses, payments, comment } = req.body;
   
   try {
     const numResult = await pool.query(`SELECT COALESCE(MAX(CAST(number AS INTEGER)), 0) + 1 as next FROM driver_reports WHERE number ~ '^[0-9]+$'`);
     const number = String(numResult.rows[0].next).padStart(9, "0");
     
-    const expense_categories = JSON.stringify({ rf_mileage, rf_rate, rf_days, rf_daily_rate, rf_fuel_start, rf_fuel_end, fuel_rf, wb_totals, bonus_enabled, bonus_rate, wb_rate, wb_trips, extra_works, expenses, payments, comment });
+    const expense_categories = JSON.stringify({ rf_mileage, rf_rate, rf_days, rf_daily_rate, rf_fuel_start, rf_fuel_end, fuel_rf, wb_totals, bonus_enabled, bonus_rate, wb_rate, wb_trips, wb_trips_data, fuel_by_source, wb_gps_mileage, wb_days, gps_mileage, extra_works, expenses, payments, comment });
     
     await pool.query(`
       INSERT INTO driver_reports (id, number, driver_name, vehicle_number, date_from, date_to, mileage, fuel_quantity, fuel_amount, total_expenses, driver_accruals, driver_payments, rf_periods, vehicle_type, season, rate_per_km, expense_categories, created_by, updated_by, synced_at)
@@ -95,14 +95,14 @@ router.post("/save", async (req, res) => {
 router.post("/update", async (req, res) => {
   console.log("[UPDATE] Body:", JSON.stringify(req.body, null, 2));
   const { id, user_name, driver_name, vehicle_number, date_from, date_to, mileage, fuel_quantity, fuel_amount, total_expenses, driver_accruals, driver_payments, rf_periods, vehicle_type, season, rate_per_km, fuel_start, fuel_end,
-    rf_mileage, rf_rate, rf_days, rf_daily_rate, rf_fuel_start, rf_fuel_end, fuel_rf, wb_totals, bonus_enabled, bonus_rate, wb_rate, wb_trips, extra_works, expenses, payments, comment } = req.body;
+    rf_mileage, rf_rate, rf_days, rf_daily_rate, rf_fuel_start, rf_fuel_end, fuel_rf, wb_totals, bonus_enabled, bonus_rate, wb_rate, wb_trips, wb_trips_data, fuel_by_source, wb_gps_mileage, wb_days, gps_mileage, extra_works, expenses, payments, comment } = req.body;
   
   if (!id) {
     return res.status(400).json({ error: "id is required" });
   }
   
   try {
-    const expense_categories = JSON.stringify({ rf_mileage, rf_rate, rf_days, rf_daily_rate, rf_fuel_start, rf_fuel_end, fuel_rf, wb_totals, bonus_enabled, bonus_rate, wb_rate, wb_trips, extra_works, expenses, payments, comment });
+    const expense_categories = JSON.stringify({ rf_mileage, rf_rate, rf_days, rf_daily_rate, rf_fuel_start, rf_fuel_end, fuel_rf, wb_totals, bonus_enabled, bonus_rate, wb_rate, wb_trips, wb_trips_data, fuel_by_source, wb_gps_mileage, wb_days, gps_mileage, extra_works, expenses, payments, comment });
     
     await pool.query(`
       UPDATE driver_reports SET
@@ -400,7 +400,9 @@ router.get("/contracts-rf", async (req, res) => {
         c.date,
         c.vehicle_number,
         c.route,
-        c.amount
+        c.amount,
+        c.loading_date,
+        c.unloading_date
       FROM contracts c
       ${whereClause}
       ORDER BY c.date
@@ -623,7 +625,9 @@ router.get("/contracts-rf-v2", async (req, res) => {
         TO_CHAR(c.date, 'YYYY-MM-DD') as date,
         c.vehicle_number,
         c.route,
-        c.amount
+        c.amount,
+        c.loading_date,
+        c.unloading_date
       FROM contracts c
       ${whereClause}
       ORDER BY c.date
