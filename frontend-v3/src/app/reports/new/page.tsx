@@ -21,6 +21,7 @@ export default function NewReportPage() {
   const router = useRouter();
   const reportId = params?.id as string | undefined;
   const isEditMode = reportId && reportId !== 'new';
+  const [fullReportId, setFullReportId] = useState<string | undefined>(reportId);
   const [reportLoaded, setReportLoaded] = useState(false); // Флаг: отчёт загружен из БД, блокируем авто-расчёты
   
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -159,11 +160,12 @@ export default function NewReportPage() {
     // Загрузка существующего отчёта в режиме редактирования
     if (isEditMode && reportId) {
       console.log('[LOAD] START - reportId:', reportId);
-      fetch(`/rest/v1/driver_reports?id=eq.${reportId}`)
+      fetch(`/rest/v1/driver_reports?id=like.${reportId}*`)
         .then(r => r.json())
         .then(async (data) => {
           if (data?.[0]) {
             const r = data[0];
+            setFullReportId(r.id); // Сохраняем полный UUID
             setDriverName(r.driver_name || ""); setDriverSearch(r.driver_name || "");
             setVehicleNumber(r.vehicle_number || ""); setVehicleSearch(r.vehicle_number || "");
             // Конвертируем даты в формат datetime-local (добавляем время)
@@ -797,7 +799,7 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
       const res = await fetch(url, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: isEditMode ? reportId : undefined, // Для update
+          id: isEditMode ? fullReportId : undefined, // Для update (полный UUID)
           user_name: user?.full_name || 'Неизвестно',
           driver_name: driverName, 
           vehicle_number: vehicleNumber,
@@ -865,7 +867,7 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
     if (!isEditMode || !reportId) return;
     if (!confirm("Удалить отчёт? Это действие нельзя отменить.")) return;
     try {
-      const res = await fetch(`/api/reports/delete/${reportId}`, { method: "DELETE" });
+      const res = await fetch(`/api/reports/delete/${fullReportId}`, { method: "DELETE" });
       const data = await res.json();
       if (data.success) { alert("Отчёт удалён"); window.location.href = "/reports"; }
       else alert("Ошибка: " + data.error);
