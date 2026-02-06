@@ -158,6 +158,7 @@ export default function NewReportPage() {
     
     // Загрузка существующего отчёта в режиме редактирования
     if (isEditMode && reportId) {
+      console.log('[LOAD] START - reportId:', reportId);
       fetch(`/rest/v1/driver_reports?id=eq.${reportId}`)
         .then(r => r.json())
         .then(async (data) => {
@@ -176,13 +177,20 @@ export default function NewReportPage() {
             // Загрузка сохранённых периодов РФ и типа машины
             if (r.rf_periods && Array.isArray(r.rf_periods) && r.rf_periods.length > 0) {
               setRfPeriods(r.rf_periods);
+              // Пересчитываем общий пробег из периодов (если rf_mileage не сохранён)
+              const totalFromPeriods = r.rf_periods.reduce((sum: number, p: any) => sum + (Number(p.mileage) || 0), 0);
+              console.log('[LOAD] rf_periods total mileage:', totalFromPeriods);
+              if (totalFromPeriods > 0) setRfGpsMileage(totalFromPeriods);
             }
             if (r.vehicle_type) setSelectedVehicleType(r.vehicle_type);
             if (r.season) setSelectedSeason(r.season);
             if (r.rate_per_km) setRfRatePerKm(Number(r.rate_per_km));
             // Детали из expense_categories
             const details = r.expense_categories;
+            console.log('[LOAD] r.mileage:', r.mileage, 'r.rate_per_km:', r.rate_per_km);
+            console.log('[LOAD] details:', details);
             if (details && typeof details === 'object' && !Array.isArray(details)) {
+              console.log('[LOAD] rf_mileage:', details.rf_mileage, 'rf_rate:', details.rf_rate);
               if (details.rf_rate) setRfRatePerKm(details.rf_rate);
               if (details.rf_mileage) setRfGpsMileage(details.rf_mileage);
               if (details.rf_days) { setRfDays(details.rf_days); setRfDaysManual(true); }
@@ -197,6 +205,20 @@ export default function NewReportPage() {
               if (details.expenses) setExpenses(details.expenses);
               if (details.payments) setPayments(details.payments);
               if (details.comment) setComment(details.comment);
+              // Восстановление WB рейсов
+              if (details.wb_trips_data && Array.isArray(details.wb_trips_data)) {
+                setWbTrips(details.wb_trips_data);
+                console.log('[LOAD] wb_trips_data:', details.wb_trips_data.length, 'trips');
+              }
+              // Восстановление топлива по источникам
+              if (details.fuel_by_source && Array.isArray(details.fuel_by_source)) {
+                setFuelBySource(details.fuel_by_source);
+                console.log('[LOAD] fuel_by_source:', details.fuel_by_source.length, 'sources');
+              }
+              // Восстановление GPS/WB данных
+              if (details.wb_gps_mileage) setWbGpsMileage(details.wb_gps_mileage);
+              if (details.wb_days) setWbDays(details.wb_days);
+              if (details.gps_mileage) setGpsMileage(details.gps_mileage);
             }
             // НЕ перезагружаем данные для существующего отчёта — используем сохранённые!
             // Загружаем только данные машины для норм (если vehicle_type не сохранён)
@@ -777,6 +799,11 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
           bonus_rate: bonusRate,
           wb_rate: Number(wbTotals.driver_rate) || 0,
           wb_trips: wbTotals.count,
+          wb_trips_data: wbTrips, // Массив рейсов WB для восстановления
+          fuel_by_source: fuelBySource, // Топливо по источникам
+          wb_gps_mileage: wbGpsMileage,
+          wb_days: wbDays,
+          gps_mileage: gpsMileage,
           extra_works: extraWorks,
           expenses: expenses,
           payments: payments,

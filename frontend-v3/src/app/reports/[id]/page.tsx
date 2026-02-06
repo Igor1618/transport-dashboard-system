@@ -205,6 +205,20 @@ export default function NewReportPage() {
               if (details.expenses) setExpenses(details.expenses);
               if (details.payments) setPayments(details.payments);
               if (details.comment) setComment(details.comment);
+              // Восстановление WB рейсов
+              if (details.wb_trips_data && Array.isArray(details.wb_trips_data)) {
+                setWbTrips(details.wb_trips_data);
+                console.log('[LOAD] wb_trips_data:', details.wb_trips_data.length, 'trips');
+              }
+              // Восстановление топлива по источникам
+              if (details.fuel_by_source && Array.isArray(details.fuel_by_source)) {
+                setFuelBySource(details.fuel_by_source);
+                console.log('[LOAD] fuel_by_source:', details.fuel_by_source.length, 'sources');
+              }
+              // Восстановление GPS/WB данных
+              if (details.wb_gps_mileage) setWbGpsMileage(details.wb_gps_mileage);
+              if (details.wb_days) setWbDays(details.wb_days);
+              if (details.gps_mileage) setGpsMileage(details.gps_mileage);
             }
             // НЕ перезагружаем данные для существующего отчёта — используем сохранённые!
             // Загружаем только данные машины для норм (если vehicle_type не сохранён)
@@ -785,6 +799,11 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
           bonus_rate: bonusRate,
           wb_rate: Number(wbTotals.driver_rate) || 0,
           wb_trips: wbTotals.count,
+          wb_trips_data: wbTrips, // Массив рейсов WB для восстановления
+          fuel_by_source: fuelBySource, // Топливо по источникам
+          wb_gps_mileage: wbGpsMileage,
+          wb_days: wbDays,
+          gps_mileage: gpsMileage,
           extra_works: extraWorks,
           expenses: expenses,
           payments: payments,
