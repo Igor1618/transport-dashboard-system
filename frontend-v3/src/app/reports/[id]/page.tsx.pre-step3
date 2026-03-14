@@ -7,7 +7,6 @@ import { ArrowLeft, Truck, User, Save, Loader2, Zap, Plus, Trash2, RefreshCw, Fu
 
 import type { Driver, Vehicle, WbTrip, RfContract, FuelBySource, Expense, Payment, ExtraWork, WorkType, ValidationResult, DriverSuggestion, VehicleSuggestion, RfPeriod, Relocation, WbPenalty, SalaryData, GpsCoverage, FuelTransaction, VehicleData, GpsDayMileage, Deduction, Fine, TariffRate, FuelTotals, FuelPeriod, WbTotals } from './types/report';
 import { normPlate } from './utils/report-helpers';
-import { useFuelCards } from './hooks/useFuelCards';
 
 export default function NewReportPage() {
   const params = useParams();
@@ -36,10 +35,14 @@ export default function NewReportPage() {
   
   const [driverSearch, setDriverSearch] = useState("");
   const [vehicleSearch, setVehicleSearch] = useState("");
-  // Fuel cards — isolated hook (prevents dark screen if cards API fails)
-  const fuelCards = useFuelCards(vehicleNumber);
-  const { vehicleCards, showCardModal, cardSearchQ, cardSearchResults, cardSearching, cardTxModal, cardTransactions } = fuelCards;
-  const { setShowCardModal, setCardSearchQ, setCardTxModal } = fuelCards;
+  // Fuel cards state
+  const [vehicleCards, setVehicleCards] = useState<any[]>([]);
+  const [showCardModal, setShowCardModal] = useState(false);
+  const [cardSearchQ, setCardSearchQ] = useState('');
+  const [cardSearchResults, setCardSearchResults] = useState<any[]>([]);
+  const [cardSearching, setCardSearching] = useState(false);
+  const [cardTxModal, setCardTxModal] = useState<any>(null);
+  const [cardTransactions, setCardTransactions] = useState<any[]>([]);
   // normPlate moved to ./utils/report-helpers.ts
   const [showDriverList, setShowDriverList] = useState(false);
   const [showVehicleList, setShowVehicleList] = useState(false);
@@ -860,8 +863,71 @@ export default function NewReportPage() {
   const totalExtraWorks = extraWorks.reduce((sum, w) => sum + ((Number(w.count) || 0) * (Number(w.rate) || 0)), 0); // Доп. работы (+)
   // RF начисления: ТОЛЬКО если есть периоды с реальными датами from/to
 
-  // Fuel card functions from useFuelCards hook
-  const { searchFuelCards, bindFuelCard, unbindFuelCard, loadCardTransactions, loadVehicleCards } = fuelCards;
+  // === Fuel Cards Functions (isolated, non-blocking) ===
+  const loadVehicleCards = async () => {
+    if (!vehicleNumber) return;
+    try {
+      const r = await fetch(`/api/fuel/cards/by-vehicle?vehicle=${encodeURIComponent(vehicleNumber)}`);
+      const d = await r.json();
+      setVehicleCards(d.cards || []);
+    } catch (e) { console.error('loadVehicleCards:', e); }
+  };
+
+  const searchFuelCards = async (q: string) => {
+    if (q.length < 3) { setCardSearchResults([]); return; }
+    setCardSearching(true);
+    try {
+      const r = await fetch(`/api/fuel/cards/search?q=${encodeURIComponent(q)}`);
+      const d = await r.json();
+      setCardSearchResults(d.cards || []);
+    } catch (e) { console.error('searchFuelCards:', e); }
+    setCardSearching(false);
+  };
+
+  const bindFuelCard = async (card: string, source: string) => {
+    try {
+      const r = await fetch('/api/fuel/cards/bind', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ card_number: card, source, vehicle_number: vehicleNumber })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        alert(`Карта привязана! Обновлено ${d.updated_transactions} транзакций (${Number(d.summary?.total_liters || 0).toFixed(0)} л)`);
+        setShowCardModal(false);
+        setCardSearchQ('');
+        setCardSearchResults([]);
+        loadVehicleCards();
+      }
+    } catch (e) { console.error('bindFuelCard:', e); }
+  };
+
+  const unbindFuelCard = async (card: string, source: string) => {
+    if (!confirm(`Отвязать карту ****${card.slice(-4)}?`)) return;
+    try {
+      const r = await fetch('/api/fuel/cards/unbind', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ card_number: card, source })
+      });
+      if (r.ok) loadVehicleCards();
+    } catch (e) { console.error('unbindFuelCard:', e); }
+  };
+
+  const loadCardTransactions = async (card: string, source: string) => {
+    setCardTxModal({ card, source });
+    try {
+      const r = await fetch(`/api/fuel/cards/transactions?card=${encodeURIComponent(card)}&source=${encodeURIComponent(source)}`);
+      const d = await r.json();
+      setCardTransactions(d.transactions || []);
+    } catch (e) { console.error('loadCardTransactions:', e); setCardTransactions([]); }
+  };
+
+  // Load fuel cards — separate useEffect, non-blocking
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (vehicleNumber) loadVehicleCards().catch(console.error);
+  }, [vehicleNumber]);
 
   const hasRfPeriods = rfPeriods.some(p => p.from && p.to);
   // Без периодов — нет РФ данных (даже если rf_mileage/rf_days сохранены в БД)
