@@ -36,10 +36,6 @@ export default function NewReportPage() {
   
   const [driverSearch, setDriverSearch] = useState("");
   const [vehicleSearch, setVehicleSearch] = useState("");
-  // Fuel cards — isolated hook (prevents dark screen if cards API fails)
-  const fuelCards = useFuelCards(vehicleNumber);
-  const { vehicleCards, showCardModal, cardSearchQ, cardSearchResults, cardSearching, cardTxModal, cardTransactions } = fuelCards;
-  const { setShowCardModal, setCardSearchQ, setCardTxModal } = fuelCards;
   // normPlate moved to ./utils/report-helpers.ts
   const [showDriverList, setShowDriverList] = useState(false);
   const [showVehicleList, setShowVehicleList] = useState(false);
@@ -51,6 +47,11 @@ export default function NewReportPage() {
   const [dateTo, setDateTo] = useState("");
   const [timeFrom, setTimeFrom] = useState("00:00");
   const [timeTo, setTimeTo] = useState("23:59");
+
+  // Fuel cards — isolated hook (prevents dark screen if cards API fails)
+  const fuelCards = useFuelCards(vehicleNumber);
+  const { vehicleCards, showCardModal, cardSearchQ, cardSearchResults, cardSearching, cardTxModal, cardTransactions } = fuelCards;
+  const { setShowCardModal, setCardSearchQ, setCardTxModal } = fuelCards;
   
   // Подсказки водителей/машин
   const [driverSuggestions, setDriverSuggestions] = useState<{driver_name: string; trips: number; source?: string}[]>([]);
