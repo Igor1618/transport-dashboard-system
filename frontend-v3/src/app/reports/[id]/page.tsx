@@ -8,6 +8,7 @@ import { ArrowLeft, Truck, User, Save, Loader2, Zap, Plus, Trash2, RefreshCw, Fu
 import type { Driver, Vehicle, WbTrip, RfContract, FuelBySource, Expense, Payment, ExtraWork, WorkType, ValidationResult, DriverSuggestion, VehicleSuggestion, RfPeriod, Relocation, WbPenalty, SalaryData, GpsCoverage, FuelTransaction, VehicleData, GpsDayMileage, Deduction, Fine, TariffRate, FuelTotals, FuelPeriod, WbTotals } from './types/report';
 import { normPlate } from './utils/report-helpers';
 import { useFuelCards } from './hooks/useFuelCards';
+import { useWbTrips } from './hooks/useWbTrips';
 import { FuelCardModals } from './components/FuelCardModals';
 import { DriverReportSection } from './components/DriverReportSection';
 import { TotalsSummary } from './components/TotalsSummary';
@@ -59,6 +60,13 @@ export default function NewReportPage() {
 
   // Fuel cards — isolated hook (prevents dark screen if cards API fails)
   const fuelCards = useFuelCards(vehicleNumber);
+  const {
+    wbTrips, setWbTrips, wbTotals, setWbTotals,
+    wbGpsMileage, setWbGpsMileage, wbDays, setWbDays,
+    excludedIdles, setExcludedIdles,
+    totalIdleData, fuelUsedWb, avgFuelConsumptionWb,
+    loadWbTrips, restoreWbData, resetWb, getUniqueDays,
+  } = useWbTrips(fuelWb);
   const { vehicleCards, showCardModal, cardSearchQ, cardSearchResults, cardSearching, cardTxModal, cardTransactions } = fuelCards;
   const { setShowCardModal, setCardSearchQ, setCardTxModal } = fuelCards;
   
@@ -66,10 +74,6 @@ export default function NewReportPage() {
   const [driverSuggestions, setDriverSuggestions] = useState<{driver_name: string; trips: number; source?: string}[]>([]);
   const [vehicleSuggestions, setVehicleSuggestions] = useState<{vehicle_number: string; trips: number}[]>([]);
   
-  const [wbTrips, setWbTrips] = useState<WbTrip[]>([]);
-  const [wbTotals, setWbTotals] = useState({count: 0, driver_rate: 0});
-  const [wbGpsMileage, setWbGpsMileage] = useState(0);
-  const [wbDays, setWbDays] = useState(0);
   
   const [rfContracts, setRfContracts] = useState<RfContract[]>([]);
   const [rfPeriods, setRfPeriods] = useState<{from: string; to: string; mileage: number}[]>([{from: "", to: "", mileage: 0}]);
@@ -110,7 +114,6 @@ export default function NewReportPage() {
   const [fuelWb, setFuelWb] = useState({ liters: 0, amount: 0 });
   const [fuelRf, setFuelRf] = useState({ liters: 0, amount: 0 });
   // Исключённые простои (индексы рейсов после которых простой)
-  const [excludedIdles, setExcludedIdles] = useState<Set<number>>(new Set());
   // Данные машины (тип, карты, нормы)
   const [vehicleData, setVehicleData] = useState<{id?: number; vehicle_type?: string; fuel_cards?: Record<string, string>; fuel_norm_winter?: number; fuel_norm_summer?: number; fuel_norm_autumn?: number}>({});
   const [editingCards, setEditingCards] = useState(false);
@@ -242,7 +245,6 @@ export default function NewReportPage() {
             // For approved reports: use total_mileage and wb_mileage as fallbacks
             if (r.status === 'approved') {
               if (r.total_mileage && !r.mileage) setGpsMileage(Number(r.total_mileage) || 0);
-              if (r.wb_mileage) setWbGpsMileage(Number(r.wb_mileage) || 0);
               if (r.total_mileage) setRfGpsMileage(Number(r.total_mileage) || 0);
             }
             setFuelTotal({ liters: r.fuel_quantity || 0, amount: r.fuel_amount || 0, count: 0 });
@@ -283,7 +285,6 @@ export default function NewReportPage() {
               if (details.rf_fuel_start) setRfFuelStartTank(details.rf_fuel_start);
               if (details.rf_fuel_end) setRfFuelEndTank(details.rf_fuel_end);
               if (details.fuel_rf) setFuelRf(details.fuel_rf);
-              if (details.wb_totals) setWbTotals(details.wb_totals);
               if (details.bonus_enabled !== undefined) setBonusEnabled(details.bonus_enabled);
               if (details.bonus_rate) setBonusRate(details.bonus_rate);
               if (details.extra_works) setExtraWorks(details.extra_works);
@@ -292,33 +293,10 @@ export default function NewReportPage() {
               if (details.fines) setFines(details.fines);
               if (details.relocations) setRelocations(details.relocations);
               if (details.wb_penalties) setWbPenalties(details.wb_penalties);
-              if (details.excluded_idle_trips) setExcludedIdles(new Set(details.excluded_idle_trips));
               if (details.payments) setPayments(details.payments);
               if (details.comment) setComment(details.comment);
               // Восстановление WB рейсов
-              if (details.wb_trips_data && Array.isArray(details.wb_trips_data) && details.wb_trips_data.length > 0) {
-                setWbTrips(details.wb_trips_data);
-                console.log('[LOAD] wb_trips_data:', details.wb_trips_data.length, 'trips');
-              } else if (r.driver_name && r.date_from && r.date_to) {
-                // No saved WB data — auto-fetch from API
-                console.log('[LOAD] No wb_trips_data, fetching from API...');
-                try {
-                  const bp = new URLSearchParams({ driver: r.driver_name, from: r.date_from, to: r.date_to });
-                  if (r.vehicle_number) bp.append("vehicle", r.vehicle_number);
-                  const wbR = await fetch(`/api/reports/trips-detail-v2?${bp}`);
-                  const wbD = await wbR.json();
-                  if (wbD.trips && wbD.trips.length > 0) {
-                    const sorted = [...wbD.trips].sort((a: any, b: any) => new Date(`${a.loading_date}T${a.loading_time || '00:00'}`).getTime() - new Date(`${b.loading_date}T${b.loading_time || '00:00'}`).getTime());
-                    setWbTrips(sorted);
-                    setWbTotals({ count: sorted.length, driver_rate: sorted.reduce((s: number, t: any) => s + parseFloat(t.driver_rate || 0), 0) });
-                    console.log('[LOAD] Fetched', sorted.length, 'WB trips from API');
-                  }
-                } catch (e) { console.warn('[LOAD] WB fetch error:', e); }
-              } else if (r.status === 'approved' && r.wb_mileage) {
-                // Approved report with no WB data saved and no live data - show stored totals
-                const wbRate = Number(details.wb_totals?.driver_rate) || Number(r.driver_accruals) || 0;
-                if (wbRate > 0) setWbTotals({ count: details.wb_totals?.count || 0, driver_rate: wbRate });
-              }
+              await restoreWbData(r, details);
               // Восстановление заявок РФ
               if (details.rf_contracts_data && Array.isArray(details.rf_contracts_data) && details.rf_contracts_data.length > 0) {
                 setRfContracts(details.rf_contracts_data);
@@ -347,8 +325,6 @@ export default function NewReportPage() {
                 console.log('[LOAD] fuel_by_source:', details.fuel_by_source.length, 'sources');
               }
               // Восстановление GPS/WB данных
-              if (details.wb_gps_mileage) setWbGpsMileage(details.wb_gps_mileage);
-              if (details.wb_days) setWbDays(details.wb_days);
               if (details.gps_mileage) setGpsMileage(details.gps_mileage);
             }
             // Загружаем данные машины для норм и типа
@@ -524,40 +500,7 @@ export default function NewReportPage() {
 
 
   // Расчёт общего простоя WB (с учётом исключений)
-  const totalIdleData = useMemo(() => {
-    let totalIdleHours = 0;
-    let paidHours = 0;
-    let totalIdleAmount = 0;
-    for (let i = 1; i < wbTrips.length; i++) {
-      if (excludedIdles.has(i)) continue; // Пропускаем исключённые
-      const prev = wbTrips[i-1];
-      const curr = wbTrips[i];
-      if (prev.unloading_date && prev.unloading_time && curr.loading_date && curr.loading_time) {
-        const prevEnd = new Date(`${prev.unloading_date}T${prev.unloading_time}`);
-        const currStart = new Date(`${curr.loading_date}T${curr.loading_time}`);
-        const idleHours = Math.round((currStart.getTime() - prevEnd.getTime()) / 3600000);
-        if (idleHours > 8) {
-          totalIdleHours += idleHours;
-          const paid = idleHours - 8;
-          paidHours += paid;
-          totalIdleAmount += paid * 100;
-        }
-      }
-    }
-    return { hours: totalIdleHours, paidHours, amount: totalIdleAmount };
-  }, [wbTrips, excludedIdles]);
 
-  const getUniqueDays = (trips: WbTrip[]): string[] => {
-    const days = new Set<string>();
-    trips.forEach(t => {
-      const start = new Date(t.loading_date);
-      const end = new Date(t.unloading_date || t.loading_date);
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        days.add(d.toISOString().slice(0, 10));
-      }
-    });
-    return Array.from(days).sort();
-  };
 
   const loadRfGps = async () => {
     if (!vehicleNumber) return;
@@ -711,7 +654,7 @@ export default function NewReportPage() {
     if (!driverName || !dateFrom || !dateTo) { alert("Выберите водителя и даты"); return; }
     
     setAutoLoading(true);
-    setWbTrips([]); setWbTotals({count: 0, driver_rate: 0}); setWbGpsMileage(0); setWbDays(0);
+    resetWb();
     setRfContracts([]);
     // NOTE: Не сбрасываем rfGpsMileage и rfPeriods — они берутся из сохранённого отчёта
     // setRfGpsMileage(0); setRfDateFrom(""); setRfDateTo("");
@@ -723,46 +666,8 @@ export default function NewReportPage() {
       if (vehicleNumber) baseParams.append("vehicle", vehicleNumber);
       
       // WB
-      const wbRes = await fetch(`/api/reports/trips-detail-v2?${baseParams}`);
-      let wbData = await wbRes.json();
-      // Vehicle fallback: if no trips with vehicle, retry by driver only
-      if ((!wbData.trips || wbData.trips.length === 0) && vehicleNumber && driverName) {
-        const fallbackParams = new URLSearchParams({ driver: driverName, from: dateFrom, to: dateTo });
-        const wbRes2 = await fetch(`/api/reports/trips-detail-v2?${fallbackParams}`);
-        const wbData2 = await wbRes2.json();
-        if (wbData2.trips?.length > 0) {
-          console.log('[WB] Vehicle fallback: found', wbData2.trips.length, 'trips by driver only');
-          wbData = wbData2;
-        }
-      }
-      
-      if (wbData.trips) {
-        // Сортировка по дате+времени погрузки для правильного расчёта простоев
-        const sortedTrips = [...wbData.trips].sort((a: WbTrip, b: WbTrip) => {
-          const dateA = new Date(`${a.loading_date}T${a.loading_time || '00:00'}`);
-          const dateB = new Date(`${b.loading_date}T${b.loading_time || '00:00'}`);
-          return dateA.getTime() - dateB.getTime();
-        });
-        setWbTrips(sortedTrips);
-        setWbTotals({
-          count: sortedTrips.length,
-          driver_rate: sortedTrips.reduce((s: number, t: WbTrip) => s + parseFloat(String(t.driver_rate || 0)), 0)
-        });
-        
-        if (vehicleNumber) {
-          const uniqueDays = getUniqueDays(wbData.trips);
-          setWbDays(uniqueDays.length);
-          if (uniqueDays.length > 0) {
-            const wbGpsRes = await fetch("/api/reports/telematics/mileage-by-dates", {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ vehicle: vehicleNumber, dates: uniqueDays })
-            });
-            const wbGpsData = await wbGpsRes.json();
-            setWbGpsMileage(wbGpsData.total || 0);
-          }
-        }
-      }
-      
+      await loadWbTrips({ driver: driverName, from: dateFrom, to: dateTo, vehicle: vehicleNumber || undefined });
+
       // РФ
       const rfRes = await fetch(`/api/reports/contracts-rf-v2?${baseParams}`);
       const rfData = await rfRes.json();
@@ -883,8 +788,6 @@ export default function NewReportPage() {
   const fuelUsedRf = fuelRf.liters || 0;
   const avgFuelConsumption = effectiveRfMileage > 0 && fuelUsedRf > 0 ? (fuelUsedRf / effectiveRfMileage * 100).toFixed(2) : "0";
   // Расход WB: топливо WB / пробег WB
-  const fuelUsedWb = fuelWb.liters;
-  const avgFuelConsumptionWb = wbGpsMileage > 0 && fuelUsedWb > 0 ? (fuelUsedWb / wbGpsMileage * 100).toFixed(2) : "0";
   const earnPerKm = effectiveRfMileage > 0 && !isNaN(totalToPay) ? (totalToPay / effectiveRfMileage).toFixed(2) : "0";
   
   // Расчёт топлива по периодам WB и РФ (только если есть транзакции)
@@ -1148,7 +1051,7 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
         // Полная очистка формы
         setDriverName(""); setDriverSearch(""); setVehicleNumber(""); setVehicleSearch("");
         setDateFrom(""); setDateTo(""); setDriverVehicles([]);
-        setWbTrips([]); setWbTotals({count: 0, driver_rate: 0}); setWbGpsMileage(0); setWbDays(0);
+        resetWb();
         setRfContracts([]); setRfGpsMileage(0); setRfDateFrom(""); setRfDateTo("");
         setGpsMileage(0); setFuelBySource([]); setFuelTotal({ liters: 0, amount: 0, count: 0 }); 
         setExpenses([]); setExtraWorks([]); setPayments([]);
