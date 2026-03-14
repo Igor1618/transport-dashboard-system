@@ -10,6 +10,7 @@ import { normPlate } from './utils/report-helpers';
 import { useFuelCards } from './hooks/useFuelCards';
 import { useWbTrips } from './hooks/useWbTrips';
 import { useRfContracts } from './hooks/useRfContracts';
+import { useFuel } from './hooks/useFuel';
 import { FuelCardModals } from './components/FuelCardModals';
 import { DriverReportSection } from './components/DriverReportSection';
 import { TotalsSummary } from './components/TotalsSummary';
@@ -62,6 +63,22 @@ export default function NewReportPage() {
 
   // Fuel cards — isolated hook (prevents dark screen if cards API fails)
   const fuelCards = useFuelCards(vehicleNumber);
+  const fuel = useFuel(gpsMileage);
+  const {
+    fuelBySource, setFuelBySource, fuelTotal, setFuelTotal, fuelLoading,
+    fuelTransactions, setFuelTransactions, showFuelDetails, setShowFuelDetails,
+    editingCards, setEditingCards,
+    fuelStartTank, setFuelStartTank, fuelEndTank, setFuelEndTank,
+    hasFuelSensor, setHasFuelSensor, sensorLoading, setSensorLoading,
+    fuelUsed, avgFuelConsumptionTotal,
+    loadFuel: loadFuelHook, restoreFuelData, resetFuel,
+  } = fuel;
+
+  const loadFuel = () => loadFuelHook({
+    vehicleNumber, dateFrom, dateTo,
+    isDeleted, isEditMode: !!isEditMode, fullReportId,
+    userName: user?.full_name, rfPeriodsLength: rfPeriods.length, setFuelRf,
+  });
   const {
     wbTrips, setWbTrips, wbTotals, setWbTotals,
     wbGpsMileage, setWbGpsMileage, wbDays, setWbDays,
@@ -122,25 +139,15 @@ export default function NewReportPage() {
   const [gpsByDay, setGpsByDay] = useState<{date: string; km: number}[]>([]);
   
   // Топливо
-  const [fuelBySource, setFuelBySource] = useState<FuelBySource[]>([]);
-  const [fuelTotal, setFuelTotal] = useState({ liters: 0, amount: 0, count: 0 });
-  const [fuelLoading, setFuelLoading] = useState(false);
-  const [fuelTransactions, setFuelTransactions] = useState<{date: string; time?: string; source: string; liters: number; amount: number; card_number?: string}[]>([]);
-  const [showFuelDetails, setShowFuelDetails] = useState(false);
   // Топливо по периодам
   const [fuelWb, setFuelWb] = useState({ liters: 0, amount: 0 });
   const [fuelRf, setFuelRf] = useState({ liters: 0, amount: 0 });
   // Исключённые простои (индексы рейсов после которых простой)
   // Данные машины (тип, карты, нормы)
   const [vehicleData, setVehicleData] = useState<{id?: number; vehicle_type?: string; fuel_cards?: Record<string, string>; fuel_norm_winter?: number; fuel_norm_summer?: number; fuel_norm_autumn?: number}>({});
-  const [editingCards, setEditingCards] = useState(false);
   
   // Остатки топлива в баке (общие)
-  const [fuelStartTank, setFuelStartTank] = useState<number | "">(""); // Остаток на начало
-  const [fuelEndTank, setFuelEndTank] = useState<number | "">(""); // Остаток на конец
   // Остатки топлива для периода РФ
-  const [hasFuelSensor, setHasFuelSensor] = useState(false); // Есть датчик топлива
-  const [sensorLoading, setSensorLoading] = useState(false);
   
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [newExpenseName, setNewExpenseName] = useState("");
@@ -254,8 +261,6 @@ export default function NewReportPage() {
               if (r.total_mileage && !r.mileage) setGpsMileage(Number(r.total_mileage) || 0);
               if (r.total_mileage) setRfGpsMileage(Number(r.total_mileage) || 0);
             }
-            setFuelTotal({ liters: r.fuel_quantity || 0, amount: r.fuel_amount || 0, count: 0 });
-            setFuelStartTank(r.fuel_start || ""); setFuelEndTank(r.fuel_end || "");
             // Загрузка сохранённых периодов РФ и типа машины
             reportLoadedRef.current = true; // Mark loaded before setting state to prevent useEffect race
             // Детали из expense_categories
@@ -265,7 +270,6 @@ export default function NewReportPage() {
             if (details && typeof details === 'object' && !Array.isArray(details)) {
               console.log('[LOAD] rf_mileage:', details.rf_mileage, 'rf_rate:', details.rf_rate);
               if (details.gps_coverage_snapshot) setGpsCoverage(details.gps_coverage_snapshot);
-              if (details.fuel_rf) setFuelRf(details.fuel_rf);
               if (details.bonus_enabled !== undefined) setBonusEnabled(details.bonus_enabled);
               if (details.bonus_rate) setBonusRate(details.bonus_rate);
               if (details.extra_works) setExtraWorks(details.extra_works);
@@ -279,11 +283,7 @@ export default function NewReportPage() {
               // Восстановление WB рейсов
               await restoreWbData(r, details);
               await restoreRfData(r, details);
-              // Восстановление топлива по источникам
-              if (details.fuel_by_source && Array.isArray(details.fuel_by_source)) {
-                setFuelBySource(details.fuel_by_source);
-                console.log('[LOAD] fuel_by_source:', details.fuel_by_source.length, 'sources');
-              }
+              restoreFuelData(r, details);
               // Восстановление GPS/WB данных
               if (details.gps_mileage) setGpsMileage(details.gps_mileage);
             }
@@ -435,47 +435,6 @@ export default function NewReportPage() {
 
 
 
-  const loadFuel = async () => {
-    if (isDeleted) return;
-    if (!vehicleNumber || !dateFrom || !dateTo) return;
-    setFuelLoading(true);
-    try {
-      const [detailRes, transRes] = await Promise.all([
-        fetch(`/api/reports/fuel/detail?vehicle=${encodeURIComponent(vehicleNumber)}&from=${encodeURIComponent(dateFrom)}&to=${encodeURIComponent(dateTo)}`),
-        fetch(`/api/reports/fuel/transactions?vehicle=${encodeURIComponent(vehicleNumber)}&from=${encodeURIComponent(dateFrom)}&to=${encodeURIComponent(dateTo)}`)
-      ]);
-      const detailData = await detailRes.json();
-      const transData = await transRes.json();
-      setFuelBySource(detailData.by_source || []);
-      setFuelTotal(detailData.total || { liters: 0, amount: 0, count: 0 });
-      setFuelTransactions(transData.transactions || []);
-      
-      // Если нет отдельных периодов РФ — используем общее топливо как РФ
-      if (rfPeriods.length === 0 && detailData.total) {
-        setFuelRf({ liters: Number(detailData.total.liters) || 0, amount: Number(detailData.total.amount) || 0 });
-      }
-    } catch (e) { 
-      setFuelBySource([]); 
-      setFuelTotal({ liters: 0, amount: 0, count: 0 }); 
-      setFuelTransactions([]);
-    }
-    // Auto-update DB if editing existing report
-      if (isEditMode && fullReportId && detailData.total) {
-        try {
-          await fetch('/api/reports/update', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              id: fullReportId,
-              fuel_quantity: Number(detailData.total.liters) || 0,
-              fuel_amount: Number(detailData.total.amount) || 0,
-              user_name: user?.full_name || 'auto',
-            })
-          });
-        } catch (e) { console.warn('[fuel] auto-save error:', e); }
-      }
-    setFuelLoading(false);
-  };
 
   const handleAutoFill = async () => {
     if (!driverName || !dateFrom || !dateTo) { alert("Выберите водителя и даты"); return; }
@@ -486,7 +445,7 @@ export default function NewReportPage() {
     // NOTE: Не сбрасываем rfGpsMileage и rfPeriods — они берутся из сохранённого отчёта
     // setRfGpsMileage(0); setRfDateFrom(""); setRfDateTo("");
     setGpsMileage(0);
-    setFuelBySource([]); setFuelTotal({ liters: 0, amount: 0, count: 0 });
+    resetFuel();
     
     try {
       const baseParams = new URLSearchParams({ driver: driverName, from: dateFrom, to: dateTo });
@@ -599,10 +558,6 @@ export default function NewReportPage() {
   const totalDriverPay = (Number(wbTotals.driver_rate) || 0) + rfDriverPay + rfDailyPay + rfBonus + (totalIdleData.amount || 0) + relocationPay;
   const totalToPay = totalDriverPay + totalExpenses + totalExtraWorks - totalPayments - totalDeductions - totalFines;
   
-  // Средний расход топлива (с учётом остатков в баке)
-  const fuelUsed = fuelTotal.liters + (Number(fuelStartTank) || 0) - (Number(fuelEndTank) || 0);
-  // ОБЩИЙ расход: всё топливо / полный GPS пробег
-  const avgFuelConsumptionTotal = gpsMileage > 0 && fuelTotal.liters > 0 ? (fuelTotal.liters / gpsMileage * 100).toFixed(2) : gpsMileage === 0 && fuelTotal.liters > 0 ? "—" : "0";
   const earnPerKm = effectiveRfMileage > 0 && !isNaN(totalToPay) ? (totalToPay / effectiveRfMileage).toFixed(2) : "0";
   
   // Расчёт топлива по периодам WB и РФ (только если есть транзакции)
