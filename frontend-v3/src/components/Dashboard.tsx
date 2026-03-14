@@ -1,8 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { GpsSensorWidget } from "@/modules/dashboard/components/GpsSensorWidget";
+import { FleetWidget } from "@/components/FleetWidget";
 import { useQuery } from "@tanstack/react-query";
-import { TrendingUp, Truck, FileText, Fuel, DollarSign, Calendar, Package, MapPin, AlertTriangle, Route } from "lucide-react";
+import { useAuth } from "@/components/AuthProvider";
+import Link from "next/link";
+import { TrendingUp, TrendingDown, Truck, FileText, Fuel, DollarSign, Calendar, Package, MapPin, AlertTriangle, Route, ArrowUpRight, ArrowDownRight, Minus, Bell, ExternalLink } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
 
 const MONTHS = [
@@ -137,7 +141,27 @@ function formatKm(n: number) {
 
 const COLORS = { wb: "#a855f7", rf: "#22c55e" };
 
+// GpsSensorWidget вынесен в modules/dashboard/components/GpsSensorWidget.tsx
+
+const ROLE_HOME: Record<string, string> = {
+  mechanic_senior: '/dashboard/mechanic',
+  mechanic: '/maintenance',
+  dispatcher: '/dispatch/wb',
+  logist: '/dispatch/wb',
+  accountant: '/salary/summary',
+};
+
 export function Dashboard() {
+  const { user } = useAuth();
+  const isDirector = user?.role === 'director';
+
+  // Redirect non-director roles to their home page
+  React.useEffect(() => {
+    if (user?.role && ROLE_HOME[user.role]) {
+      window.location.replace(ROLE_HOME[user.role]);
+    }
+  }, [user?.role]);
+
   const now = new Date();
   const [mode, setMode] = useState<"month" | "range">("month");
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
@@ -210,11 +234,104 @@ export function Dashboard() {
     { name: "РФ Транспорт", value: stats.trfRevenue, color: COLORS.rf },
   ].filter(d => d.value > 0);
 
+  // KPI & Alerts
+  const { data: kpiData } = useQuery({
+    queryKey: ['dashboard-kpi'],
+    queryFn: () => fetch('/api/dashboard-api/kpi').then(r => r.json()),
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: alertsData } = useQuery({
+    queryKey: ['dashboard-alerts'],
+    queryFn: () => fetch('/api/dashboard-api/alerts').then(r => r.json()),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const fmtM = (n: number) => {
+    if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M ₽`;
+    if (Math.abs(n) >= 1_000) return `${Math.round(n / 1_000)}К ₽`;
+    return `${n.toLocaleString('ru-RU')} ₽`;
+  };
+  const changeIcon = (change: number) => {
+    if (Math.abs(change) < 1) return <Minus className="w-3 h-3 text-slate-500" />;
+    return change > 0 
+      ? <ArrowUpRight className="w-3 h-3 text-green-400" />
+      : <ArrowDownRight className="w-3 h-3 text-red-400" />;
+  };
+  const changeColor = (change: number, invert?: boolean) => {
+    if (Math.abs(change) < 1) return 'text-slate-500';
+    const positive = invert ? change < 0 : change > 0;
+    return positive ? 'text-green-400' : 'text-red-400';
+  };
+
   return (
     <div>
       <div className="mb-4 sm:mb-6">
         <h1 className="text-xl sm:text-2xl font-bold text-white">Дашборд</h1>
       </div>
+
+      {/* KPI Cards — финансы только для director */}
+      {kpiData?.kpi && (() => {
+        const cards = isDirector ? [
+          { label: 'Выручка', value: fmtM(kpiData.kpi.revenue.value), change: kpiData.kpi.revenue.change, icon: '💰' },
+          { label: 'Прибыль', value: fmtM(kpiData.kpi.profit.value), change: kpiData.kpi.profit.change, icon: '📈' },
+          { label: 'Загрузка', value: `${kpiData.kpi.utilization.value}%`, change: kpiData.kpi.utilization.change, icon: '🚛' },
+          { label: '₽/км', value: kpiData.kpi.revenue_per_km.value.toFixed(1), change: kpiData.kpi.revenue_per_km.change, icon: '🛣' },
+        ] : [
+          { label: 'Машин активных', value: String(kpiData.kpi.active_vehicles?.value ?? stats.vehicles ?? 0), change: 0, icon: '🚛' },
+          { label: 'Загрузка парка', value: `${kpiData.kpi.utilization.value}%`, change: kpiData.kpi.utilization.change, icon: '📊' },
+          { label: 'Рейсов за месяц', value: String(kpiData.kpi.trips?.value ?? stats.trips ?? 0), change: kpiData.kpi.trips?.change ?? 0, icon: '📋' },
+        ];
+        return (
+          <div className={`grid ${isDirector ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3'} gap-3 mb-4`}>
+            {cards.map((k, i) => (
+              <div key={i} className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-slate-400 text-xs">{k.label}</span>
+                  <span>{k.icon}</span>
+                </div>
+                <div className="text-xl font-bold text-white">{k.value}</div>
+                {k.change !== 0 && (
+                  <div className={`flex items-center gap-1 text-xs ${changeColor(k.change)}`}>
+                    {changeIcon(k.change)}
+                    {k.change > 0 ? '+' : ''}{k.change}% к пред. мес.
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
+      {/* Fleet Widget */}
+      <FleetWidget />
+
+      {/* Alerts Block */}
+      {alertsData?.alerts?.length > 0 && (
+        <div className="bg-slate-800/50 rounded-xl p-4 border border-yellow-500/30 mb-4">
+          <div className="flex items-center gap-2 text-yellow-400 font-medium text-sm mb-3">
+            <AlertTriangle className="w-4 h-4" />
+            Требует внимания ({alertsData.summary.total})
+          </div>
+          <div className="space-y-2">
+            {alertsData.alerts.map((a: any, i: number) => (
+              <Link 
+                key={i}
+                href={a.link || '#'}
+                className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors hover:bg-slate-700/50 ${
+                  a.severity === 'error' ? 'bg-red-500/10' : 'bg-yellow-500/10'
+                }`}
+              >
+                <span className={`text-sm ${a.severity === 'error' ? 'text-red-300' : 'text-yellow-300'}`}>
+                  {a.icon} {a.text}
+                </span>
+                <ExternalLink className="w-3 h-3 text-slate-500" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <GpsSensorWidget />
 
       {/* Period Selector */}
       <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50 mb-4">
@@ -326,8 +443,8 @@ export function Dashboard() {
             />
           </div>
 
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 sm:mb-6">
+          {/* Charts — финансовые графики только для director */}
+          {isDirector && <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 sm:mb-6">
             <div className="lg:col-span-2 bg-slate-800/50 backdrop-blur rounded-xl p-4 border border-slate-700/50">
               <h3 className="text-white font-medium mb-4">Выручка по месяцам (млн ₽)</h3>
               <div className="h-64">
@@ -376,12 +493,12 @@ export function Dashboard() {
                 </ResponsiveContainer>
               </div>
             </div>
-          </div>
+          </div>}
 
-          {/* Main Stats */}
+          {/* Main Stats — финансы скрыты для не-director */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
-            <StatCard title="Расходы" value={formatMoney(stats.expenses)} icon={Fuel} color="text-yellow-400" />
-            <StatCard title="Маржа" value={formatMoney(stats.margin)} icon={TrendingUp} color="text-green-400" />
+            {isDirector && <StatCard title="Расходы" value={formatMoney(stats.expenses)} icon={Fuel} color="text-yellow-400" />}
+            {isDirector && <StatCard title="Маржа" value={formatMoney(stats.margin)} icon={TrendingUp} color="text-green-400" />}
             <StatCard 
               title="Рейсов всего" 
               value={stats.trips?.toLocaleString("ru-RU") || "0"} 
@@ -394,8 +511,8 @@ export function Dashboard() {
           {/* WB Stats */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <StatCard title="Пробег WB" value={formatKm(stats.wbDistance)} icon={Route} color="text-purple-400" />
-            <StatCard title="Штрафы WB" value={formatMoney(stats.wbPenalties)} icon={AlertTriangle} color="text-red-400" />
-            <StatCard title="Топливо" value={formatMoney(stats.fuel)} icon={Fuel} color="text-orange-400" />
+            {isDirector && <StatCard title="Штрафы WB" value={formatMoney(stats.wbPenalties)} icon={AlertTriangle} color="text-red-400" />}
+            {isDirector && <StatCard title="Топливо" value={formatMoney(stats.fuel)} icon={Fuel} color="text-orange-400" />}
             <StatCard title="Пробег (отчёты)" value={formatKm(stats.mileage)} icon={Truck} />
           </div>
         </>

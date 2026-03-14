@@ -1,0 +1,587 @@
+"use client";
+import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { ChevronLeft, Download, Upload, FileText, Phone, Mail, MessageCircle, MapPin, Truck, AlertTriangle, Check, Clock, X } from "lucide-react";
+import dynamic from "next/dynamic";
+
+const YandexMap = dynamic(() => import("@/components/YandexMap"), { ssr: false });
+
+const hdr = () => ({ 'x-user-role': typeof window !== 'undefined' ? localStorage.getItem('userRole') || 'director' : 'director', 'Cache-Control': 'no-cache' } as any);
+const isWbHidden = () => typeof window !== 'undefined' && localStorage.getItem('userRole') === 'logist';
+
+const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
+  draft: { label: '📝 Черновик', color: 'text-slate-400', bg: 'bg-slate-500/20' },
+  sent: { label: '📧 Отправлена', color: 'text-blue-400', bg: 'bg-blue-500/20' },
+  signed: { label: '✍️ Подписана', color: 'text-purple-400', bg: 'bg-purple-500/20' },
+  in_progress: { label: '🚛 В работе', color: 'text-amber-400', bg: 'bg-amber-500/20' },
+  completed: { label: '✅ Завершена', color: 'text-green-400', bg: 'bg-green-500/20' },
+  cancelled: { label: '❌ Отменена', color: 'text-red-400', bg: 'bg-red-500/20' },
+  accepted: { label: '💰 Принята', color: 'text-emerald-400', bg: 'bg-emerald-500/20' },
+  rejected: { label: '❌ Отклонена', color: 'text-orange-400', bg: 'bg-orange-500/20' },
+  paid: { label: '🏦 Оплачена', color: 'text-teal-400', bg: 'bg-teal-500/20' },
+};
+
+const fmt = (n: any) => n ? Number(n).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0';
+const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+const fmtDateTime = (d: string) => d ? new Date(d).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+
+
+function TripLinker({ contractId, hdr }: { contractId: string; hdr: () => any }) {
+  const [open, setOpen] = useState(false);
+  const [available, setAvailable] = useState<any[]>([]);
+  const [linked, setLinked] = useState<any[]>([]);
+  const [sel, setSel] = useState<Set<number>>(new Set());
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    const [avail, trips] = await Promise.all([
+      fetch('/api/hired/accounting/contracts/' + contractId + '/available-trips', { headers: hdr() }).then(r => r.ok ? r.json() : []),
+      fetch('/api/hired/contracts/' + contractId + '/trips', { headers: hdr() }).then(r => r.ok ? r.json() : []).catch(() => []),
+    ]);
+    setAvailable(avail);
+    setLinked(Array.isArray(trips) ? trips : trips.trips || []);
+    setLoading(false);
+  };
+
+  const linkTrips = async () => {
+    if (!sel.size) return;
+    await fetch('/api/hired/accounting/contracts/' + contractId + '/link-trips', {
+      method: 'POST', headers: { ...hdr(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trip_ids: Array.from(sel) })
+    });
+    setSel(new Set());
+    load();
+  };
+
+  const unlinkTrip = async (wbId: number) => {
+    if (!confirm('\u041e\u0442\u0432\u044f\u0437\u0430\u0442\u044c \u0440\u0435\u0439\u0441?')) return;
+    await fetch('/api/hired/accounting/contracts/' + contractId + '/unlink-trip', {
+      method: 'POST', headers: { ...hdr(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trip_id: wbId })
+    });
+    load();
+  };
+
+  const fmtD = (d: string) => d ? new Date(d).toLocaleDateString('ru-RU', {day:'2-digit',month:'2-digit',year:'2-digit'}) : '\u2014';
+  const fmt = (n: any) => n ? Number(n).toLocaleString('ru-RU') : '0';
+
+  return (
+    <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+      <button onClick={() => { setOpen(!open); if (!open) load(); }} className="w-full px-4 py-3 flex justify-between items-center hover:bg-slate-750">
+        <span className="text-white font-medium">\U0001f517 \u041f\u0440\u0438\u0432\u044f\u0437\u043a\u0430 \u0440\u0435\u0439\u0441\u043e\u0432</span>
+        <span className="text-slate-400">{open ? '\u25b2' : '\u25bc'}</span>
+      </button>
+      {open && (
+        <div className="px-4 pb-4">
+          {loading ? <div className="text-slate-500 text-sm py-4 text-center">\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430...</div> : (
+            <>
+              {linked.length > 0 && (
+                <div className="mb-4">
+                  <div className="text-xs text-slate-400 mb-2">\u041f\u0440\u0438\u0432\u044f\u0437\u0430\u043d\u043d\u044b\u0435 \u0440\u0435\u0439\u0441\u044b ({linked.length})</div>
+                  {linked.map((t: any) => (
+                    <div key={t.wb_id || t.waysheet_id} className="flex items-center justify-between py-1.5 border-b border-slate-700/50">
+                      <div className="text-sm text-white">#{t.wb_id || t.waysheet_id} \u00b7 {t.vehicle_plate || ''} \u00b7 {fmtD(t.trip_date || t.loading_date)}</div>
+                      <button onClick={() => unlinkTrip(t.wb_id || t.waysheet_id)} className="text-red-400 text-xs hover:text-red-300">\u2715</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="text-xs text-slate-400 mb-2">\u0421\u0432\u043e\u0431\u043e\u0434\u043d\u044b\u0435 \u0440\u0435\u0439\u0441\u044b ({available.length})</div>
+              {available.length === 0 ? <div className="text-slate-500 text-sm">\u041d\u0435\u0442 \u0441\u0432\u043e\u0431\u043e\u0434\u043d\u044b\u0445 \u0440\u0435\u0439\u0441\u043e\u0432</div> : (
+                <>
+                  <div className="max-h-[200px] overflow-y-auto space-y-1 mb-2">
+                    {available.map((t: any) => (
+                      <label key={t.wb_id} className="flex items-center gap-2 py-1 px-2 rounded hover:bg-slate-700/50 cursor-pointer">
+                        <input type="checkbox" checked={sel.has(t.wb_id)} onChange={() => { const s = new Set(sel); s.has(t.wb_id) ? s.delete(t.wb_id) : s.add(t.wb_id); setSel(s); }} />
+                        <span className="text-sm text-white">#{t.wb_id}</span>
+                        <span className="text-xs text-slate-400 font-mono">{t.vehicle_plate}</span>
+                        <span className="text-xs text-slate-400">{fmtD(t.trip_date)}</span>
+                        <span className="text-xs text-slate-400 ml-auto">{fmt(t.trip_amount)} \u20bd</span>
+                      </label>
+                    ))}
+                  </div>
+                  {sel.size > 0 && <button onClick={linkTrips} className="px-3 py-1.5 bg-blue-600 rounded text-xs text-white">\u2705 \u041f\u0440\u0438\u0432\u044f\u0437\u0430\u0442\u044c ({sel.size})</button>}
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function HiredContractDetail() {
+  const params = useParams();
+  const router = useRouter();
+  const id = params.id as string;
+
+  const [contract, setContract] = useState<any>(null);
+  const [trips, setTrips] = useState<any[]>([]);
+  const [penalties, setPenalties] = useState<any[]>([]);
+  const [gpsData, setGpsData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
+  const [statusChanging, setStatusChanging] = useState(false);
+
+  // Load contract
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      fetch(`/api/hired/contracts/${id}`, { headers: hdr() }).then(r => r.ok ? r.json() : null),
+      fetch(`/api/hired/contracts/${id}/trips`, { headers: hdr() }).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([cData, tData]) => {
+      const c = cData?.contract || cData;
+      if (!c) {
+        // Fallback to old API
+        fetch(`/api/contracts/${id}`, { headers: hdr() }).then(r => r.json())
+          .then(d => { setContract(d.contract || d); setLoading(false); }).catch(() => setLoading(false));
+        return;
+      }
+      setContract(c);
+      setTrips(tData?.trips || tData || []);
+      setLoading(false);
+
+      // Load penalties for this contract
+      fetch(`/api/hired/penalties?contract_id=${id}`, { headers: hdr() })
+        .then(r => r.json()).then(d => setPenalties(Array.isArray(d) ? d : d.penalties || []))
+        .catch(() => {});
+
+      // Load GPS data if vehicle is in active status
+      if (c.vehicle_plate && ['signed', 'in_progress'].includes(c.status)) {
+        fetch(`/api/dispatch-wp/gps`, { headers: hdr() })
+          .then(r => r.json()).then(vehicles => {
+            if (Array.isArray(vehicles)) {
+              const v = vehicles.find((v: any) => v.vehicle === c.vehicle_plate || v.vehicle?.replace(/\s/g, '') === c.vehicle_plate?.replace(/\s/g, ''));
+              if (v) setGpsData(v);
+            }
+          }).catch(() => {});
+      }
+    }).catch(() => setLoading(false));
+  }, [id]);
+
+  const changeStatus = async (newStatus: string) => {
+    setStatusChanging(true);
+    try {
+      const r = await fetch(`/api/hired/contracts/${id}/status`, {
+        method: 'PATCH', headers: { ...hdr(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (r.ok) {
+        const d = await r.json();
+        setContract((prev: any) => ({ ...prev, status: newStatus, ...d }));
+      }
+    } catch {} finally { setStatusChanging(false); }
+  };
+
+  const uploadScan = async (file: File) => {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('scan', file);
+      const r = await fetch(`/api/hired/contracts/${id}/upload-scan`, { method: 'POST', headers: hdr(), body: fd });
+      if (r.ok) {
+        setContract((prev: any) => ({ ...prev, status: 'signed', signed_scan_path: 'uploaded' }));
+        setShowUpload(false);
+      }
+    } catch {} finally { setUploading(false); }
+  };
+
+  if (loading) return (
+    <div className="max-w-[1200px] mx-auto p-4">
+      <div className="animate-pulse space-y-4">
+        <div className="h-8 bg-slate-800 rounded w-1/3" />
+        <div className="h-64 bg-slate-800 rounded" />
+        <div className="h-32 bg-slate-800 rounded" />
+      </div>
+    </div>
+  );
+
+  if (!contract) return (
+    <div className="max-w-[1200px] mx-auto p-4 text-center py-20">
+      <div className="text-4xl mb-4">📋</div>
+      <h2 className="text-xl text-white mb-2">Контракт не найден</h2>
+      <button onClick={() => router.push('/hired')} className="text-blue-400 hover:underline">← Вернуться</button>
+    </div>
+  );
+
+  const st = STATUS_MAP[contract.status] || STATUS_MAP.draft;
+  const tripCount = trips.length || contract.trip_count || 0;
+  const totalPenalties = penalties.reduce((s, p) => s + Number(p.penalty_amount || 0), 0);
+  const totalAccrued = Number(contract.price || 0) * tripCount;
+  const toPay = totalAccrued - totalPenalties;
+
+  // GPS marker for map
+  const gpsMarkers = gpsData ? [{
+    id: contract.vehicle_plate,
+    lat: gpsData.latitude,
+    lng: gpsData.longitude,
+    title: contract.vehicle_plate,
+    color: gpsData.speed > 5 ? 'green' : 'blue',
+  }] : [];
+
+  // ETA calculation
+  let etaInfo: any = null;
+  if (contract.loading_date && contract.transit_hours && contract.status === 'in_progress') {
+    const deadline = new Date(new Date(contract.loading_date).getTime() + contract.transit_hours * 3600000);
+    const remaining = deadline.getTime() - Date.now();
+    const hoursRemaining = Math.round(remaining / 3600000);
+    etaInfo = {
+      deadline,
+      hoursRemaining,
+      isLate: remaining < 0,
+      hoursLate: remaining < 0 ? Math.abs(hoursRemaining) : 0,
+    };
+  }
+
+  return (
+    <div className="max-w-[1200px] mx-auto p-4 space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <button onClick={() => router.push('/hired?tab=contracts')} className="p-2 hover:bg-slate-800 rounded-lg">
+            <ChevronLeft size={20} />
+          </button>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-white">{contract.contract_number || id}</h1>
+              <span className={`text-xs px-2 py-1 rounded ${st.bg} ${st.color}`}>{st.label}</span>
+            </div>
+            <div className="text-sm text-slate-400">
+              {contract.carrier_name || '—'} · {contract.vehicle_plate || '—'} · {contract.route || contract.route_name || '—'}
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <a href={`/api/hired/contracts/${id}/pdf`} target="_blank"
+            className="flex items-center gap-1 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-sm">
+            <Download size={14} /> PDF
+          </a>
+          {contract.signed_scan_path && (
+            <a href={`/api/hired/contracts/${id}/signed-scan`} target="_blank"
+              className="flex items-center gap-1 px-3 py-1.5 bg-green-700/30 hover:bg-green-700/50 text-green-400 rounded text-sm">
+              <FileText size={14} /> Скан
+            </a>
+          )}
+        </div>
+      </div>
+
+      {/* Block 1: GPS Tracking (for active contracts) */}
+      {['signed', 'in_progress'].includes(contract.status) && (
+        <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
+            <h3 className="text-white font-medium flex items-center gap-2"><MapPin size={16} /> Трекинг</h3>
+            {etaInfo && (
+              <span className={`text-xs px-2 py-1 rounded ${etaInfo.isLate ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
+                {etaInfo.isLate ? `🔴 Опоздание ${etaInfo.hoursLate}ч` : `🟢 ETA через ${etaInfo.hoursRemaining}ч`}
+              </span>
+            )}
+          </div>
+          {gpsData ? (
+            <div>
+              <div className="h-[300px]">
+                <YandexMap markers={gpsMarkers} height="300px" zoom={10}
+                  center={[gpsData.latitude, gpsData.longitude]} />
+              </div>
+              <div className="px-4 py-3 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm border-t border-slate-700">
+                <div>
+                  <div className="text-slate-400 text-xs">Позиция</div>
+                  <div className="text-white">📍 {gpsData.latitude?.toFixed(4)}, {gpsData.longitude?.toFixed(4)}</div>
+                </div>
+                <div>
+                  <div className="text-slate-400 text-xs">Скорость</div>
+                  <div className="text-white">{Math.round(gpsData.speed || 0)} км/ч</div>
+                </div>
+                <div>
+                  <div className="text-slate-400 text-xs">Последнее обновление</div>
+                  <div className="text-white">{fmtDateTime(gpsData.gps_time)}</div>
+                </div>
+                {etaInfo && (
+                  <div>
+                    <div className="text-slate-400 text-xs">Дедлайн</div>
+                    <div className={etaInfo.isLate ? 'text-red-400' : 'text-white'}>{fmtDateTime(etaInfo.deadline.toISOString())}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="px-4 py-8 text-center text-slate-500">
+              <MapPin size={32} className="mx-auto mb-2 opacity-50" />
+              <p>Нет GPS-данных для {contract.vehicle_plate}</p>
+              <p className="text-xs mt-1">Машина не отслеживается или GPS-устройство не настроено</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Block 2: Linked WB Trips */}
+      <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
+          <h3 className="text-white font-medium">📦 Рейсы ({trips.length}/{contract.trip_count || '?'} привязано)</h3>
+        </div>
+        {trips.length > 0 ? (
+          <div className="divide-y divide-slate-700/50">
+            {trips.map((t: any, i: number) => {
+              const ws = t.waysheet || t;
+              return (
+                <div key={i} className="px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">{ws.close_dt ? '✅' : ws.open_dt ? '🚛' : '⏳'}</span>
+                    <div>
+                      <div className="text-white text-sm font-medium">
+                        #{ws.wb_id || ws.wb_trip_number || t.trip_number} {ws.route_name || '—'}
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        {fmtDate(ws.open_dt || ws.loading_date)} → {fmtDate(ws.close_dt || ws.unloading_date)}
+                        {ws.fact_speed ? ` · ${ws.fact_speed} км/ч` : ''}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-white text-sm font-mono">{fmt(ws.total_price || t.our_price)} ₽</div>
+                    <div className="text-xs text-slate-500">{ws.close_dt ? 'Доставлен' : ws.open_dt ? 'В пути' : 'Ожидание'}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="px-4 py-6 text-center text-slate-500 text-sm">
+            Нет привязанных рейсов. Автопривязка происходит каждые 30 минут.
+          </div>
+        )}
+      </div>
+
+      {/* Block 3: Route & Transport (two columns) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+          <h3 className="text-white font-medium mb-3 flex items-center gap-2"><MapPin size={16} /> Маршрут</h3>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-slate-400">Маршрут</span><span className="text-white">{contract.route || contract.route_name || '—'}</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Расстояние</span><span className="text-white">{contract.distance_km || contract.route_km || '—'} км</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Транзит</span><span className="text-white">{contract.transit_hours || '—'} ч</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Дата погрузки</span><span className="text-white">{fmtDateTime(contract.loading_date)}</span></div>
+            {contract.loading_address && <div className="flex justify-between"><span className="text-slate-400">Адрес погрузки</span><span className="text-white text-right max-w-[200px]">{contract.loading_address}</span></div>}
+            {contract.unloading_address && <div className="flex justify-between"><span className="text-slate-400">Адрес выгрузки</span><span className="text-white text-right max-w-[200px]">{contract.unloading_address}</span></div>}
+          </div>
+        </div>
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+          <h3 className="text-white font-medium mb-3 flex items-center gap-2"><Truck size={16} /> Транспорт</h3>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-slate-400">Гос. номер</span><span className="text-white font-mono text-lg">{contract.vehicle_plate || '—'}</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Марка</span><span className="text-white">{contract.vehicle_brand || '—'}</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Водитель</span><span className="text-white">{contract.driver_name || '—'}</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Телефон водителя</span>
+              <span className="text-white">{contract.driver_phone ? <a href={`tel:${contract.driver_phone}`} className="text-blue-400 hover:underline">{contract.driver_phone}</a> : '—'}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Block 4: Finances */}
+      <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-700">
+          <h3 className="text-white font-medium">💰 Финансы</h3>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-slate-700">
+          <div className="bg-slate-800 p-4 text-center">
+            <div className="text-xs text-slate-400 mb-1">Ставка</div>
+            <div className="text-xl font-bold text-white">{fmt(contract.price)} ₽</div>
+            <div className="text-xs text-slate-500">{contract.vat_type === 'vat_included' ? 'с НДС' : 'без НДС'}</div>
+          </div>
+          <div className="bg-slate-800 p-4 text-center">
+            <div className="text-xs text-slate-400 mb-1">Рейсов</div>
+            <div className="text-xl font-bold text-white">{trips.length}/{contract.trip_count || '?'}</div>
+          </div>
+          <div className="bg-slate-800 p-4 text-center">
+            <div className="text-xs text-slate-400 mb-1">Штрафы</div>
+            <div className="text-xl font-bold text-red-400">{totalPenalties > 0 ? `-${fmt(totalPenalties)}` : '0'} ₽</div>
+            <div className="text-xs text-slate-500">{penalties.length} шт</div>
+          </div>
+          <div className="bg-slate-800 p-4 text-center">
+            <div className="text-xs text-slate-400 mb-1">К оплате</div>
+            <div className={"text-xl font-bold " + (toPay >= 0 ? 'text-green-400' : 'text-red-400')}>{fmt(toPay)} ₽</div>
+            <div className="text-xs text-slate-500">{fmt(contract.price)} × {tripCount} − {fmt(totalPenalties)}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Block 5: Penalties — enhanced */}
+      <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-700 flex justify-between items-center">
+          <h3 className="text-white font-medium">⚠️ Штрафы ({penalties.length})</h3>
+          <button onClick={() => {
+            const amt = prompt('Сумма штрафа, ₽');
+            if (!amt) return;
+            const reason = prompt('Причина');
+            fetch('/api/hired/accounting/penalties', {method:'POST', headers:hdr(), body:JSON.stringify({contract_id:id, carrier_id:contract?.carrier_id, penalty_type:'other', penalty_amount:Number(amt), reason:reason||''})})
+              .then(()=>window.location.reload());
+          }} className="px-3 py-1 bg-red-700 rounded text-xs text-white">+ Добавить штраф</button>
+          {penalties.length > 0 && <button onClick={() => {
+            fetch('/api/hired/accounting/penalties/notify/' + id, {method:'POST', headers:hdr()})
+              .then(r => r.json()).then(d => { if (d.ok) alert('✉️ Отправлено: ' + d.sent_to + ' (' + d.penalties_count + ' штрафов)'); else alert('Ошибка: ' + (d.error || 'unknown')); })
+          }} className="px-3 py-1 bg-purple-700 rounded text-xs text-white">📧 Уведомить</button>}
+        </div>
+        {penalties.length === 0 ? <div className="px-4 py-6 text-center text-slate-500 text-sm">Штрафов нет</div> : (
+          <div className="divide-y divide-slate-700/50">
+            {penalties.map((p: any, i: number) => {
+              const ptypes: Record<string,string> = {late_arrival:'Опоздание',late_delivery:'Просрочка',cargo_damage:'Повреждение груза',document_late:'Задержка документов',wb_penalty:'Штраф WB',other:'Прочее'};
+              const pstats: Record<string,{l:string,c:string}> = {new:{l:'🆕 Новый',c:'bg-blue-500/20 text-blue-400'}, notified:{l:'📧 Уведомлён',c:'bg-purple-500/20 text-purple-400'}, confirmed:{l:'✅ Подтверждён',c:'bg-green-500/20 text-green-400'}, disputed:{l:'⚡ Оспаривается',c:'bg-yellow-500/20 text-yellow-400'}, offset:{l:'💰 Удержан',c:'bg-emerald-500/20 text-emerald-400'}, cancelled:{l:'❌ Отменён',c:'bg-slate-500/20 text-slate-400'}};
+              const st = pstats[p.status] || {l:p.status,c:'bg-slate-500/20 text-slate-400'};
+              return (
+                <div key={i} className="px-4 py-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-white text-sm">{ptypes[p.penalty_type] || p.penalty_type || 'Штраф'}</div>
+                      <div className="text-xs text-slate-400">{fmtDate(p.penalty_date || p.created_at)} {p.reason && <span>· {p.reason}</span>}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-red-400 font-mono font-medium">{fmt(p.penalty_amount)} ₽</span>
+                      <span className={"text-[10px] px-2 py-0.5 rounded " + st.c}>{st.l}</span>
+                    </div>
+                  </div>
+                  {!['cancelled','paid','offset'].includes(p.status) && (
+                    <div className="flex gap-1 mt-2">
+                      {['new','notified'].includes(p.status) && <button onClick={()=>{if(window.confirm('Подтвердить штраф?')) fetch('/api/hired/accounting/penalties/'+p.id+'/confirm',{method:'POST',headers:hdr()}).then(()=>window.location.reload())}} className="px-2 py-1 bg-green-700 rounded text-[10px] text-white">✅ Подтвердить</button>}
+                      <button onClick={()=>{const r=prompt('Причина отмены:');if(r) fetch('/api/hired/accounting/penalties/'+p.id+'/cancel',{method:'POST',headers:hdr(),body:JSON.stringify({reason:r})}).then(()=>window.location.reload())}} className="px-2 py-1 bg-red-700/60 rounded text-[10px] text-white">🗑 Отменить</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      
+      {/* Block 5b: Trip Linking */}
+      <TripLinker contractId={id} hdr={hdr} />
+
+      {/* Block 6: Context Actions */}
+      <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+        <h3 className="text-white font-medium mb-3">🎯 Действия</h3>
+        <div className="flex flex-wrap gap-2">
+          {contract.status === 'draft' && (
+            <>
+              <button onClick={() => changeStatus('sent')} disabled={statusChanging}
+                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm disabled:opacity-50">
+                <Mail size={14} /> Отправить перевозчику
+              </button>
+              <button onClick={() => router.push(`/contracts/create?edit=${id}`)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm">
+                ✏️ Редактировать
+              </button>
+              <button onClick={() => changeStatus('cancelled')} disabled={statusChanging}
+                className="flex items-center gap-1.5 px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded text-sm disabled:opacity-50">
+                <X size={14} /> Отменить
+              </button>
+            </>
+          )}
+          {contract.status === 'sent' && (
+            <>
+              <button onClick={() => setShowUpload(true)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-500 rounded text-sm">
+                <Upload size={14} /> Загрузить скан подписи
+              </button>
+              <button onClick={() => changeStatus('cancelled')} disabled={statusChanging}
+                className="flex items-center gap-1.5 px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded text-sm disabled:opacity-50">
+                ❌ Отменить
+              </button>
+            </>
+          )}
+          {contract.status === 'signed' && (
+            <>
+              <button onClick={() => changeStatus('in_progress')} disabled={statusChanging}
+                className="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded text-sm disabled:opacity-50">
+                <Truck size={14} /> Начать рейс
+              </button>
+            </>
+          )}
+          {contract.status === 'in_progress' && (
+            <>
+              <button onClick={() => changeStatus('completed')} disabled={statusChanging}
+                className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-500 rounded text-sm disabled:opacity-50">
+                <Check size={14} /> Завершить
+              </button>
+            </>
+          )}
+          {contract.status === 'completed' && (
+            <button onClick={() => router.push('/hired?tab=settlements')}
+              className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-500 rounded text-sm">
+              💰 К расчётам
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Block 7: Carrier Communication */}
+      {(contract.carrier_name || contract.carrier_phone || contract.carrier_email) && (
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+          <h3 className="text-white font-medium mb-3">💬 Перевозчик</h3>
+          <div className="space-y-2 text-sm">
+            <div className="text-white font-medium text-lg">{contract.carrier_name || '—'}</div>
+            {contract.carrier_inn && <div className="text-slate-400">ИНН: {contract.carrier_inn}</div>}
+            <div className="flex flex-wrap gap-2 mt-3">
+              {contract.carrier_phone && (
+                <a href={`tel:${contract.carrier_phone}`}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 text-blue-400 rounded text-sm hover:bg-blue-600/30">
+                  <Phone size={14} /> {contract.carrier_phone}
+                </a>
+              )}
+              {contract.carrier_email && (
+                <a href={`mailto:${contract.carrier_email}`}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600/20 text-purple-400 rounded text-sm hover:bg-purple-600/30">
+                  <Mail size={14} /> {contract.carrier_email}
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Block 8: Timeline */}
+      <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+        <h3 className="text-white font-medium mb-3">📜 История</h3>
+        <div className="space-y-3 text-sm">
+          <div className="flex gap-3 items-start">
+            <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+            <div><span className="text-slate-400">Создан:</span> <span className="text-white">{fmtDateTime(contract.created_at)}</span></div>
+          </div>
+          {contract.signed_scan_path && (
+            <div className="flex gap-3 items-start">
+              <div className="w-2 h-2 rounded-full bg-purple-500 mt-1.5 shrink-0" />
+              <div><span className="text-slate-400">Подписан:</span> <span className="text-white">скан загружен</span></div>
+            </div>
+          )}
+          {contract.status === 'in_progress' && (
+            <div className="flex gap-3 items-start">
+              <div className="w-2 h-2 rounded-full bg-amber-500 mt-1.5 shrink-0" />
+              <div><span className="text-slate-400">В работе:</span> <span className="text-white">рейс начат</span></div>
+            </div>
+          )}
+          {contract.completed_at && (
+            <div className="flex gap-3 items-start">
+              <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5 shrink-0" />
+              <div><span className="text-slate-400">Завершён:</span> <span className="text-white">{fmtDateTime(contract.completed_at)}</span></div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Upload Scan Modal */}
+      {showUpload && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => !uploading && setShowUpload(false)}>
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 max-w-md w-full" onClick={e => e.stopPropagation()}>
+            <h3 className="text-white font-medium mb-4">📎 Загрузить скан подписанного ДЗ</h3>
+            <input type="file" accept=".pdf,.jpg,.jpeg,.png" disabled={uploading}
+              onChange={e => { if (e.target.files?.[0]) uploadScan(e.target.files[0]); }}
+              className="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:bg-blue-600 file:text-white hover:file:bg-blue-500" />
+            {uploading && <p className="text-blue-400 text-sm mt-3">Загрузка...</p>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

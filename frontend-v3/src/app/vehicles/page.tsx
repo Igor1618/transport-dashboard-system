@@ -1,8 +1,13 @@
 "use client";
+import dynamic from "next/dynamic";
+const VehicleRepairs = dynamic(() => import("@/components/VehicleRepairs"), { ssr: false });
+import ExcelExport from "@/components/ExcelExport";
+import { pVehicle } from "@/shared/utils/pluralize";
 import { formatDate } from "@/lib/dates";
+import { useAuth } from "@/components/AuthProvider";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, Truck, Fuel, Settings, Save, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Truck, Fuel, Settings, Save, ChevronDown, ChevronUp , Wrench } from "lucide-react";
 
 interface Vehicle {
   id: string;
@@ -14,8 +19,14 @@ interface Vehicle {
   fuel_norm_autumn: number | null;
   fuel_norm_winter: number | null;
   is_active: boolean;
+  status: string;
+  ownership: string;
   last_trip_date: string | null;
   last_contract_date: string | null;
+  osago_expires: string | null;
+  diagnostics_expires: string | null;
+  tech_inspection_expires: string | null;
+  tachograph_expires: string | null;
 }
 
 interface VehicleType {
@@ -27,9 +38,12 @@ interface VehicleType {
 }
 
 export default function VehiclesPage() {
+  const { effectiveRole } = useAuth();
+  const isReadOnly = ["logist"].includes(effectiveRole);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [types, setTypes] = useState<VehicleType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [repairVehicle, setRepairVehicle] = useState<{id:string,plate:string}|null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Partial<Vehicle>>({});
   const [filter, setFilter] = useState("");
@@ -72,7 +86,7 @@ export default function VehiclesPage() {
   };
 
   const startEdit = (v: Vehicle) => {
-    setEditingId(v.id);
+    isReadOnly ? null : setEditingId(v.id);
     setEditData({
       vehicle_type: v.vehicle_type,
       fuel_norm_summer: v.fuel_norm_summer,
@@ -145,9 +159,10 @@ export default function VehiclesPage() {
             <Link href="/fuel" className="text-slate-400 hover:text-white"><ArrowLeft className="w-5 h-5" /></Link>
             <Truck className="w-6 h-6 text-cyan-400" />
             <h1 className="text-lg sm:text-xl font-bold">Справочник машин</h1>
-            <Link href="/vehicles/new" className="ml-auto bg-green-600 hover:bg-green-700 px-3 sm:px-4 py-2 rounded-lg text-sm">+ Добавить</Link>
+            <ExcelExport type="vehicles" label="📥 Excel" />
+            {!isReadOnly && <Link href="/vehicles/new" className="ml-auto bg-green-600 hover:bg-green-700 px-3 sm:px-4 py-2 rounded-lg text-sm">+ Добавить</Link>}
           </div>
-          <div className="text-slate-400 text-xs sm:text-sm mt-1 ml-8 sm:ml-12">{activeVehicles.length} активных / {inactiveVehicles.length} неактивных</div>
+          <div className="text-slate-400 text-xs sm:text-sm mt-1 ml-8 sm:ml-12">{activeVehicles.length} активных / {inactiveVehicles.length} в архиве</div>
         </div>
       </div>
 
@@ -183,7 +198,7 @@ export default function VehiclesPage() {
               <div className="text-sm opacity-80">
                 ☀️{t.fuel_norm_summer} 🍂{t.fuel_norm_autumn} ❄️{t.fuel_norm_winter}
               </div>
-              <div className="text-xs opacity-60">{vehicles.filter(v => v.vehicle_type === t.name).length} машин</div>
+              <div className="text-xs opacity-60">{pVehicle(vehicles.filter(v => v.vehicle_type === t.name).length)}</div>
             </div>
           ))}
         </div>
@@ -263,6 +278,7 @@ export default function VehiclesPage() {
                     <th className="text-center p-3">☀️ Лето</th>
                     <th className="text-center p-3">🍂 Осень</th>
                     <th className="text-center p-3">❄️ Зима</th>
+                    <th className="text-center p-3">📄 Документы</th>
                     <th className="text-center p-3"></th>
                   </tr>
                 </thead>
@@ -339,6 +355,27 @@ export default function VehiclesPage() {
                         )}
                       </td>
                       <td className="p-3 text-center">
+                        {(() => {
+                          const now = new Date();
+                          const docs = [
+                            { name: 'ОСАГО', date: v.osago_expires },
+                            { name: 'Диагн.', date: v.diagnostics_expires || v.tech_inspection_expires },
+                            { name: 'Тахограф', date: v.tachograph_expires },
+                          ];
+                          const statuses = docs.map(d => {
+                            if (!d.date) return 'none';
+                            const diff = Math.ceil((new Date(d.date).getTime() - now.getTime()) / 86400000);
+                            return diff < 0 ? 'expired' : diff <= 30 ? 'warning' : 'ok';
+                          });
+                          const worst = statuses.includes('expired') ? '🔴' : statuses.includes('warning') ? '🟡' : statuses.includes('none') ? '⚪' : '🟢';
+                          return (
+                            <span title={docs.map((d, i) => `${d.name}: ${d.date ? d.date.slice(0,10) : 'нет'} ${['🟢','🟡','🔴','⚪'][['ok','warning','expired','none'].indexOf(statuses[i])]}`).join('\n')}>
+                              {worst}
+                            </span>
+                          );
+                        })()}
+                      </td>
+                      <td className="p-3 text-center">
                         {editingId === v.id ? (
                           <div className="flex gap-1">
                             <button
@@ -356,13 +393,14 @@ export default function VehiclesPage() {
                             </button>
                           </div>
                         ) : (
-                          <button
+                          <><button onClick={() => setRepairVehicle({id:v.id,plate:v.license_plate})} className="text-slate-400 hover:text-blue-400 p-1" title="История ремонтов"><Wrench className="w-4 h-4" /></button>
+                        <button
                             onClick={() => startEdit(v)}
                             className="text-slate-400 hover:text-white"
                           >
                             <Settings className="w-4 h-4" />
                           </button>
-                        )}
+                        </>)}
                       </td>
                     </tr>
                   ))}
@@ -448,7 +486,7 @@ export default function VehiclesPage() {
               className="flex items-center gap-2 text-slate-400 hover:text-white mb-3"
             >
               {showInactive ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              <span>📦 Неактивные ТС ({inactiveVehicles.length})</span>
+              <span>📦 Архивные ТС ({inactiveVehicles.length})</span>
             </button>
             {showInactive && (
               <>
@@ -513,6 +551,14 @@ export default function VehiclesPage() {
           </div>
         )}
       </div>
-    </div>
+    
+      {repairVehicle && (
+        <VehicleRepairs
+          vehicleId={repairVehicle.id}
+          plate={repairVehicle.plate}
+          onClose={() => setRepairVehicle(null)}
+        />
+      )}
+</div>
   );
 }

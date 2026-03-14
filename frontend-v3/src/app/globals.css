@@ -49,3 +49,4 @@ body {
   #print-report .text-red-700 { color: #b91c1c !important; }
   #print-report .text-orange-700 { color: #c2410c !important; }
 }
+@import "./responsive.css";

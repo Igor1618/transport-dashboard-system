@@ -1,0 +1,1800 @@
+"use client";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
+} from "recharts";
+import {
+  BarChart3, Clock, Users, Search, ChevronLeft, ChevronRight,
+  ArrowUpDown, X, MapPin, Truck, Package, Calendar, AlertTriangle,
+  CheckCircle, RefreshCw, Crosshair, Zap, Activity, Wifi, WifiOff,
+  Play, Square, Settings, Filter, ChevronDown, ChevronUp, RotateCcw,
+  Flame, TrendingUp, Trophy, Target,
+} from "lucide-react";
+import { apiFetch } from "@/shared/utils/apiFetch";
+import { useAuth } from "@/components/AuthProvider";
+
+const OUR_INN = "6679185730";
+
+// ==================== Types ====================
+interface TenderCalc {
+  fuel_per_km: number; platon_per_km: number; salary_per_km: number;
+  depreciation_per_km: number; other_per_km: number; cost_per_km: number;
+  cost_per_trip: number; total_cost: number; avg_fuel_norm: number;
+  avg_fuel_price: number; avg_salary_per_day: number;
+}
+
+interface Tender {
+  id: string; name: string; route_name: string;
+  start_point: string; end_point: string; delivery_type: string;
+  distance_km: number; tonnage: number; body_volume: number;
+  body_type: string; loading_type: string; number_trips: number;
+  number_trips_period: string; active_period: number;
+  is_round_trip: boolean; current_rate: number; initial_rate: number;
+  route_cost: number; daily_rate: number;
+  leader_id: string; leader_name: string; leader_inn: string;
+  participants_count: number; start_time: string; end_time: string;
+  status: string; calculation: TenderCalc; our_rate_per_km: number;
+  profit_per_km: number; profit_per_trip: number;
+  we_are_leader: boolean; has_profit: boolean;
+  additional_info?: string; min_step?: number;
+  forward_rate?: number; return_rate?: number;
+  supplier_bet_rate?: number | null;
+}
+
+interface HistoryItem {
+  id: string; name: string; route_name: string;
+  start_point: string; end_point: string;
+  distance_km: number; tonnage: number;
+  initial_rate: number; final_rate: number;
+  winner_name: string; participants_count: number;
+  finished_at: string;
+}
+
+interface FinishedTender {
+  id: string; name: string; start_point: string; end_point: string;
+  distance_km: number; initial_rate: number; final_rate: number;
+  winner_name: string; winner_inn: string; participants_count: number;
+  start_time: string; end_time: string; finished_at: string;
+  rate_changes: number; unique_leaders: number; last_minute_bids: number;
+}
+
+interface RateChange {
+  time: string; old_rate: number; new_rate: number;
+  leader: string; leader_inn: string;
+  participants: number; time_left_seconds: number; drop: number;
+}
+
+interface TenderHistory {
+  tender_id: string; route: string; start_point: string; end_point: string;
+  distance_km: number; initial_rate: number | string; final_rate: number | string;
+  total_drop: number; winner: string; winner_inn: string;
+  participants: number; start_time: string; end_time: string;
+  rate_changes: RateChange[]; last_minute_bids: number; total_changes: number;
+}
+
+interface AnalyticsData {
+  total_finished: number; avg_drop_per_km: number;
+  top_winners: { name: string; wins: number; avg_rate: number; sniper_pct: number; routes: string[] }[];
+}
+
+interface SniperStatus {
+  active: boolean;
+  mode?: string;
+  min_rate?: number;
+  auto_rebid?: boolean;
+  we_are_leader?: boolean;
+  bids_placed?: number;
+  latency_ms?: number;
+  last_bid_at?: string;
+  error?: string;
+}
+
+type SortField = "profit_per_trip" | "current_rate" | "distance_km" | "end_time" | "participants_count" | "profit_per_km";
+type SortDir = "ASC" | "DESC";
+type DistanceRange = "all" | "lt500" | "500-1000" | "1000-2000" | "gt2000";
+type MainTab = "active" | "finished" | "analytics";
+
+// ==================== Helpers ====================
+function timeLeft(endTime: string): string {
+  if (!endTime) return "—";
+  const diff = new Date(endTime).getTime() - Date.now();
+  if (diff <= 0) return "Завершён";
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  if (h > 24) return `${Math.floor(h / 24)}д ${h % 24}ч`;
+  if (h > 0) return `${h}ч ${m}м`;
+  return `${m}м ${s}с`;
+}
+
+function isUrgent(endTime: string): boolean {
+  if (!endTime) return false;
+  const diff = new Date(endTime).getTime() - Date.now();
+  return diff > 0 && diff < 3 * 60 * 60 * 1000;
+}
+
+const fmt = (n: number | null | undefined, d = 0) =>
+  n == null || isNaN(Number(n)) ? "—" : Number(n).toLocaleString("ru-RU", { minimumFractionDigits: d, maximumFractionDigits: d });
+
+const fmtDate = (s: string | null) =>
+  s ? new Date(s).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+
+const fmtMsk = (s: string | null) =>
+  s ? new Date(s).toLocaleString("ru-RU", { timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
+
+const fmtMskFull = (s: string | null) =>
+  s ? new Date(s).toLocaleString("ru-RU", { timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+
+const fmtMskTime = (s: string | null) =>
+  s ? new Date(s).toLocaleString("ru-RU", { timeZone: "Europe/Moscow", hour: "2-digit", minute: "2-digit" }) : "—";
+
+function fmtTimeLeft(seconds: number): string {
+  if (seconds > 3600) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return `${h}ч ${m}м`;
+  }
+  if (seconds > 60) {
+    const m = Math.floor(seconds / 60);
+    return `${m}м`;
+  }
+  return `${seconds}с 🔥`;
+}
+
+function fmtDuration(start: string, end: string): string {
+  if (!start || !end) return "—";
+  const diff = new Date(end).getTime() - new Date(start).getTime();
+  if (diff <= 0) return "—";
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  if (h > 24) return `${Math.floor(h / 24)}д ${h % 24}ч`;
+  if (h > 0) return `${h}ч ${m}м`;
+  return `${m}м`;
+}
+
+/** Profit for a tender (positive = good) */
+function profitForTender(t: Tender): number {
+  if (t.profit_per_trip != null && !isNaN(t.profit_per_trip)) return t.profit_per_trip;
+  if (t.current_rate && t.distance_km && t.calculation?.cost_per_km) {
+    return (t.current_rate - t.calculation.cost_per_km) * t.distance_km;
+  }
+  return 0;
+}
+
+function rowColor(t: Tender) {
+  const p = profitForTender(t);
+  const urgent = isUrgent(t.end_time);
+  let base = "";
+  if (p > 0) base = "bg-green-900/20";
+  else if (p < 0) base = "bg-red-900/20";
+  else base = "bg-slate-800/40";
+
+  if (urgent) base += " border-l-4 border-yellow-400";
+  else if (t.we_are_leader) base += " border-l-4 border-green-500";
+  else if (p > 0) base += " border-l-4 border-green-700";
+  else if (p < 0) base += " border-l-4 border-red-700";
+  else base += " border-l-4 border-slate-600";
+
+  return base;
+}
+
+function statusEmoji(t: Tender) {
+  if (t.we_are_leader) return "🟢";
+  if (!t.current_rate) return "⚪";
+  if (t.has_profit) return "🟡";
+  return "🔴";
+}
+
+// ==================== CountdownTimer ====================
+const CountdownTimer = ({ endTime, showMs = false }: { endTime: string; showMs?: boolean }) => {
+  const [display, setDisplay] = useState('');
+  const [urgency, setUrgency] = useState('normal');
+
+  useEffect(() => {
+    if (!endTime) { setDisplay('—'); return; }
+    const endMs = new Date(endTime).getTime();
+    const update = () => {
+      const diff = endMs - Date.now();
+      if (diff <= 0) { setDisplay('ЗАВЕРШЁН'); setUrgency('done'); return; }
+      const d = Math.floor(diff / 86400000);
+      const h = Math.floor((diff % 86400000) / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      const ms = diff % 1000;
+      if (d > 0) {
+        setDisplay(`${d}д ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`);
+      } else {
+        const base = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        setDisplay(showMs ? `${base}.${String(ms).padStart(3,'0')}` : base);
+      }
+      if (diff < 10000) setUrgency('critical');
+      else if (diff < 60000) setUrgency('danger');
+      else if (diff < 300000) setUrgency('warning');
+      else setUrgency('normal');
+    };
+    const interval = setInterval(update, showMs ? 50 : 1000);
+    update();
+    return () => clearInterval(interval);
+  }, [endTime, showMs]);
+
+  const colors: Record<string, string> = {
+    normal: 'text-white',
+    warning: 'text-yellow-400',
+    danger: 'text-red-400',
+    critical: 'text-red-500 animate-pulse',
+    done: 'text-slate-500'
+  };
+
+  return <span className={`font-mono font-bold ${colors[urgency] || 'text-white'}`}>⏱ {display}</span>;
+};
+
+// ==================== SearchableDropdown ====================
+function SearchableDropdown({ options, value, onChange, placeholder }: {
+  options: string[]; value: string; onChange: (v: string) => void; placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    if (!search) return options;
+    const q = search.toLowerCase();
+    return options.filter(o => o.toLowerCase().includes(q));
+  }, [options, search]);
+
+  return (
+    <div className="relative">
+      <div
+        className="flex items-center gap-1 bg-slate-700 border border-slate-600 rounded-lg px-2.5 py-1.5 text-sm cursor-pointer min-w-[140px] hover:border-slate-500 transition-colors"
+        onClick={() => setOpen(!open)}
+      >
+        <span className={`flex-1 truncate ${value ? "text-white" : "text-slate-400"}`}>
+          {value || placeholder}
+        </span>
+        {value ? (
+          <X size={14} className="text-slate-400 hover:text-white shrink-0" onClick={e => { e.stopPropagation(); onChange(""); setSearch(""); }} />
+        ) : (
+          <ChevronDown size={14} className="text-slate-400 shrink-0" />
+        )}
+      </div>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => { setOpen(false); setSearch(""); }} />
+          <div className="absolute top-full left-0 mt-1 z-50 bg-slate-800 border border-slate-600 rounded-lg shadow-xl w-64 max-h-60 overflow-hidden">
+            <div className="p-2 border-b border-slate-700">
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Поиск..."
+                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                autoFocus
+              />
+            </div>
+            <div className="overflow-y-auto max-h-48">
+              <div
+                className="px-3 py-1.5 text-sm text-slate-400 hover:bg-slate-700 cursor-pointer"
+                onClick={() => { onChange(""); setOpen(false); setSearch(""); }}
+              >
+                Все
+              </div>
+              {filtered.map(o => (
+                <div
+                  key={o}
+                  className={`px-3 py-1.5 text-sm cursor-pointer truncate ${o === value ? "bg-blue-600/30 text-blue-300" : "text-white hover:bg-slate-700"}`}
+                  onClick={() => { onChange(o); setOpen(false); setSearch(""); }}
+                >
+                  {o}
+                </div>
+              ))}
+              {filtered.length === 0 && (
+                <div className="px-3 py-2 text-xs text-slate-500 text-center">Ничего не найдено</div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ==================== Sniper Block ====================
+function SniperBlock({ tenderId, costPerKm }: { tenderId: string; costPerKm: number }) {
+  const [status, setStatus] = useState<SniperStatus | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [minRate, setMinRate] = useState("");
+  const [autoRebid, setAutoRebid] = useState(true);
+  const [sniperEnabled, setSniperEnabled] = useState(true);
+
+  const loadStatus = useCallback(async () => {
+    try {
+      const r = await apiFetch(`/api/tenders/${tenderId}/sniper/status`);
+      if (r.ok) {
+        const d = await r.json();
+        setStatus(d);
+        if (d.min_rate && !minRate) setMinRate(String(d.min_rate));
+        if (d.auto_rebid !== undefined) setAutoRebid(d.auto_rebid);
+      } else {
+        setStatus({ active: false });
+      }
+    } catch {
+      setStatus({ active: false });
+    }
+  }, [tenderId]);
+
+  useEffect(() => {
+    loadStatus();
+    const iv = setInterval(loadStatus, 5000);
+    return () => clearInterval(iv);
+  }, [loadStatus]);
+
+  const handleStart = async () => {
+    if (!minRate || parseFloat(minRate) <= 0) {
+      setError("Укажите мин. ставку");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await apiFetch(`/api/tenders/${tenderId}/sniper/start`, {
+        method: "POST",
+        body: JSON.stringify({ min_rate: parseFloat(minRate), auto_rebid: autoRebid, sniper_enabled: sniperEnabled }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Ошибка запуска");
+      await loadStatus();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStop = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await apiFetch(`/api/tenders/${tenderId}/sniper/stop`, { method: "POST" });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Ошибка остановки");
+      await loadStatus();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await apiFetch(`/api/tenders/${tenderId}/sniper`, {
+        method: "PATCH",
+        body: JSON.stringify({ min_rate: parseFloat(minRate), auto_rebid: autoRebid, sniper_enabled: sniperEnabled }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Ошибка обновления");
+      await loadStatus();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isActive = status?.active === true;
+
+  return (
+    <div className={`border-2 rounded-lg p-4 ${isActive ? "border-green-600 bg-green-900/10" : "border-purple-700 bg-purple-900/10"}`}>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-bold text-sm flex items-center gap-2">
+          <Crosshair size={16} className={isActive ? "text-green-400" : "text-purple-400"} />
+          <span className={isActive ? "text-green-300" : "text-purple-300"}>Снайпер VPS</span>
+        </h3>
+        {isActive ? (
+          <span className="flex items-center gap-1 text-xs bg-green-900/50 text-green-400 px-2 py-1 rounded-full">
+            <Activity size={12} className="animate-pulse" /> Активен
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 text-xs bg-slate-700 text-slate-400 px-2 py-1 rounded-full">
+            <WifiOff size={12} /> Неактивен
+          </span>
+        )}
+      </div>
+
+      {isActive && status && (
+        <div className="grid grid-cols-4 gap-2 mb-3">
+          <div className="bg-slate-700/50 rounded p-2 text-center">
+            <div className="text-xs text-slate-400">Лидер</div>
+            <div className={`text-sm font-bold ${status.we_are_leader ? "text-green-400" : "text-red-400"}`}>
+              {status.we_are_leader ? "✅ Да" : "❌ Нет"}
+            </div>
+          </div>
+          <div className="bg-slate-700/50 rounded p-2 text-center">
+            <div className="text-xs text-slate-400">Ставки</div>
+            <div className="text-sm font-bold text-white">{status.bids_placed ?? 0}</div>
+          </div>
+          <div className="bg-slate-700/50 rounded p-2 text-center">
+            <div className="text-xs text-slate-400">Латентность</div>
+            <div className={`text-sm font-bold ${(status.latency_ms ?? 999) < 50 ? "text-green-400" : "text-yellow-400"}`}>
+              {status.latency_ms ?? "—"} мс
+            </div>
+          </div>
+          <div className="bg-slate-700/50 rounded p-2 text-center">
+            <div className="text-xs text-slate-400">Режим</div>
+            <div className="text-sm font-bold text-white">{status.mode || "sniper"}</div>
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        <div>
+          <label className="text-xs text-slate-400">Минимальная ставка ₽/км</label>
+          <div className="flex items-center gap-2 mt-1">
+            <input type="number" step="0.1" value={minRate}
+              placeholder={`Себест: ${fmt(costPerKm, 1)}`}
+              onChange={e => { setMinRate(e.target.value); setError(null); }}
+              className="flex-1 bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-white focus:ring-1 focus:ring-purple-500 focus:outline-none" />
+            {minRate && costPerKm > 0 && (
+              <span className={`text-xs whitespace-nowrap ${parseFloat(minRate) > costPerKm ? "text-green-400" : "text-red-400"}`}>
+                {parseFloat(minRate) > costPerKm ? "✅" : "⚠️"} профит {fmt(parseFloat(minRate) - costPerKm, 1)} ₽/км
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+            <input type="checkbox" checked={autoRebid} onChange={e => setAutoRebid(e.target.checked)}
+              className="rounded bg-slate-700 border-slate-600 text-purple-500 focus:ring-purple-500" />
+            Auto-rebid
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+            <input type="checkbox" checked={sniperEnabled} onChange={e => setSniperEnabled(e.target.checked)}
+              className="rounded bg-slate-700 border-slate-600 text-purple-500 focus:ring-purple-500" />
+            Снайпер
+          </label>
+        </div>
+
+        {error && <div className="text-red-400 text-xs bg-red-900/30 p-2 rounded">{error}</div>}
+
+        <div className="flex gap-2">
+          {!isActive ? (
+            <button onClick={handleStart} disabled={loading}
+              className="flex-1 flex items-center justify-center gap-2 bg-green-600 text-white py-2 rounded-lg font-bold hover:bg-green-700 disabled:opacity-50 transition-colors">
+              <Play size={16} /> {loading ? "Запуск..." : "Запустить"}
+            </button>
+          ) : (
+            <>
+              <button onClick={handleUpdate} disabled={loading}
+                className="flex-1 flex items-center justify-center gap-2 bg-purple-600 text-white py-2 rounded-lg font-bold hover:bg-purple-700 disabled:opacity-50 transition-colors">
+                <Settings size={16} /> Обновить
+              </button>
+              <button onClick={handleStop} disabled={loading}
+                className="flex items-center justify-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-red-700 disabled:opacity-50 transition-colors">
+                <Square size={16} /> Стоп
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==================== Active Tender Modal ====================
+function TenderModal({ tender: initialTender, isDirector, onClose, onBidPlaced }: {
+  tender: Tender; isDirector: boolean; onClose: () => void; onBidPlaced: () => void;
+}) {
+  const [t, setT] = useState<Tender>(initialTender);
+  const step = t.min_step || 0.1;
+  const defaultRate = Number((Number(t.current_rate) - step).toFixed(2));
+  const [bidRate, setBidRate] = useState(defaultRate > 0 ? defaultRate : 0);
+  const [bidLoading, setBidLoading] = useState(false);
+  const [bidResult, setBidResult] = useState<{type: 'success'|'error', text: string} | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const [calcFuelNorm, setCalcFuelNorm] = useState(t.calculation?.avg_fuel_norm || 24);
+  const [calcFuelPrice, setCalcFuelPrice] = useState(t.calculation?.avg_fuel_price || 70);
+  const [calcSalary, setCalcSalary] = useState(t.calculation?.avg_salary_per_day || 3000);
+  const [calcDepr, setCalcDepr] = useState(3);
+  const [calcOther, setCalcOther] = useState(2);
+  const [calcEmpty, setCalcEmpty] = useState(0);
+
+  // Task 3: Auto-refresh polling every 5 sec
+  useEffect(() => {
+    let prevRate = Number(t.current_rate);
+    let prevLeaderInn = t.leader_inn;
+    const interval = setInterval(async () => {
+      try {
+        const res = await apiFetch(`/api/tenders/${t.id}`);
+        const data = await res.json();
+        const tender = data.tender || data;
+        if (tender && tender.current_rate !== undefined) {
+          setT(prev => ({
+            ...prev,
+            current_rate: Number(tender.current_rate) || prev.current_rate,
+            leader_name: tender.leader_name ?? prev.leader_name,
+            leader_inn: tender.leader_inn ?? prev.leader_inn,
+            participants_count: tender.participants_count ?? prev.participants_count,
+            supplier_bet_rate: tender.supplier_bet_rate !== undefined ? tender.supplier_bet_rate : prev.supplier_bet_rate,
+            min_step: tender.min_step ?? prev.min_step,
+            we_are_leader: tender.leader_inn === OUR_INN,
+          }));
+          const newRate = Number(tender.current_rate);
+          if (newRate !== prevRate && prevRate > 0) {
+            const wasLeader = prevLeaderInn === OUR_INN;
+            const isOutbid = tender.leader_inn !== OUR_INN && wasLeader;
+            if (isOutbid) {
+              setBidResult({ type: 'error', text: `🔴 Вас перебили! Новый лидер: ${newRate} ₽/км` });
+            } else {
+              setBidResult({ type: 'success', text: `⚠️ Ставка изменилась: ${prevRate} → ${newRate} ₽/км` });
+              setTimeout(() => setBidResult(prev => prev?.text.includes('изменилась') ? null : prev), 5000);
+            }
+            setBidRate(Number((newRate - (tender.min_step || step)).toFixed(2)));
+            prevRate = newRate;
+            prevLeaderInn = tender.leader_inn;
+          }
+        }
+      } catch (e) { /* ignore polling errors */ }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [t.id]);
+
+  const dist = Number(t.distance_km) || 0;
+  const totalDist = dist + calcEmpty;
+  const fuelKm = (calcFuelNorm / 100) * calcFuelPrice;
+  const platonKm = (t.tonnage || 0) > 12 ? 2.09 : 0;
+  const salaryKm = calcSalary / 400;
+  const costKm = fuelKm + platonKm + salaryKm + calcDepr + calcOther;
+  const costTrip = costKm * totalDist;
+  const rate = Number(t.current_rate) || 0;
+  const revenue = rate * dist;
+  const profit = revenue - costTrip;
+  const trips = Number(t.number_trips) || 1;
+  const days = Number(t.active_period) || 1;
+  const profitDay = (profit * trips) / days;
+  const profitMonth = profitDay * 22;
+
+  const handleBid = async () => {
+    if (!showConfirm) { setShowConfirm(true); return; }
+    setBidLoading(true);
+    setBidResult(null);
+    try {
+      const r = await apiFetch(`/api/tenders/${t.id}/bid`, {
+        method: "POST", body: JSON.stringify({ rate: bidRate }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || "Ошибка");
+      setBidResult({ type: 'success', text: `✅ Ставка принята! ${bidRate} ₽/км` });
+      setTimeout(() => setBidResult(prev => prev?.type === 'success' ? null : prev), 3000);
+      // Refresh tender data after 1 sec
+      setTimeout(async () => {
+        try {
+          const res = await apiFetch(`/api/tenders/${t.id}`);
+          const d = await res.json();
+          const tender = d.tender || d;
+          if (tender) {
+            setT(prev => ({
+              ...prev,
+              current_rate: Number(tender.current_rate) || prev.current_rate,
+              leader_name: tender.leader_name ?? prev.leader_name,
+              leader_inn: tender.leader_inn ?? prev.leader_inn,
+              participants_count: tender.participants_count ?? prev.participants_count,
+              supplier_bet_rate: tender.supplier_bet_rate !== undefined ? tender.supplier_bet_rate : prev.supplier_bet_rate,
+              min_step: tender.min_step ?? prev.min_step,
+              we_are_leader: tender.leader_inn === OUR_INN,
+            }));
+            const newDefault = Number((Number(tender.current_rate) - (tender.min_step || step)).toFixed(2));
+            if (newDefault > 0) setBidRate(newDefault);
+          }
+        } catch (e) { /* ignore */ }
+      }, 1000);
+      onBidPlaced(); // refresh list in background
+    } catch (e: any) {
+      setBidResult({ type: 'error', text: `❌ Ошибка: ${e.message}` });
+    } finally { setBidLoading(false); setShowConfirm(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-center p-4 pt-10 overflow-y-auto">
+      <div className="bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl border border-slate-700">
+        <div className="flex items-center justify-between p-4 border-b border-slate-700">
+          <div>
+            <h2 className="text-lg font-bold text-white">{statusEmoji(t)} {t.start_point} → {t.end_point}</h2>
+            {t.route_name && <p className="text-sm text-slate-400">{t.route_name}</p>}
+            {t.additional_info && <p className="text-xs text-blue-400 mt-1">{t.additional_info}</p>}
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400"><X size={20} /></button>
+        </div>
+
+        <div className="p-4 space-y-4 max-h-[75vh] overflow-y-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {[
+              { l: "Расстояние", v: `${fmt(t.distance_km)} км`, i: <MapPin size={14} /> },
+              { l: "Тоннаж", v: `${t.tonnage || "—"} т`, i: <Package size={14} /> },
+              { l: "Объём", v: t.body_volume ? `${t.body_volume} м³` : "—", i: <Truck size={14} /> },
+              { l: "Кузов", v: t.body_type || "—", i: <Truck size={14} /> },
+              { l: "Рейсы", v: `${t.number_trips || "—"} / ${t.number_trips_period || ""}`, i: <RefreshCw size={14} /> },
+              { l: "Период", v: `${t.active_period || "—"} дн.`, i: <Calendar size={14} /> },
+              { l: "Участники", v: String(t.participants_count || 0), i: <Users size={14} /> },
+            ].map((x, i) => (
+              <div key={i} className="bg-slate-700/50 rounded-lg p-2">
+                <div className="flex items-center gap-1 text-xs text-slate-400 mb-1">{x.i} {x.l}</div>
+                <div className="font-medium text-sm text-white">{x.v}</div>
+              </div>
+            ))}
+            <div className="bg-slate-700/50 rounded-lg p-2">
+              <div className="flex items-center gap-1 text-xs text-slate-400 mb-1"><Clock size={14} /> Осталось</div>
+              <div className="text-2xl"><CountdownTimer endTime={t.end_time} showMs={true} /></div>
+            </div>
+          </div>
+
+          {/* Bid result notification */}
+          {bidResult && (
+            <div className={`p-3 rounded-lg ${bidResult.type === 'success' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
+              {bidResult.text}
+            </div>
+          )}
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-blue-900/30 rounded-lg p-3 text-center">
+              <div className="text-xs text-blue-400">Текущая ставка</div>
+              <div className="text-xl font-bold text-blue-300">{fmt(rate, 2)} ₽/км</div>
+              {t.initial_rate > 0 && rate !== t.initial_rate && <div className="text-xs text-slate-500">Нач: {fmt(t.initial_rate, 2)}</div>}
+              <div className="text-sm text-slate-400 mt-1">Мин. шаг: <span className="text-white font-bold">{step} ₽</span></div>
+            </div>
+            <div className="bg-slate-700/50 rounded-lg p-3 text-center">
+              <div className="text-xs text-slate-400">Стоимость рейса</div>
+              <div className="text-lg font-bold text-white">{fmt(Math.round(rate * dist))} ₽</div>
+              {t.supplier_bet_rate != null && (
+                <div className={`text-sm font-bold mt-1 ${t.leader_inn === OUR_INN ? 'text-green-400' : 'text-red-400'}`}>
+                  {t.supplier_bet_rate} ₽/км {t.leader_inn === OUR_INN ? '(Лидирующая)' : '(Вас перебили)'}
+                </div>
+              )}
+            </div>
+            <div className="bg-slate-700/50 rounded-lg p-3 text-center">
+              <div className="text-xs text-slate-400">Лидер</div>
+              <div className="text-sm font-bold truncate">
+                {t.leader_inn === OUR_INN ? (
+                  <span className="text-green-400 font-bold">🏆 Вы лидер!</span>
+                ) : t.leader_name ? (
+                  <span className="text-white">{t.leader_name}</span>
+                ) : (
+                  <span className="text-slate-500">Ставок нет</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {t.is_round_trip && (
+            <div className="bg-purple-900/30 border border-purple-700 rounded-lg p-3 text-sm">
+              <span className="font-bold text-purple-300">🔄 Туда-обратно</span>
+              <div className="flex gap-4 mt-1 text-xs text-purple-400">
+                <span>Туда: {fmt(t.forward_rate, 2)} ₽/км</span>
+                <span>Обратно: {fmt(t.return_rate, 2)} ₽/км</span>
+              </div>
+            </div>
+          )}
+
+          <div className="border border-slate-700 rounded-lg p-4">
+            <h3 className="font-bold text-sm mb-3 text-slate-300">📊 Калькулятор себестоимости</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+              {[
+                { l: "Расход л/100км", v: calcFuelNorm, s: setCalcFuelNorm },
+                { l: "Цена топлива ₽/л", v: calcFuelPrice, s: setCalcFuelPrice },
+                { l: "ЗП ₽/день", v: calcSalary, s: setCalcSalary },
+                { l: "Амортизация ₽/км", v: calcDepr, s: setCalcDepr },
+                { l: "Прочее ₽/км", v: calcOther, s: setCalcOther },
+                { l: "Порожний пробег км", v: calcEmpty, s: setCalcEmpty },
+              ].map((f, i) => (
+                <div key={i}>
+                  <label className="text-xs text-slate-400">{f.l}</label>
+                  <input type="number" value={f.v} onChange={e => f.s(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white mt-1 focus:ring-1 focus:ring-blue-500 focus:outline-none" />
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+              <div className="bg-slate-700/50 rounded p-2"><span className="text-slate-400">Себест.</span><div className="font-bold text-white">{fmt(costKm, 2)} ₽/км</div></div>
+              <div className="bg-slate-700/50 rounded p-2"><span className="text-slate-400">Расход/рейс</span><div className="font-bold text-white">{fmt(Math.round(costTrip))} ₽</div></div>
+              <div className={`rounded p-2 ${profit >= 0 ? "bg-green-900/30" : "bg-red-900/30"}`}>
+                <span className="text-slate-400">Прибыль/рейс</span>
+                <div className={`font-bold ${profit >= 0 ? "text-green-400" : "text-red-400"}`}>{fmt(Math.round(profit))} ₽</div>
+              </div>
+              <div className={`rounded p-2 ${profitMonth >= 0 ? "bg-green-900/30" : "bg-red-900/30"}`}>
+                <span className="text-slate-400">Прибыль/мес</span>
+                <div className={`font-bold ${profitMonth >= 0 ? "text-green-400" : "text-red-400"}`}>{fmt(Math.round(profitMonth))} ₽</div>
+              </div>
+            </div>
+            <div className="mt-2 text-xs text-slate-500">
+              Платон: {platonKm.toFixed(2)} ₽/км | Мин. ставка: {fmt(costKm, 2)} ₽/км = {fmt(Math.round(costKm * dist))} ₽/рейс
+            </div>
+          </div>
+
+          {isDirector && <SniperBlock tenderId={t.id} costPerKm={costKm} />}
+
+          {isDirector && (
+            <div className="border-2 border-blue-700 rounded-lg p-4 bg-blue-900/20">
+              <h3 className="font-bold text-sm mb-3 text-blue-300">
+                <Zap size={14} className="inline mr-1" />
+                Ручная ставка <span className="text-xs font-normal text-slate-400">(через VPS)</span>
+              </h3>
+              <>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <label className="text-xs text-slate-400">Ставка ₽/км (шаг: {step})</label>
+                      <div className="flex items-center gap-1 mt-1">
+                        <button onClick={() => setBidRate(prev => Number((prev - step).toFixed(2)))}
+                          className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-lg font-bold text-white transition-colors">▼</button>
+                        <input type="number" step={step} placeholder={rate > 0 ? `< ${rate}` : "Ставка"}
+                          value={bidRate} onChange={e => { setBidRate(Number(e.target.value)); setBidResult(null); setShowConfirm(false); }}
+                          className="flex-1 bg-slate-700 border-2 border-blue-600 rounded-lg px-3 py-2 text-lg font-bold text-white text-center focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                        <button onClick={() => setBidRate(prev => Number((prev + step).toFixed(2)))}
+                          className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-lg font-bold text-white transition-colors">▲</button>
+                      </div>
+                    </div>
+                    <div className="text-center text-sm">
+                      <div className="text-slate-400">Рейс:</div>
+                      <div className="font-bold text-lg text-white">{bidRate ? fmt(Math.round(bidRate * dist)) : "—"} ₽</div>
+                    </div>
+                  </div>
+                  {showConfirm && (
+                    <div className="mt-3 bg-yellow-900/30 border border-yellow-700 rounded-lg p-3 text-sm text-yellow-300">
+                      <AlertTriangle size={14} className="inline mr-1" />
+                      Подтвердите: <b>{bidRate} ₽/км</b> ({fmt(Math.round(bidRate * dist))} ₽/рейс)?
+                    </div>
+                  )}
+                  <button onClick={handleBid} disabled={bidLoading || !bidRate}
+                    className="mt-3 w-full bg-blue-600 text-white py-2.5 rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                    {bidLoading ? "Отправка..." : showConfirm ? "✅ Подтвердить" : "⚡ Ставка через VPS"}
+                  </button>
+                </>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==================== Tender History Modal (finished) ====================
+function TenderHistoryModal({ tenderId, tenderInfo, onClose }: {
+  tenderId: string; tenderInfo: FinishedTender; onClose: () => void;
+}) {
+  const [history, setHistory] = useState<TenderHistory | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const r = await apiFetch(`/api/tenders/${tenderId}/history`);
+        if (!r.ok) throw new Error("Ошибка загрузки");
+        const d: TenderHistory = await r.json();
+        setHistory(d);
+      } catch (e: any) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [tenderId]);
+
+  const initialRate = Number(history?.initial_rate || tenderInfo.initial_rate) || 0;
+  const finalRate = Number(history?.final_rate || tenderInfo.final_rate) || 0;
+  const drop = initialRate - finalRate;
+  const dropPct = initialRate > 0 ? (drop / initialRate) * 100 : 0;
+  const startPt = history?.start_point || tenderInfo.start_point;
+  const endPt = history?.end_point || tenderInfo.end_point;
+  const distKm = history?.distance_km || tenderInfo.distance_km;
+  const winner = history?.winner || tenderInfo.winner_name;
+
+  const chartData = useMemo(() => {
+    if (!history?.rate_changes?.length) return [];
+    return history.rate_changes.map((rc) => ({
+      time: fmtMskTime(rc.time),
+      rate: rc.new_rate,
+      fullTime: fmtMsk(rc.time),
+    }));
+  }, [history]);
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-center p-4 pt-8 overflow-y-auto" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-slate-800 rounded-xl shadow-2xl w-full max-w-4xl border border-slate-700">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-slate-700">
+          <div>
+            <h2 className="text-lg font-bold text-white">
+              {startPt || "?"} → {endPt || "?"}
+            </h2>
+            <p className="text-sm text-slate-400">
+              ID: {tenderId} • {fmt(distKm)} км
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400"><X size={20} /></button>
+        </div>
+
+        <div className="p-4 space-y-4 max-h-[80vh] overflow-y-auto">
+          {loading ? (
+            <div className="flex items-center justify-center py-12 text-slate-500">
+              <RefreshCw size={24} className="animate-spin mr-2" /> Загрузка истории...
+            </div>
+          ) : error ? (
+            <div className="bg-red-900/30 border border-red-700 rounded-lg p-4 text-red-400">
+              <AlertTriangle size={14} className="inline mr-2" />{error}
+            </div>
+          ) : (
+            <>
+              {/* 3 cards */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-blue-900/30 rounded-lg p-3 text-center border border-blue-800/50">
+                  <div className="text-xs text-blue-400 mb-1">Начальная ставка</div>
+                  <div className="text-xl font-bold text-blue-300">{fmt(initialRate, 2)} ₽/км</div>
+                </div>
+                <div className="bg-green-900/30 rounded-lg p-3 text-center border border-green-800/50">
+                  <div className="text-xs text-green-400 mb-1">Финальная ставка</div>
+                  <div className="text-xl font-bold text-green-300">{fmt(finalRate, 2)} ₽/км</div>
+                </div>
+                <div className="bg-amber-900/30 rounded-lg p-3 text-center border border-amber-800/50">
+                  <div className="text-xs text-amber-400 mb-1">Победитель</div>
+                  <div className="text-sm font-bold text-amber-300 truncate">{winner || "—"}</div>
+                  {(history?.winner_inn || tenderInfo.winner_inn) && (
+                    <div className="text-xs text-slate-500 mt-0.5">ИНН: {history?.winner_inn || tenderInfo.winner_inn}</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Stats row */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-slate-700/50 rounded-lg p-3">
+                  <div className="text-xs text-slate-400 mb-1">📉 Падение</div>
+                  <div className="font-bold text-red-400">
+                    -{fmt(drop, 2)} ₽/км
+                    <span className="text-xs text-slate-500 ml-1">(-{fmt(dropPct, 1)}%)</span>
+                  </div>
+                </div>
+                <div className="bg-slate-700/50 rounded-lg p-3">
+                  <div className="text-xs text-slate-400 mb-1">⏱ Длительность</div>
+                  <div className="font-bold text-white">
+                    {fmtDuration(history?.start_time || tenderInfo.start_time, history?.end_time || tenderInfo.end_time)}
+                  </div>
+                </div>
+                <div className="bg-slate-700/50 rounded-lg p-3">
+                  <div className="text-xs text-slate-400 mb-1">📊 Изменений ставки</div>
+                  <div className="font-bold text-white">{history?.total_changes ?? tenderInfo.rate_changes}</div>
+                </div>
+                <div className="bg-slate-700/50 rounded-lg p-3">
+                  <div className="text-xs text-slate-400 mb-1">🎯 Ставок в последнюю мин.</div>
+                  <div className={`font-bold ${(history?.last_minute_bids || 0) > 0 ? "text-red-400" : "text-white"}`}>
+                    {history?.last_minute_bids ?? tenderInfo.last_minute_bids}
+                    {(history?.last_minute_bids || 0) > 0 && " 🔥"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Chart */}
+              {chartData.length > 1 && (
+                <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
+                  <h3 className="text-sm font-bold text-slate-300 mb-3">📈 График ставок</h3>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <LineChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                      <XAxis dataKey="time" stroke="#94a3b8" fontSize={12} />
+                      <YAxis
+                        stroke="#94a3b8"
+                        fontSize={12}
+                        domain={['auto', 'auto']}
+                        tickFormatter={(v: number) => v.toFixed(1)}
+                      />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #475569", borderRadius: "8px" }}
+                        labelStyle={{ color: "#94a3b8" }}
+                        formatter={(value: number) => [`${value.toFixed(2)} ₽/км`, "Ставка"]}
+                        labelFormatter={(label: string, payload: any[]) => payload?.[0]?.payload?.fullTime || label}
+                      />
+                      <ReferenceLine y={initialRate} stroke="#60a5fa" strokeDasharray="5 5" label={{ value: `Нач: ${initialRate}`, fill: "#60a5fa", fontSize: 11 }} />
+                      <Line
+                        type="stepAfter"
+                        dataKey="rate"
+                        stroke="#3b82f6"
+                        strokeWidth={2}
+                        dot={{ fill: "#3b82f6", r: 4 }}
+                        activeDot={{ r: 6, fill: "#60a5fa" }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              {/* Rate changes table */}
+              {history?.rate_changes && history.rate_changes.length > 0 && (
+                <div className="bg-slate-900/50 rounded-lg border border-slate-700 overflow-x-auto">
+                  <h3 className="text-sm font-bold text-slate-300 p-3 border-b border-slate-700">📋 История ставок</h3>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-slate-400 text-xs uppercase border-b border-slate-700">
+                        <th className="px-3 py-2 text-left">Время МСК</th>
+                        <th className="px-3 py-2 text-right">Ставка ₽/км</th>
+                        <th className="px-3 py-2 text-right">Изменение</th>
+                        <th className="px-3 py-2 text-left">Лидер</th>
+                        <th className="px-3 py-2 text-right">Осталось</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {history.rate_changes.map((rc, i) => {
+                        const tls = rc.time_left_seconds;
+                        let rowBg = "";
+                        if (tls < 60) rowBg = "bg-red-900/30";
+                        else if (tls < 300) rowBg = "bg-yellow-900/20";
+                        return (
+                          <tr key={i} className={`border-b border-slate-700/50 ${rowBg}`}>
+                            <td className="px-3 py-2 text-slate-300 font-mono text-xs">{fmtMsk(rc.time)}</td>
+                            <td className="px-3 py-2 text-right font-mono font-bold text-white">{fmt(rc.new_rate, 2)}</td>
+                            <td className="px-3 py-2 text-right font-mono text-red-400 text-xs">
+                              -{fmt(rc.drop, 2)} ₽
+                            </td>
+                            <td className="px-3 py-2 text-left text-xs text-slate-400 truncate max-w-[200px]">
+                              {rc.leader || "—"}
+                            </td>
+                            <td className={`px-3 py-2 text-right font-mono text-xs ${tls < 60 ? "text-red-400 font-bold" : tls < 300 ? "text-yellow-400" : "text-slate-400"}`}>
+                              {fmtTimeLeft(tls)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==================== Sort Header Component ====================
+function SortHeader({ label, field, currentField, currentDir, onSort }: {
+  label: string; field: SortField; currentField: SortField; currentDir: SortDir;
+  onSort: (f: SortField) => void;
+}) {
+  const active = currentField === field;
+  return (
+    <th
+      className={`px-2 py-2 text-right cursor-pointer select-none transition-colors ${active ? "text-blue-400" : "hover:text-white"}`}
+      onClick={() => onSort(field)}
+    >
+      <span className="inline-flex items-center gap-0.5">
+        {label}
+        {active ? (
+          currentDir === "ASC" ? <ChevronUp size={12} /> : <ChevronDown size={12} />
+        ) : (
+          <ArrowUpDown size={10} className="opacity-40" />
+        )}
+      </span>
+    </th>
+  );
+}
+
+// ==================== Main Page ====================
+export default function TendersPage() {
+  const { user } = useAuth();
+  const isDirector = user?.role === "director";
+
+  // Main tab
+  const [activeTab, setActiveTab] = useState<MainTab>("active");
+
+  // --- Active tab internal sub-tab ---
+  const [subTab, setSubTab] = useState<"active" | "history">("active");
+  const [tenders, setTenders] = useState<Tender[]>([]);
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Tender | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+
+  // --- Filters state ---
+  const [filterFrom, setFilterFrom] = useState("");
+  const [filterTo, setFilterTo] = useState("");
+  const [distanceRange, setDistanceRange] = useState<DistanceRange>("all");
+  const [minRateFilter, setMinRateFilter] = useState("");
+  const [onlyRoundTrip, setOnlyRoundTrip] = useState(false);
+  const [onlyProfitable, setOnlyProfitable] = useState(false);
+  const [onlyUrgent, setOnlyUrgent] = useState(false);
+  const [onlyParticipant, setOnlyParticipant] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [tonnageFilter, setTonnageFilter] = useState<number[]>([]);
+
+  // --- Sort state ---
+  const [sortField, setSortField] = useState<SortField>("profit_per_trip");
+  const [sortDir, setSortDir] = useState<SortDir>("DESC");
+
+  // --- History (old internal history) state ---
+  const [hPage, setHPage] = useState(1);
+  const [hTotal, setHTotal] = useState(0);
+  const [hPages, setHPages] = useState(0);
+  const [hSearch, setHSearch] = useState("");
+  const [hDateFrom, setHDateFrom] = useState("");
+  const [hDateTo, setHDateTo] = useState("");
+  const [hSortBy, setHSortBy] = useState("finished_at");
+  const [hSortDir, setHSortDir] = useState<"ASC" | "DESC">("DESC");
+  const [tick, setTick] = useState(0);
+
+  // --- Finished tab state ---
+  const [finishedTenders, setFinishedTenders] = useState<FinishedTender[]>([]);
+  const [finishedTotal, setFinishedTotal] = useState(0);
+  const [finishedOffset, setFinishedOffset] = useState(0);
+  const [finishedLoading, setFinishedLoading] = useState(false);
+  const [finishedSelectedId, setFinishedSelectedId] = useState<string | null>(null);
+  const [finishedSelectedInfo, setFinishedSelectedInfo] = useState<FinishedTender | null>(null);
+  const FINISHED_LIMIT = 50;
+
+  // --- Analytics tab state ---
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+
+  // --- Unique values for dropdowns ---
+  const uniqueFromPoints = useMemo(() => {
+    const pts = [...new Set(tenders.map(t => t.start_point).filter(Boolean))];
+    return pts.sort();
+  }, [tenders]);
+
+  const uniqueToPoints = useMemo(() => {
+    const pts = [...new Set(tenders.map(t => t.end_point).filter(Boolean))];
+    return pts.sort();
+  }, [tenders]);
+
+  const hasActiveFilters = filterFrom || filterTo || distanceRange !== "all" || minRateFilter || onlyRoundTrip || onlyProfitable || onlyUrgent || onlyParticipant || searchQuery || tonnageFilter.length > 0;
+
+  const resetFilters = () => {
+    setFilterFrom("");
+    setFilterTo("");
+    setDistanceRange("all");
+    setMinRateFilter("");
+    setOnlyRoundTrip(false);
+    setOnlyProfitable(false);
+    setOnlyUrgent(false);
+    setOnlyParticipant(false);
+    setSearchQuery('');
+    setTonnageFilter([]);
+  };
+
+  const filteredAndSorted = useMemo(() => {
+    let result = tenders.filter(t => {
+      if (filterFrom && t.start_point !== filterFrom) return false;
+      if (filterTo && t.end_point !== filterTo) return false;
+      if (distanceRange !== "all") {
+        const d = Number(t.distance_km) || 0;
+        switch (distanceRange) {
+          case "lt500": if (d >= 500) return false; break;
+          case "500-1000": if (d < 500 || d > 1000) return false; break;
+          case "1000-2000": if (d < 1000 || d > 2000) return false; break;
+          case "gt2000": if (d <= 2000) return false; break;
+        }
+      }
+      if (minRateFilter) {
+        const mr = parseFloat(minRateFilter);
+        if (!isNaN(mr) && (Number(t.current_rate) || 0) < mr) return false;
+      }
+      if (onlyRoundTrip && !t.is_round_trip) return false;
+      if (onlyProfitable && profitForTender(t) <= 0) return false;
+      if (onlyUrgent && !isUrgent(t.end_time)) return false;
+      if (onlyParticipant && !t.supplier_bet_rate) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const haystack = `${t.id} ${t.name || ''} ${t.route_name || ''} ${t.start_point || ''} ${t.end_point || ''}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      if (tonnageFilter.length > 0 && !tonnageFilter.includes(t.tonnage)) return false;
+      return true;
+    });
+
+    result.sort((a, b) => {
+      let va: number, vb: number;
+      switch (sortField) {
+        case "profit_per_trip":
+          va = profitForTender(a); vb = profitForTender(b); break;
+        case "current_rate":
+          va = Number(a.current_rate) || 0; vb = Number(b.current_rate) || 0; break;
+        case "distance_km":
+          va = Number(a.distance_km) || 0; vb = Number(b.distance_km) || 0; break;
+        case "end_time":
+          va = a.end_time ? new Date(a.end_time).getTime() : 0;
+          vb = b.end_time ? new Date(b.end_time).getTime() : 0; break;
+        case "participants_count":
+          va = Number(a.participants_count) || 0; vb = Number(b.participants_count) || 0; break;
+        case "profit_per_km":
+          va = Number(a.profit_per_km) || 0; vb = Number(b.profit_per_km) || 0; break;
+        default:
+          va = 0; vb = 0;
+      }
+      return sortDir === "ASC" ? va - vb : vb - va;
+    });
+
+    return result;
+  }, [tenders, filterFrom, filterTo, distanceRange, minRateFilter, onlyRoundTrip, onlyProfitable, onlyUrgent, onlyParticipant, searchQuery, tonnageFilter, sortField, sortDir]);
+
+  const handleActiveSort = (field: SortField) => {
+    if (sortField === field) setSortDir(d => d === "ASC" ? "DESC" : "ASC");
+    else { setSortField(field); setSortDir("DESC"); }
+  };
+
+  const loadActive = useCallback(async () => {
+    try {
+      const r = await apiFetch("/api/tenders/all");
+      const d = await r.json();
+      setTenders(d.tenders || []);
+      setLastUpdate(new Date());
+      setError(null);
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }, []);
+
+  const loadHistoryItems = useCallback(async () => {
+    setLoading(true);
+    try {
+      const p = new URLSearchParams({ page: String(hPage), limit: "50", sort_by: hSortBy, sort_dir: hSortDir });
+      if (hSearch) p.set("search", hSearch);
+      if (hDateFrom) p.set("date_from", hDateFrom);
+      if (hDateTo) p.set("date_to", hDateTo);
+      const r = await apiFetch(`/api/tenders/history?${p}`);
+      const d = await r.json();
+      setHistoryItems(d.history || []);
+      setHTotal(d.total || 0);
+      setHPages(d.pages || 0);
+    } catch (e: any) { console.error(e); }
+    finally { setLoading(false); }
+  }, [hPage, hSearch, hDateFrom, hDateTo, hSortBy, hSortDir]);
+
+  const loadStats = useCallback(async () => {
+    try {
+      const r = await apiFetch("/api/tenders/stats");
+      setStats(await r.json());
+    } catch (e) { console.error(e); }
+  }, []);
+
+  // --- Finished tenders loader ---
+  const loadFinished = useCallback(async () => {
+    setFinishedLoading(true);
+    try {
+      const r = await apiFetch(`/api/tenders/finished?limit=${FINISHED_LIMIT}&offset=${finishedOffset}`);
+      const d = await r.json();
+      setFinishedTenders(d.tenders || []);
+      setFinishedTotal(d.total || 0);
+    } catch (e: any) { console.error(e); }
+    finally { setFinishedLoading(false); }
+  }, [finishedOffset]);
+
+  // --- Analytics loader ---
+  const loadAnalytics = useCallback(async () => {
+    setAnalyticsLoading(true);
+    try {
+      const r = await apiFetch("/api/tenders/analytics");
+      const d = await r.json();
+      setAnalytics(d);
+    } catch (e: any) { console.error(e); }
+    finally { setAnalyticsLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    loadActive(); loadStats();
+    const iv = setInterval(loadActive, 15000);
+    return () => clearInterval(iv);
+  }, [loadActive, loadStats]);
+
+  useEffect(() => { if (subTab === "history") loadHistoryItems(); }, [subTab, loadHistoryItems]);
+  useEffect(() => { const iv = setInterval(() => setTick(t => t + 1), 1000); return () => clearInterval(iv); }, []);
+
+  // Load finished when tab switches
+  useEffect(() => { if (activeTab === "finished") loadFinished(); }, [activeTab, loadFinished]);
+  useEffect(() => { if (activeTab === "analytics") loadAnalytics(); }, [activeTab, loadAnalytics]);
+
+  const handleSort = (col: string) => {
+    if (hSortBy === col) setHSortDir(d => d === "ASC" ? "DESC" : "ASC");
+    else { setHSortBy(col); setHSortDir("DESC"); }
+  };
+
+  const distanceChips: { label: string; value: DistanceRange }[] = [
+    { label: "Все", value: "all" },
+    { label: "< 500", value: "lt500" },
+    { label: "500–1000", value: "500-1000" },
+    { label: "1000–2000", value: "1000-2000" },
+    { label: "2000+", value: "gt2000" },
+  ];
+
+  const finishedPages = Math.ceil(finishedTotal / FINISHED_LIMIT);
+  const finishedPage = Math.floor(finishedOffset / FINISHED_LIMIT) + 1;
+
+  return (
+    <div className="max-w-[1600px] mx-auto">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+          <BarChart3 size={28} className="text-blue-400" /> Тендеры WB
+        </h1>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+        {[
+          { l: "Активные", v: tenders.length, c: "text-blue-400" },
+          { l: "В истории", v: stats?.total_history || 0, c: "text-slate-300" },
+          { l: "Наши ставки", v: stats?.total_bids || 0, c: "text-purple-400" },
+          { l: "Выиграно", v: stats?.won_tenders || 0, c: "text-green-400" },
+          { l: "Ср. ставка", v: stats?.avg_final_rate ? `${fmt(stats.avg_final_rate, 1)} ₽` : "—", c: "text-amber-400" },
+        ].map((s, i) => (
+          <div key={i} className="bg-slate-800 rounded-lg p-3 border border-slate-700">
+            <div className="text-xs text-slate-500 mb-1">{s.l}</div>
+            <div className={`text-xl font-bold ${s.c}`}>{s.v}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Main Tabs - salary-style */}
+      <div className="flex gap-1 mb-6 border-b border-slate-700">
+        {[
+          { key: "active" as MainTab, label: "Активные", icon: <Activity size={16} />, count: tenders.length },
+          { key: "finished" as MainTab, label: "Завершённые", icon: <CheckCircle size={16} />, count: finishedTotal || undefined },
+          { key: "analytics" as MainTab, label: "Аналитика", icon: <TrendingUp size={16} /> },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex items-center gap-2 px-5 py-3 text-sm font-medium transition-colors relative ${
+              activeTab === tab.key
+                ? "text-blue-400"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+            {tab.count != null && tab.count > 0 && (
+              <span className={`ml-1 px-1.5 py-0.5 rounded-full text-xs ${
+                activeTab === tab.key ? "bg-blue-500/30 text-blue-300" : "bg-slate-700 text-slate-400"
+              }`}>{tab.count}</span>
+            )}
+            {activeTab === tab.key && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-400 rounded-t" />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ==================== TAB: ACTIVE ==================== */}
+      {activeTab === "active" && (
+        <div>
+          {/* Sub-tabs (Active/History) */}
+          <div className="flex gap-1 mb-4 bg-slate-800 rounded-lg p-1 w-fit border border-slate-700">
+            <button onClick={() => setSubTab("active")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${subTab === "active" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"}`}>
+              Активные {tenders.length > 0 && <span className="ml-1 bg-blue-500/30 text-blue-300 px-1.5 py-0.5 rounded-full text-xs">{tenders.length}</span>}
+            </button>
+            <button onClick={() => setSubTab("history")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${subTab === "history" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"}`}>
+              История
+            </button>
+          </div>
+
+          {/* Active sub-tab */}
+          {subTab === "active" && (
+            <div>
+              {/* Filters bar */}
+              <div className="bg-slate-800 rounded-lg border border-slate-700 p-3 mb-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Filter size={14} className="text-slate-400 shrink-0" />
+                  <SearchableDropdown options={uniqueFromPoints} value={filterFrom} onChange={setFilterFrom} placeholder="Откуда" />
+                  <SearchableDropdown options={uniqueToPoints} value={filterTo} onChange={setFilterTo} placeholder="Куда" />
+                  <div className="flex items-center gap-1">
+                    {distanceChips.map(ch => (
+                      <button
+                        key={ch.value}
+                        onClick={() => setDistanceRange(ch.value)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                          distanceRange === ch.value
+                            ? "bg-blue-600 text-white"
+                            : "bg-slate-700 text-slate-400 hover:text-white hover:bg-slate-600"
+                        }`}
+                      >
+                        {ch.label}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={minRateFilter}
+                    onChange={e => setMinRateFilter(e.target.value)}
+                    placeholder="мин ₽/км"
+                    className="w-24 bg-slate-700 border border-slate-600 rounded-lg px-2.5 py-1.5 text-sm text-white focus:ring-1 focus:ring-blue-500 focus:outline-none placeholder:text-slate-500"
+                  />
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-slate-500 mr-1">Тоннаж:</span>
+                    <button
+                      onClick={() => setTonnageFilter([])}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                        tonnageFilter.length === 0
+                          ? "bg-blue-600 text-white"
+                          : "bg-slate-700 text-slate-400 hover:text-white hover:bg-slate-600"
+                      }`}
+                    >
+                      Все
+                    </button>
+                    {[5, 10, 20].map(tn => (
+                      <button
+                        key={tn}
+                        onClick={() => setTonnageFilter(prev =>
+                          prev.includes(tn) ? prev.filter(v => v !== tn) : [...prev, tn]
+                        )}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                          tonnageFilter.includes(tn)
+                            ? "bg-blue-600 text-white"
+                            : "bg-slate-700 text-slate-400 hover:text-white hover:bg-slate-600"
+                        }`}
+                      >
+                        {tn} тн
+                      </button>
+                    ))}
+                  </div>
+                  <div className="relative">
+                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      placeholder="Поиск маршрута или номера..."
+                      className="w-[250px] pl-8 pr-3 py-1.5 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white focus:ring-1 focus:ring-blue-500 focus:outline-none placeholder:text-slate-500"
+                    />
+                    {searchQuery && (
+                      <X size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 cursor-pointer hover:text-white" onClick={() => setSearchQuery('')} />
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setOnlyParticipant(!onlyParticipant)}
+                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      onlyParticipant ? "bg-green-600 text-white" : "bg-slate-700 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    {onlyParticipant ? "Мы участвуем 🟢" : "Все тендеры"}
+                  </button>
+                  <button
+                    onClick={() => setOnlyRoundTrip(!onlyRoundTrip)}
+                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      onlyRoundTrip ? "bg-purple-600 text-white" : "bg-slate-700 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    🔄 Туда-обратно
+                  </button>
+                  <button
+                    onClick={() => setOnlyProfitable(!onlyProfitable)}
+                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      onlyProfitable ? "bg-green-600 text-white" : "bg-slate-700 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <TrendingUp size={12} /> Прибыльные
+                  </button>
+                  <button
+                    onClick={() => setOnlyUrgent(!onlyUrgent)}
+                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      onlyUrgent ? "bg-amber-600 text-white" : "bg-slate-700 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Flame size={12} /> Горящие
+                  </button>
+                  {hasActiveFilters && (
+                    <button
+                      onClick={resetFilters}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:text-red-300 bg-red-900/20 hover:bg-red-900/40 transition-colors"
+                    >
+                      <RotateCcw size={12} /> Сбросить
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-slate-300">
+                    Показано <span className="font-bold text-white">{filteredAndSorted.length}</span> из <span className="font-bold text-white">{tenders.length}</span> тендеров
+                  </span>
+                  <div className="flex items-center gap-3 text-xs text-slate-500">
+                    <span>🟢 Лидер</span><span className="text-green-400/60">█ Профит</span><span className="text-red-400/60">█ Убыток</span><span className="text-yellow-400">▌Горящий</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  {tenders.length > 0 && <RefreshCw size={12} className="animate-spin" />}
+                  {lastUpdate && lastUpdate.toLocaleTimeString("ru-RU")}
+                </div>
+              </div>
+
+              {error && (
+                <div className="bg-red-900/30 border border-red-700 rounded-lg p-3 mb-3 text-red-400 text-sm">
+                  <AlertTriangle size={14} className="inline mr-2" />{error}
+                </div>
+              )}
+
+              {tenders.length === 0 ? (
+                <div className="bg-slate-800 rounded-lg p-12 text-center text-slate-500 border border-slate-700">
+                  <BarChart3 size={48} className="mx-auto mb-3 text-slate-600" />
+                  <p className="text-lg font-medium">Нет активных тендеров</p>
+                  <p className="text-sm mt-1">Данные обновляются каждые 15 секунд</p>
+                </div>
+              ) : filteredAndSorted.length === 0 ? (
+                <div className="bg-slate-800 rounded-lg p-12 text-center text-slate-500 border border-slate-700">
+                  <Filter size={48} className="mx-auto mb-3 text-slate-600" />
+                  <p className="text-lg font-medium">Ничего не найдено</p>
+                  <p className="text-sm mt-1">Попробуйте изменить фильтры</p>
+                  <button onClick={resetFilters} className="mt-3 text-blue-400 hover:text-blue-300 text-sm">Сбросить фильтры</button>
+                </div>
+              ) : (
+                <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-slate-400 text-xs uppercase border-b border-slate-700">
+                        <th className="px-2 py-2 w-8"></th>
+                        <th className="px-2 py-2 text-left">Маршрут</th>
+                        <SortHeader label="Расст." field="distance_km" currentField={sortField} currentDir={sortDir} onSort={handleActiveSort} />
+                        <th className="px-2 py-2 text-right">Тонн.</th>
+                        <th className="px-2 py-2 text-right">Рейсы</th>
+                        <th className="px-2 py-2 text-right">Дней</th>
+                        <SortHeader label="Ставка" field="current_rate" currentField={sortField} currentDir={sortDir} onSort={handleActiveSort} />
+                        <SortHeader label="Уч." field="participants_count" currentField={sortField} currentDir={sortDir} onSort={handleActiveSort} />
+                        <th className="px-2 py-2 text-center">Статус</th>
+                        <SortHeader label="Осталось" field="end_time" currentField={sortField} currentDir={sortDir} onSort={handleActiveSort} />
+                        <th className="px-2 py-2 text-right">Себест.</th>
+                        <SortHeader label="₽/км" field="profit_per_km" currentField={sortField} currentDir={sortDir} onSort={handleActiveSort} />
+                        <SortHeader label="Профит" field="profit_per_trip" currentField={sortField} currentDir={sortDir} onSort={handleActiveSort} />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredAndSorted.map(t => {
+                        const tProfit = profitForTender(t);
+                        const tUrgent = isUrgent(t.end_time);
+                        return (
+                          <tr key={t.id} className={`${rowColor(t)} hover:bg-slate-700/50 cursor-pointer transition-all border-b border-slate-700/50`}
+                            onClick={() => setSelected(t)}>
+                            <td className="px-2 py-2 text-center">
+                              <span className="relative">
+                                {statusEmoji(t)}
+                                {t.we_are_leader && (
+                                  <span className="absolute -top-1 -right-3 bg-purple-600 text-white text-[9px] px-1 rounded font-bold">ЛИД</span>
+                                )}
+                              </span>
+                            </td>
+                            <td className="px-2 py-2 min-w-[280px]">
+                              <div className="font-medium text-white whitespace-normal break-words">
+                                <span className={`inline-block w-2 h-2 rounded-full mr-2 ${
+                                  t.leader_inn === OUR_INN ? 'bg-green-400' :
+                                  t.supplier_bet_rate != null ? 'bg-yellow-400' :
+                                  'bg-slate-600'
+                                }`} />
+                                {t.start_point || "?"} → {t.end_point || "?"}
+                                {tUrgent && <Flame size={12} className="inline ml-1 text-amber-400" />}
+                              </div>
+                              <div className="text-xs text-slate-500">
+                                {t.body_type} {t.is_round_trip ? "🔄" : ""}
+                                {t.we_are_leader && <span className="ml-1 bg-purple-600/40 text-purple-300 text-[10px] px-1 rounded">💜 Мы лидер</span>}
+                              </div>
+                            </td>
+                            <td className="px-2 py-2 text-right font-mono text-xs text-slate-300">{fmt(t.distance_km)} км</td>
+                            <td className="px-2 py-2 text-right text-xs text-slate-300">{t.tonnage || "—"}</td>
+                            <td className="px-2 py-2 text-right text-xs text-slate-300">{t.number_trips || "—"}</td>
+                            <td className="px-2 py-2 text-right text-xs text-slate-300">{t.active_period || "—"}</td>
+                            <td className="px-2 py-2 text-right font-mono font-bold text-white">{t.current_rate ? fmt(t.current_rate, 2) : "—"}</td>
+                            <td className="px-2 py-2 text-center"><span className="bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded-full text-xs">{t.participants_count || 0}</span></td>
+                            <td className="px-2 py-2 text-center text-sm">
+                              {t.leader_inn === OUR_INN ? (
+                                <span className="text-green-400">🏆</span>
+                              ) : t.supplier_bet_rate != null ? (
+                                <span className="text-yellow-400">📋</span>
+                              ) : (
+                                <span className="text-slate-600">—</span>
+                              )}
+                            </td>
+                            <td className="px-2 py-2 text-center text-xs whitespace-nowrap"><CountdownTimer endTime={t.end_time} /></td>
+                            <td className="px-2 py-2 text-right font-mono text-xs text-slate-400">{fmt(t.our_rate_per_km, 2)}</td>
+                            <td className="px-2 py-2 text-right font-mono text-xs font-bold">
+                              {(t.profit_per_km != null && t.profit_per_km !== 0) ? (
+                                t.profit_per_km > 0
+                                  ? <span className="text-green-400">+{fmt(t.profit_per_km, 2)}</span>
+                                  : <span className="text-red-400">{fmt(t.profit_per_km, 2)}</span>
+                              ) : "—"}
+                            </td>
+                            <td className="px-2 py-2 text-right font-mono text-xs font-bold">
+                              {tProfit !== 0 ? (
+                                tProfit > 0
+                                  ? <span className="text-green-400">+{fmt(Math.round(tProfit))}</span>
+                                  : <span className="text-red-400">{fmt(Math.round(tProfit))}</span>
+                              ) : "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* History sub-tab */}
+          {subTab === "history" && (
+            <div>
+              <div className="flex flex-wrap items-center gap-3 mb-4">
+                <div className="relative flex-1 min-w-[200px] max-w-md">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input type="text" placeholder="Поиск..." value={hSearch}
+                    onChange={e => { setHSearch(e.target.value); setHPage(1); }}
+                    className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:ring-1 focus:ring-blue-500 focus:outline-none" />
+                </div>
+                <input type="date" value={hDateFrom} onChange={e => { setHDateFrom(e.target.value); setHPage(1); }}
+                  className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
+                <input type="date" value={hDateTo} onChange={e => { setHDateTo(e.target.value); setHPage(1); }}
+                  className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white" />
+                {(hSearch || hDateFrom || hDateTo) && (
+                  <button onClick={() => { setHSearch(""); setHDateFrom(""); setHDateTo(""); setHPage(1); }}
+                    className="text-slate-500 hover:text-slate-300 text-xs flex items-center gap-1"><X size={12} /> Сбросить</button>
+                )}
+              </div>
+
+              {loading ? (
+                <div className="bg-slate-800 rounded-lg p-12 text-center text-slate-500 border border-slate-700">
+                  <RefreshCw size={32} className="animate-spin mx-auto mb-3" /> Загрузка...
+                </div>
+              ) : historyItems.length === 0 ? (
+                <div className="bg-slate-800 rounded-lg p-12 text-center text-slate-500 border border-slate-700">
+                  <Calendar size={48} className="mx-auto mb-3 text-slate-600" />
+                  <p>Нет данных в истории</p>
+                  <p className="text-sm mt-1">Завершённые тендеры сохраняются автоматически</p>
+                </div>
+              ) : (
+                <>
+                  <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-slate-400 text-xs uppercase border-b border-slate-700">
+                          <th className="px-3 py-2 text-left">Маршрут</th>
+                          <th className="px-3 py-2 text-right cursor-pointer hover:text-white" onClick={() => handleSort("distance_km")}>Расст. {hSortBy === "distance_km" && <ArrowUpDown size={10} className="inline" />}</th>
+                          <th className="px-3 py-2 text-right cursor-pointer hover:text-white" onClick={() => handleSort("tonnage")}>Тонн. {hSortBy === "tonnage" && <ArrowUpDown size={10} className="inline" />}</th>
+                          <th className="px-3 py-2 text-right cursor-pointer hover:text-white" onClick={() => handleSort("initial_rate")}>Нач. {hSortBy === "initial_rate" && <ArrowUpDown size={10} className="inline" />}</th>
+                          <th className="px-3 py-2 text-right cursor-pointer hover:text-white" onClick={() => handleSort("final_rate")}>Фин. {hSortBy === "final_rate" && <ArrowUpDown size={10} className="inline" />}</th>
+                          <th className="px-3 py-2 text-left">Победитель</th>
+                          <th className="px-3 py-2 text-right cursor-pointer hover:text-white" onClick={() => handleSort("participants_count")}>Уч. {hSortBy === "participants_count" && <ArrowUpDown size={10} className="inline" />}</th>
+                          <th className="px-3 py-2 text-right cursor-pointer hover:text-white" onClick={() => handleSort("finished_at")}>Дата {hSortBy === "finished_at" && <ArrowUpDown size={10} className="inline" />}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historyItems.map(h => (
+                          <tr key={h.id} className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors">
+                            <td className="px-3 py-2 min-w-[280px]">
+                              <div className="font-medium text-white whitespace-normal break-words">{h.start_point || "?"} → {h.end_point || "?"}</div>
+                              {h.route_name && <div className="text-xs text-slate-500 whitespace-normal break-words">{h.route_name}</div>}
+                            </td>
+                            <td className="px-3 py-2 text-right font-mono text-slate-300">{fmt(h.distance_km)} км</td>
+                            <td className="px-3 py-2 text-right text-slate-300">{h.tonnage || "—"}</td>
+                            <td className="px-3 py-2 text-right font-mono text-slate-300">{fmt(h.initial_rate, 2)}</td>
+                            <td className="px-3 py-2 text-right font-mono font-bold text-white">{fmt(h.final_rate, 2)}</td>
+                            <td className="px-3 py-2 text-left text-xs text-slate-400 truncate max-w-[150px]">{h.winner_name || "—"}</td>
+                            <td className="px-3 py-2 text-right text-slate-400">{h.participants_count || "—"}</td>
+                            <td className="px-3 py-2 text-right text-xs text-slate-500">{fmtDate(h.finished_at)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {hPages > 1 && (
+                    <div className="flex items-center justify-between mt-4">
+                      <div className="text-sm text-slate-500">Всего: {hTotal} | Стр. {hPage}/{hPages}</div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setHPage(p => Math.max(1, p - 1))} disabled={hPage <= 1}
+                          className="p-2 rounded-lg border border-slate-700 hover:bg-slate-700 disabled:opacity-30 text-slate-400"><ChevronLeft size={16} /></button>
+                        <button onClick={() => setHPage(p => Math.min(hPages, p + 1))} disabled={hPage >= hPages}
+                          className="p-2 rounded-lg border border-slate-700 hover:bg-slate-700 disabled:opacity-30 text-slate-400"><ChevronRight size={16} /></button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {selected && <TenderModal tender={selected} isDirector={isDirector} onClose={() => setSelected(null)} onBidPlaced={loadActive} />}
+        </div>
+      )}
+
+      {/* ==================== TAB: FINISHED ==================== */}
+      {activeTab === "finished" && (
+        <div>
+          {finishedLoading ? (
+            <div className="bg-slate-800 rounded-lg p-12 text-center text-slate-500 border border-slate-700">
+              <RefreshCw size={32} className="animate-spin mx-auto mb-3" /> Загрузка завершённых тендеров...
+            </div>
+          ) : finishedTenders.length === 0 ? (
+            <div className="bg-slate-800 rounded-lg p-12 text-center text-slate-500 border border-slate-700">
+              <CheckCircle size={48} className="mx-auto mb-3 text-slate-600" />
+              <p className="text-lg font-medium">Нет завершённых тендеров</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm text-slate-300">
+                  Всего: <span className="font-bold text-white">{finishedTotal}</span> • Стр. {finishedPage}/{finishedPages || 1}
+                </span>
+              </div>
+              <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-slate-400 text-xs uppercase border-b border-slate-700">
+                      <th className="px-3 py-2 text-left">Маршрут</th>
+                      <th className="px-3 py-2 text-right">Расст.</th>
+                      <th className="px-3 py-2 text-right">Нач. ставка</th>
+                      <th className="px-3 py-2 text-right">Фин. ставка</th>
+                      <th className="px-3 py-2 text-right">Падение</th>
+                      <th className="px-3 py-2 text-left">Победитель</th>
+                      <th className="px-3 py-2 text-center">Участн.</th>
+                      <th className="px-3 py-2 text-center">Изм.</th>
+                      <th className="px-3 py-2 text-center">Снайпер</th>
+                      <th className="px-3 py-2 text-right">Дата МСК</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {finishedTenders.map(ft => {
+                      const dropVal = Number(ft.initial_rate) - Number(ft.final_rate);
+                      const dropPct = Number(ft.initial_rate) > 0 ? (dropVal / Number(ft.initial_rate)) * 100 : 0;
+                      return (
+                        <tr
+                          key={ft.id}
+                          className="border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer transition-colors"
+                          onClick={() => { setFinishedSelectedId(ft.id); setFinishedSelectedInfo(ft); }}
+                        >
+                          <td className="px-3 py-2 min-w-[280px]">
+                            <div className="font-medium text-white whitespace-normal break-words">
+                              {ft.start_point || "?"} → {ft.end_point || "?"}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono text-xs text-slate-300">{fmt(ft.distance_km)} км</td>
+                          <td className="px-3 py-2 text-right font-mono text-xs text-slate-300">{fmt(ft.initial_rate, 2)}</td>
+                          <td className="px-3 py-2 text-right font-mono font-bold text-white">{fmt(ft.final_rate, 2)}</td>
+                          <td className="px-3 py-2 text-right font-mono text-xs">
+                            <span className="text-red-400">-{fmt(dropVal, 1)} ₽</span>
+                            <span className="text-slate-500 ml-1">/ -{fmt(dropPct, 1)}%</span>
+                          </td>
+                          <td className="px-3 py-2 text-left text-xs text-slate-400 truncate max-w-[150px]">{ft.winner_name || "—"}</td>
+                          <td className="px-3 py-2 text-center">
+                            <span className="bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded-full text-xs">{ft.participants_count || 0}</span>
+                          </td>
+                          <td className="px-3 py-2 text-center text-xs text-slate-400">{ft.rate_changes || 0}</td>
+                          <td className="px-3 py-2 text-center">
+                            {ft.last_minute_bids > 0 ? (
+                              <span className="bg-red-900/40 text-red-400 px-1.5 py-0.5 rounded-full text-xs font-bold">🔥 {ft.last_minute_bids}</span>
+                            ) : (
+                              <span className="text-slate-600 text-xs">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right text-xs text-slate-500">{fmtMskFull(ft.finished_at)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              {finishedPages > 1 && (
+                <div className="flex items-center justify-between mt-4">
+                  <div className="text-sm text-slate-500">
+                    Показано {finishedOffset + 1}–{Math.min(finishedOffset + FINISHED_LIMIT, finishedTotal)} из {finishedTotal}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setFinishedOffset(Math.max(0, finishedOffset - FINISHED_LIMIT))}
+                      disabled={finishedOffset <= 0}
+                      className="flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-700 disabled:opacity-30 text-slate-400 text-sm"
+                    >
+                      <ChevronLeft size={16} /> Назад
+                    </button>
+                    <span className="text-sm text-slate-400">Стр. {finishedPage}/{finishedPages}</span>
+                    <button
+                      onClick={() => setFinishedOffset(finishedOffset + FINISHED_LIMIT)}
+                      disabled={finishedOffset + FINISHED_LIMIT >= finishedTotal}
+                      className="flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-700 hover:bg-slate-700 disabled:opacity-30 text-slate-400 text-sm"
+                    >
+                      Вперёд <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* History modal for finished tender */}
+          {finishedSelectedId && finishedSelectedInfo && (
+            <TenderHistoryModal
+              tenderId={finishedSelectedId}
+              tenderInfo={finishedSelectedInfo}
+              onClose={() => { setFinishedSelectedId(null); setFinishedSelectedInfo(null); }}
+            />
+          )}
+        </div>
+      )}
+
+      {/* ==================== TAB: ANALYTICS ==================== */}
+      {activeTab === "analytics" && (
+        <div>
+          {analyticsLoading ? (
+            <div className="bg-slate-800 rounded-lg p-12 text-center text-slate-500 border border-slate-700">
+              <RefreshCw size={32} className="animate-spin mx-auto mb-3" /> Загрузка аналитики...
+            </div>
+          ) : !analytics ? (
+            <div className="bg-slate-800 rounded-lg p-12 text-center text-slate-500 border border-slate-700">
+              <TrendingUp size={48} className="mx-auto mb-3 text-slate-600" />
+              <p>Нет данных аналитики</p>
+            </div>
+          ) : (
+            <>
+              {/* Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-2 gap-4 mb-6">
+                <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+                  <div className="flex items-center gap-2 text-sm text-slate-400 mb-2">
+                    <Trophy size={16} className="text-green-400" /> Завершено тендеров
+                  </div>
+                  <div className="text-3xl font-bold text-white">{analytics.total_finished}</div>
+                </div>
+                <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+                  <div className="flex items-center gap-2 text-sm text-slate-400 mb-2">
+                    <TrendingUp size={16} className="text-red-400" /> Ср. падение ₽/км
+                  </div>
+                  <div className="text-3xl font-bold text-red-400">-{fmt(analytics.avg_drop_per_km, 2)} ₽</div>
+                </div>
+              </div>
+
+              {/* Competitors table */}
+              <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
+                <Target size={20} className="text-purple-400" /> Конкуренты
+              </h3>
+              <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-slate-400 text-xs uppercase border-b border-slate-700">
+                      <th className="px-3 py-2 text-left">#</th>
+                      <th className="px-3 py-2 text-left">Компания</th>
+                      <th className="px-3 py-2 text-right">Побед</th>
+                      <th className="px-3 py-2 text-right">Ср. ставка</th>
+                      <th className="px-3 py-2 text-center">Снайпер%</th>
+                      <th className="px-3 py-2 text-left">Направления</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analytics.top_winners.map((w, i) => (
+                      <tr key={i} className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors">
+                        <td className="px-3 py-2 text-slate-500 font-mono">{i + 1}</td>
+                        <td className="px-3 py-2 font-medium text-white truncate max-w-[200px]">{w.name || "—"}</td>
+                        <td className="px-3 py-2 text-right font-bold text-green-400">{w.wins}</td>
+                        <td className="px-3 py-2 text-right font-mono text-slate-300">{fmt(w.avg_rate, 2)} ₽</td>
+                        <td className="px-3 py-2 text-center">
+                          {w.sniper_pct > 30 ? (
+                            <span className="bg-red-900/40 text-red-400 px-2 py-0.5 rounded-full text-xs font-bold">{fmt(w.sniper_pct, 0)}%</span>
+                          ) : (
+                            <span className="text-slate-400 text-xs">{fmt(w.sniper_pct, 0)}%</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-slate-400 truncate max-w-[300px]">
+                          {w.routes?.slice(0, 3).join(", ") || "—"}
+                          {w.routes?.length > 3 && <span className="text-slate-600"> +{w.routes.length - 3}</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

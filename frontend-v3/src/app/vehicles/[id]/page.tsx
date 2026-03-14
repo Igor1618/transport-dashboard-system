@@ -1,9 +1,135 @@
 "use client";
 import { formatDate, formatDateTime, formatShortDate } from "@/lib/dates";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Truck, Save, Loader2, FileText, Fuel, User, History, Wrench, CreditCard } from "lucide-react";
+import { useAuth } from "@/components/AuthProvider";
+
+// ==================== TCO / Economics Tab ====================
+function VehicleEconomicsTab({ plate }: { plate: string }) {
+  const [month, setMonth] = useState(() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;
+  });
+  const [tco, setTco] = useState<any>(null);
+  const [trend, setTrend] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    const encodedPlate = encodeURIComponent(plate);
+    Promise.all([
+      fetch(`/api/vehicles-ext/tco/${encodedPlate}?month=${month}`).then(r => r.json()),
+      fetch(`/api/vehicles-ext/tco-trend/${encodedPlate}?months=6`).then(r => r.json()),
+    ]).then(([t, tr]) => {
+      setTco(t);
+      setTrend(tr);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [plate, month]);
+
+  const fmt = (n: number) => Number(n).toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₽';
+
+  if (loading) return <div className="text-center py-8 text-slate-400">Загрузка экономики...</div>;
+  if (!tco) return <div className="text-center py-8 text-red-400">Ошибка загрузки</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-white">💰 Экономика машины</h3>
+        <input type="month" value={month} onChange={e => setMonth(e.target.value)}
+          className="px-3 py-1.5 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm" />
+      </div>
+
+      {/* KPI */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-slate-700 rounded-lg p-3">
+          <div className="text-slate-400 text-xs">Выручка</div>
+          <div className="text-lg font-bold text-green-400">{fmt(tco.revenue)}</div>
+        </div>
+        <div className="bg-slate-700 rounded-lg p-3">
+          <div className="text-slate-400 text-xs">Расходы</div>
+          <div className="text-lg font-bold text-red-400">{fmt(tco.expenses.total)}</div>
+        </div>
+        <div className="bg-slate-700 rounded-lg p-3">
+          <div className="text-slate-400 text-xs">Прибыль</div>
+          <div className={`text-lg font-bold ${tco.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{fmt(tco.profit)}</div>
+        </div>
+        <div className="bg-slate-700 rounded-lg p-3">
+          <div className="text-slate-400 text-xs">Маржа</div>
+          <div className={`text-lg font-bold ${tco.margin >= 20 ? 'text-green-400' : tco.margin >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>{tco.margin}%</div>
+        </div>
+      </div>
+
+      {/* Breakdown */}
+      <div className="bg-slate-700/50 rounded-xl p-4">
+        <h4 className="text-sm font-medium text-slate-300 mb-3">Структура расходов</h4>
+        <div className="space-y-2">
+          {[
+            { label: '⛽ Топливо', value: tco.expenses.fuel, color: 'bg-orange-500' },
+            { label: '👤 Зарплата', value: tco.expenses.salary, color: 'bg-blue-500' },
+            { label: '🏢 Лизинг', value: tco.expenses.leasing, color: 'bg-cyan-500' },
+            { label: '🔧 Ремонт', value: tco.expenses.repair, color: 'bg-yellow-500' },
+          ].map((item, i) => {
+            const pct = tco.expenses.total > 0 ? (item.value / tco.expenses.total * 100) : 0;
+            return (
+              <div key={i} className="flex items-center gap-3">
+                <span className="text-sm text-slate-300 w-28">{item.label}</span>
+                <div className="flex-1 h-4 bg-slate-600 rounded-full overflow-hidden">
+                  <div className={`h-full ${item.color} rounded-full`} style={{ width: `${pct}%` }} />
+                </div>
+                <span className="text-sm text-white w-24 text-right">{fmt(item.value)}</span>
+                <span className="text-xs text-slate-500 w-10 text-right">{pct.toFixed(0)}%</span>
+              </div>
+            );
+          })}
+        </div>
+        {tco.mileage > 0 && (
+          <div className="mt-3 pt-3 border-t border-slate-600 text-sm text-slate-400">
+            Себестоимость: <span className="text-white font-semibold">{tco.cost_per_km} ₽/км</span>
+            {' · '}Пробег: <span className="text-white">{tco.mileage.toLocaleString('ru-RU')} км</span>
+          </div>
+        )}
+      </div>
+
+      {/* Trend */}
+      {trend?.trend && (
+        <div className="bg-slate-700/50 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-medium text-slate-300">Тренд за 6 месяцев</h4>
+            {trend.loss_streak >= 3 && (
+              <span className="text-xs px-2 py-1 bg-red-500/20 text-red-400 rounded">
+                🔴 Убыток {trend.loss_streak} мес. подряд
+              </span>
+            )}
+          </div>
+          <div className="space-y-2">
+            {trend.trend.map((t: any, i: number) => {
+              const maxVal = Math.max(...trend.trend.map((x: any) => Math.max(x.revenue, x.expenses)), 1);
+              return (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400 w-14 text-right">{t.label}</span>
+                  <div className="flex-1 space-y-0.5">
+                    <div className="h-2 bg-slate-600 rounded-full overflow-hidden">
+                      <div className="h-full bg-green-500 rounded-full" style={{ width: `${(t.revenue/maxVal)*100}%` }} />
+                    </div>
+                    <div className="h-2 bg-slate-600 rounded-full overflow-hidden">
+                      <div className="h-full bg-red-500/70 rounded-full" style={{ width: `${(t.expenses/maxVal)*100}%` }} />
+                    </div>
+                  </div>
+                  <span className={`text-xs w-16 text-right font-semibold ${t.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {t.profit >= 0 ? '+' : ''}{(t.profit/1000).toFixed(0)}К
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+import { ArrowLeft, Truck, Save, Loader2, FileText, Fuel, User, History, Wrench, CreditCard, DollarSign, Plus, Trash2, Edit3 } from "lucide-react";
 
 interface Vehicle {
   id: string;
@@ -39,14 +165,35 @@ interface Vehicle {
 
 interface VehicleType { id: number; name: string; fuel_norm_summer: number; fuel_norm_autumn: number; fuel_norm_winter: number; }
 
-const TABS = [
+const ALL_TABS = [
   { id: "main", label: "Основное", icon: Truck },
+  { id: "economics", label: "💰 Экономика", icon: DollarSign },
   { id: "docs", label: "Документы", icon: FileText },
   { id: "fuel", label: "Топливо", icon: Fuel },
   { id: "drivers", label: "Водители", icon: User },
   { id: "maintenance", label: "Обслуживание", icon: Wrench },
+  { id: "leasing", label: "Лизинг", icon: DollarSign },
   { id: "history", label: "История", icon: History },
 ];
+
+/** Tab visibility by role */
+const TAB_ACCESS: Record<string, string[]> = {
+  main:        ["accountant","logist","senior_logist","dispatcher","mechanic","director","admin","superadmin"],
+  economics:   ["senior_logist","director","admin","superadmin"],
+  docs:        ["accountant","logist","senior_logist","dispatcher","mechanic","director","admin","superadmin"],
+  fuel:        ["accountant","logist","senior_logist","director","admin","superadmin"],
+  drivers:     ["accountant","logist","senior_logist","dispatcher","director","admin","superadmin"],
+  maintenance: ["mechanic","director","admin","superadmin"],
+  leasing:     ["director","admin","superadmin"],
+  history:     ["accountant","logist","senior_logist","dispatcher","mechanic","director","admin","superadmin"],
+};
+
+function getTabsForRole(role: string) {
+  return ALL_TABS.filter(tab => {
+    const allowed = TAB_ACCESS[tab.id];
+    return !allowed || allowed.includes(role);
+  });
+}
 
 const STATUS_OPTIONS = [
   { value: "active", label: "Активна", color: "bg-green-600" },
@@ -57,6 +204,9 @@ const STATUS_OPTIONS = [
 export default function VehicleEditPage() {
   const params = useParams();
   const router = useRouter();
+  const { user } = useAuth();
+  const effectiveRole = user?.role || "director";
+  const TABS = getTabsForRole(effectiveRole);
   const id = params.id as string;
   const isNew = id === "new";
   
@@ -65,6 +215,12 @@ export default function VehicleEditPage() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("main");
+
+  // Redirect to "main" if current tab is not accessible for this role
+  useEffect(() => {
+    const allowedIds = TABS.map(t => t.id);
+    if (!allowedIds.includes(activeTab)) setActiveTab("main");
+  }, [effectiveRole]);
   
   const [drivers, setDrivers] = useState<any[]>([]);
   const [fuelStats, setFuelStats] = useState<any>({ by_source: [], total: { liters: 0, amount: 0 } });
@@ -78,6 +234,12 @@ export default function VehicleEditPage() {
   const [allCards, setAllCards] = useState<any[]>([]);
   const [showAddCard, setShowAddCard] = useState(false);
   const [cardSearch, setCardSearch] = useState("");
+  
+  // Лизинг
+  const [leasingPayments, setLeasingPayments] = useState<any[]>([]);
+  const [leasingForm, setLeasingForm] = useState<any>({ monthly_payment: '', start_date: '', end_date: '', contract_number: '', lessor: '', notes: '' });
+  const [showLeasingForm, setShowLeasingForm] = useState(false);
+  const [editingLeasing, setEditingLeasing] = useState<number | null>(null);
 
   useEffect(() => {
     loadTypes();
@@ -110,8 +272,36 @@ export default function VehicleEditPage() {
       if (activeTab === "fuel") loadFuel();
       if (activeTab === "history") loadHistory();
       if (activeTab === "maintenance") loadMaintenance();
+      if (activeTab === "leasing") loadLeasing();
     }
   }, [activeTab, vehicle.id]);
+
+  const loadLeasing = async () => {
+    try {
+      const res = await fetch(`/api/leasing/${vehicle.id}`);
+      const data = await res.json();
+      setLeasingPayments(Array.isArray(data) ? data : []);
+    } catch (e) { console.error(e); }
+  };
+
+  const saveLeasing = async () => {
+    try {
+      const body = { ...leasingForm, vehicle_id: vehicle.id };
+      const url = editingLeasing ? `/api/leasing/${editingLeasing}` : '/api/leasing';
+      const method = editingLeasing ? 'PUT' : 'POST';
+      await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      setShowLeasingForm(false);
+      setEditingLeasing(null);
+      setLeasingForm({ monthly_payment: '', start_date: '', end_date: '', contract_number: '', lessor: '', notes: '' });
+      loadLeasing();
+    } catch (e) { alert('Ошибка сохранения'); }
+  };
+
+  const deleteLeasing = async (id: number) => {
+    if (!confirm('Удалить запись?')) return;
+    await fetch(`/api/leasing/${id}`, { method: 'DELETE' });
+    loadLeasing();
+  };
 
   const loadTypes = async () => {
     const res = await fetch("/api/vehicles/types");
@@ -185,9 +375,10 @@ export default function VehicleEditPage() {
   };
 
   const loadMaintenance = async () => {
-    const res = await fetch(`/api/vehicles/${id}/maintenance`);
+    const res = await fetch(`/api/vehicles/${id}/repairs`);
     const data = await res.json();
-    setMaintenance(data.maintenance || []);
+    setMaintenance(data.repairs || []);
+    if (data.summary) (window as any).__repairSummary = data.summary;
   };
 
   // Маппинг марок на типы для норм топлива
@@ -490,6 +681,11 @@ export default function VehicleEditPage() {
           </div>
         )}
 
+        {/* Economics Tab */}
+        {activeTab === "economics" && vehicle.license_plate && (
+          <VehicleEconomicsTab plate={vehicle.license_plate as string} />
+        )}
+
         {/* Documents Tab */}
         {activeTab === "docs" && (
           <div className="grid md:grid-cols-2 gap-4">
@@ -675,19 +871,114 @@ export default function VehicleEditPage() {
         {/* Maintenance Tab */}
         {activeTab === "maintenance" && (
           <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-            <h3 className="font-semibold mb-3">История обслуживания</h3>
+            <h3 className="font-semibold mb-3">🔧 Ремонты ({maintenance.length})</h3>
             {maintenance.length === 0 ? (
-              <div className="text-slate-400 text-center py-8">Нет записей об обслуживании</div>
+              <div className="text-slate-400 text-center py-8">Ремонтов не было</div>
             ) : (
               <div className="space-y-2">
                 {maintenance.map((m, i) => (
                   <div key={i} className="p-3 bg-slate-700/30 rounded">
-                    <div className="flex justify-between">
-                      <span className="font-medium">{m.maintenance_type}</span>
-                      <span className="text-slate-400">{formatDate(m.maintenance_date)}</span>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="font-medium">{m.type || "Ремонт"}</span>
+                        {m.priority === "critical" && <span className="ml-2 text-xs bg-red-900/50 text-red-400 px-1.5 py-0.5 rounded">🔴 Срочно</span>}
+                        {m.status === "completed" ? <span className="ml-2 text-xs text-green-400">✅</span> : <span className="ml-2 text-xs text-yellow-400">⏳</span>}
+                      </div>
+                      <span className="text-slate-400 text-sm">{m.completed_at ? new Date(m.completed_at).toLocaleDateString("ru-RU", {timeZone:"Europe/Moscow", day:"2-digit", month:"2-digit", year:"numeric"}) : m.created_at ? new Date(m.created_at).toLocaleDateString("ru-RU", {timeZone:"Europe/Moscow", day:"2-digit", month:"2-digit", year:"numeric"}) : ""}</span>
                     </div>
                     {m.description && <div className="text-sm text-slate-400 mt-1">{m.description}</div>}
-                    {m.cost && <div className="text-sm text-red-400 mt-1">{m.cost.toLocaleString("ru-RU")} ₽</div>}
+                    {m.mechanic_name && <div className="text-sm text-slate-500 mt-1">🔧 {m.mechanic_name}</div>}
+                    <div className="flex gap-4 mt-1 text-sm">
+                      {Number(m.parts_cost) > 0 && <span className="text-orange-400">Запч: {Number(m.parts_cost).toLocaleString("ru-RU")} ₽</span>}
+                      {Number(m.labor_cost) > 0 && <span className="text-blue-400">Работа: {Number(m.labor_cost).toLocaleString("ru-RU")} ₽</span>}
+                      {Number(m.total_cost) > 0 && <span className="text-red-400 font-medium">Итого: {Number(m.total_cost).toLocaleString("ru-RU")} ₽</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Leasing Tab */}
+        {activeTab === "leasing" && (
+          <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold text-green-400">💰 Лизинговые платежи</h3>
+              <button onClick={() => { setShowLeasingForm(true); setEditingLeasing(null); setLeasingForm({ monthly_payment: '', start_date: '', end_date: '', contract_number: '', lessor: '', notes: '' }); }}
+                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-sm flex items-center gap-1">
+                <Plus className="w-4 h-4" /> Добавить
+              </button>
+            </div>
+
+            {showLeasingForm && (
+              <div className="bg-slate-700/50 rounded-lg p-4 mb-4 border border-green-500/30">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="text-slate-400 text-xs">Ежемесячный платёж *</label>
+                    <input type="number" value={leasingForm.monthly_payment} onChange={e => setLeasingForm({...leasingForm, monthly_payment: e.target.value})}
+                      className="w-full bg-slate-600 text-white rounded px-3 py-2 text-sm border border-slate-500" placeholder="100000" />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-xs">Лизингодатель</label>
+                    <input type="text" value={leasingForm.lessor} onChange={e => setLeasingForm({...leasingForm, lessor: e.target.value})}
+                      className="w-full bg-slate-600 text-white rounded px-3 py-2 text-sm border border-slate-500" placeholder="Название компании" />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-xs">Начало</label>
+                    <input type="date" value={leasingForm.start_date} onChange={e => setLeasingForm({...leasingForm, start_date: e.target.value})}
+                      className="w-full bg-slate-600 text-white rounded px-3 py-2 text-sm border border-slate-500" />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-xs">Окончание</label>
+                    <input type="date" value={leasingForm.end_date} onChange={e => setLeasingForm({...leasingForm, end_date: e.target.value})}
+                      className="w-full bg-slate-600 text-white rounded px-3 py-2 text-sm border border-slate-500" />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-xs">Номер договора</label>
+                    <input type="text" value={leasingForm.contract_number} onChange={e => setLeasingForm({...leasingForm, contract_number: e.target.value})}
+                      className="w-full bg-slate-600 text-white rounded px-3 py-2 text-sm border border-slate-500" />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-xs">Примечание</label>
+                    <input type="text" value={leasingForm.notes} onChange={e => setLeasingForm({...leasingForm, notes: e.target.value})}
+                      className="w-full bg-slate-600 text-white rounded px-3 py-2 text-sm border border-slate-500" />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={saveLeasing} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm">
+                    {editingLeasing ? 'Обновить' : 'Сохранить'}
+                  </button>
+                  <button onClick={() => { setShowLeasingForm(false); setEditingLeasing(null); }} className="bg-slate-600 hover:bg-slate-500 text-white px-4 py-2 rounded text-sm">
+                    Отмена
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {leasingPayments.length === 0 && !showLeasingForm ? (
+              <div className="text-slate-400 text-center py-8">Нет лизинговых платежей</div>
+            ) : (
+              <div className="space-y-2">
+                {leasingPayments.map((lp: any) => (
+                  <div key={lp.id} className="p-3 bg-slate-700/30 rounded-lg flex justify-between items-start">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-green-400 font-bold text-lg">{Number(lp.monthly_payment).toLocaleString('ru-RU')} ₽/мес</span>
+                        {lp.contract_number && <span className="text-slate-500 text-xs">№{lp.contract_number}</span>}
+                      </div>
+                      {lp.lessor && <div className="text-slate-300 text-sm">{lp.lessor}</div>}
+                      <div className="text-slate-500 text-xs mt-1">
+                        {lp.start_date && formatDate(lp.start_date)} — {lp.end_date ? formatDate(lp.end_date) : 'бессрочно'}
+                      </div>
+                      {lp.notes && <div className="text-slate-400 text-xs mt-1">{lp.notes}</div>}
+                    </div>
+                    <div className="flex gap-1">
+                      <button onClick={() => { setEditingLeasing(lp.id); setLeasingForm(lp); setShowLeasingForm(true); }}
+                        className="p-1.5 text-slate-400 hover:text-white"><Edit3 className="w-4 h-4" /></button>
+                      <button onClick={() => deleteLeasing(lp.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
+                    </div>
                   </div>
                 ))}
               </div>

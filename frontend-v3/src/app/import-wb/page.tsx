@@ -134,6 +134,19 @@ export default function ImportWBPage() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
+      {/* Auto-import banner */}
+      <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start gap-3">
+        <div className="text-blue-500 mt-0.5">ℹ️</div>
+        <div>
+          <p className="font-medium text-blue-800 dark:text-blue-200">Путевые WB загружаются автоматически</p>
+          <p className="text-sm text-blue-600 dark:text-blue-300 mt-1">
+            Данные обновляются каждые 30 минут из API WB. Ручная загрузка Excel доступна как резервный вариант.
+            Перейти в{' '}
+            <a href="/dispatch/wb" className="underline font-medium">Диспетчерскую WB</a> или{' '}
+            <a href="/settings/wb-import" className="underline font-medium">Настройки автоимпорта</a>.
+          </p>
+        </div>
+      </div>
       <div className="bg-slate-800 border-b border-slate-700 px-4 py-3">
         <div className="max-w-6xl mx-auto flex items-center gap-4">
           <Link href="/fuel" className="text-slate-400 hover:text-white"><ArrowLeft className="w-5 h-5" /></Link>

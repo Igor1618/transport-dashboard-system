@@ -1,0 +1,12 @@
+[production]
+> 0.5%
+last 2 versions
+not dead
+safari >= 13
+ios_saf >= 13
+not op_mini all
+
+[development]
+last 1 chrome version
+last 1 firefox version
+last 1 safari version

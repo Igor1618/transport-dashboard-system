@@ -82,7 +82,22 @@ export default function UsersPage() {
     loadUsers();
   };
 
-  if (currentUser?.role !== 'director') return <div className="p-6 text-red-400">Доступ запрещён</div>;
+
+  const handleResetPin = async (userId: number, name: string) => {
+    if (!confirm(`Сбросить PIN для ${name}?`)) return;
+    try {
+      const res = await fetch('/api/auth/reset-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-user-id': String(currentUser?.id || ''), 'x-user-role': currentUser?.role || '' },
+        body: JSON.stringify({ user_id: userId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setSuccess(`PIN сброшен для ${name}`);
+    } catch (err: any) { setError(err.message); }
+  };
+
+  if (!['director','superadmin','admin'].includes(currentUser?.role || '')) return <div className="p-6 text-red-400">Доступ запрещён</div>;
 
   return (
     <div className="p-6">
@@ -97,7 +112,7 @@ export default function UsersPage() {
       {showForm && (
         <div className="mb-6 p-4 bg-gray-800 rounded-lg">
           <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
-            <input type="email" placeholder="Email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="p-2 bg-gray-700 rounded text-white" required />
+            <input type="text" placeholder="Логин (email или имя)" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="p-2 bg-gray-700 rounded text-white" required />
             <input type="password" placeholder="Пароль" value={form.password} onChange={e => setForm({...form, password: e.target.value})} className="p-2 bg-gray-700 rounded text-white" required={!editingUser} />
             <input type="text" placeholder="ФИО" value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} className="p-2 bg-gray-700 rounded text-white" required />
             <select value={form.role_id} onChange={e => setForm({...form, role_id: e.target.value})} className="p-2 bg-gray-700 rounded text-white" required>
@@ -122,7 +137,7 @@ export default function UsersPage() {
                 <td className="p-3 text-gray-300">{u.email}</td>
                 <td className="p-3 text-gray-300">{u.role_display}</td>
                 <td className="p-3"><span className={u.is_active ? 'text-green-400' : 'text-red-400'}>{u.is_active ? 'Активен' : 'Неактивен'}</span></td>
-                <td className="p-3"><button onClick={() => handleEdit(u)} className="text-blue-400 mr-2">✏️</button>{u.is_active && <button onClick={() => handleDelete(u.id)} className="text-red-400">🗑️</button>}</td>
+                <td className="p-3 flex gap-1"><button onClick={() => handleEdit(u)} className="text-blue-400" title="Редактировать">✏️</button><button onClick={() => handleResetPin(u.id, u.full_name)} className="text-yellow-400" title="Сбросить PIN">🔑</button>{u.is_active && <button onClick={() => handleDelete(u.id)} className="text-red-400" title="Деактивировать">🗑️</button>}</td>
               </tr>
             ))}
           </tbody>

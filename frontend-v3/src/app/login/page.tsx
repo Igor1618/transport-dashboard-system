@@ -31,7 +31,15 @@ export default function LoginPage() {
 
       // Сохраняем пользователя
       localStorage.setItem('user', JSON.stringify(data.user));
-      window.location.href = ('/');
+      localStorage.setItem('userRole', data.user.role || 'director');
+      // Role-based redirect
+      const roleRedirects: Record<string, string> = {
+        logist: '/hired',
+        mechanic: '/maintenance',
+        mechanic_senior: '/dashboard/mechanic',
+        accountant: '/salary',
+      };
+      window.location.href = roleRedirects[data.user.role] || '/';
     } catch {
       setError('Ошибка соединения с сервером');
     } finally {

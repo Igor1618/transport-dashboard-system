@@ -1,0 +1,1391 @@
+"use client";
+import { displayPlate } from "@/utils/plate";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Plus, ChevronDown, ChevronUp, Search, AlertTriangle, ChevronLeft, ChevronRight, Check, Loader2 } from "lucide-react";
+import CarrierWizard from "@/components/CarrierWizard";
+import CreateCarrierModal from "@/components/CreateCarrierModal";
+
+type Tab = "trips"|"carriers"|"contracts"|"penalties"|"claims"|"settlements"|"audit";
+
+interface Trip {
+  id: number; wb_trip_number: number; route_name: string; vehicle_plate: string;
+  close_dt: string; total_price: number; fine_sum: number; our_price: number|null;
+  carrier_id: string|null; carrier_name: string|null; is_confirmed: boolean;
+  driver_name: string; link_id: string|null;
+  fact_speed: number|null; norm_speed: number|null; open_dt: string|null;
+  plan_mileage: number|null; is_fine_under_consideration: boolean;
+}
+interface Stats { total_hired: number; without_carrier: number; without_price: number; confirmed: number }
+interface Carrier { id: string; name: string }
+
+const hdr = () => { const role = typeof window !== 'undefined' ? localStorage.getItem('userRole') : null; return { 'x-user-role': role || 'director', 'Cache-Control': 'no-cache' } as any; };
+const getUserRole = () => typeof window !== 'undefined' ? localStorage.getItem('userRole') || 'director' : 'director';
+// isAdminOnly is computed via useState below to avoid SSR/hydration mismatch
+const fmt = (n: any) => n != null ? Number(n).toLocaleString('ru-RU') : '—';
+
+export default function HiredPage() {
+  const [tab, setTab] = useState<Tab>("contracts");
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [stats, setStats] = useState<Stats|null>(null);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [carriers, setCarriers] = useState<Carrier[]>([]);
+  const [showAdd, setShowAdd] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
+  const [dashboard, setDashboard] = useState<any>(null);
+
+  // Filters
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [filterCarrier, setFilterCarrier] = useState('');
+  const [filterVehicle, setFilterVehicle] = useState('');
+  const [filterRoute, setFilterRoute] = useState('');
+  const [filterConfirmed, setFilterConfirmed] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [autoMatchResult, setAutoMatchResult] = useState<any>(null);
+
+  // Inline edit state
+  const [editingPrice, setEditingPrice] = useState<number|null>(null);
+  const [priceVal, setPriceVal] = useState('');
+  const [savingPrice, setSavingPrice] = useState<number|null>(null);
+  const [carrierDropdown, setCarrierDropdown] = useState<number|null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [fineDetail, setFineDetail] = useState<Trip|null>(null);
+
+  const LIMIT = 50;
+
+  
+  const bulkConfirm = async () => {
+    if (!selected.size) return;
+    setBulkLoading(true);
+    try {
+      const res = await fetch('/api/hired/trip-links/bulk-confirm', {
+        method: 'POST', headers: { ...hdr(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ link_ids: Array.from(selected) })
+      });
+      const data = await res.json();
+      alert(`Подтверждено: ${data.confirmed}, уже были: ${data.already_confirmed}`);
+      setSelected(new Set());
+      loadTrips();
+    } catch(e) { alert('Ошибка: ' + e); }
+    finally { setBulkLoading(false); }
+  };
+  
+  const bulkUnconfirm = async () => {
+    if (!selected.size || !confirm('Снять подтверждение с выбранных?')) return;
+    setBulkLoading(true);
+    try {
+      const res = await fetch('/api/hired/trip-links/bulk-unconfirm', {
+        method: 'POST', headers: { ...hdr(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ link_ids: Array.from(selected) })
+      });
+      const data = await res.json();
+      alert(`Снято: ${data.unconfirmed}, заблокировано: ${data.blocked_by_settlement || 0}`);
+      setSelected(new Set());
+      loadTrips();
+    } catch(e) { alert('Ошибка: ' + e); }
+    finally { setBulkLoading(false); }
+  };
+  
+  const runAutoMatch = async (dryRun: boolean) => {
+    setBulkLoading(true);
+    try {
+      const res = await fetch('/api/hired/trip-links/auto-match', {
+        method: 'POST', headers: { ...hdr(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dry_run: dryRun })
+      });
+      const data = await res.json();
+      setAutoMatchResult(data);
+      if (!dryRun) loadTrips();
+    } catch(e) { alert('Ошибка: ' + e); }
+    finally { setBulkLoading(false); }
+  };
+  
+  const toggleSelect = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  
+  const toggleSelectAll = () => {
+    if (selected.size === trips.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(trips.map((t: any) => t.id)));
+    }
+  };
+
+  const loadTrips = useCallback(async () => {
+    setLoading(true);
+    try {
+      const p = new URLSearchParams({ page: String(page), limit: String(LIMIT) });
+      if (dateFrom) p.set('date_from', dateFrom);
+      if (dateTo) p.set('date_to', dateTo);
+      if (filterCarrier) p.set('carrier_id', filterCarrier);
+      if (filterVehicle) p.set('vehicle_plate', filterVehicle);
+      if (filterRoute) p.set('route_name', filterRoute);
+      if (filterConfirmed) p.set('confirmed', filterConfirmed);
+      const r = await fetch('/api/hired/trips?' + p, { headers: hdr() });
+      const d = await r.json();
+      setTrips(d.trips || []);
+      setTotal(d.total || 0);
+      setStats(d.stats || null);
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  }, [page, dateFrom, dateTo, filterCarrier, filterVehicle, filterRoute, filterConfirmed]);
+  const claimOwn = async (tripId: number) => {
+    if (!confirm('Отметить эту машину как нашу? Все её рейсы исчезнут из наёмных.')) return;
+    try {
+      const r = await fetch('/api/hired/trips/' + tripId + '/claim-own', { method: 'POST', headers: hdr() });
+      const d = await r.json();
+      if (d.ok) { loadTrips(); fetch('/api/hired-dashboard', { headers: hdr() }).then(r => r.json()).then(setDashboard).catch(() => {}); }
+      else alert('Ошибка: ' + (d.error || 'Unknown'));
+    } catch(e) { alert('Ошибка: ' + e); }
+  };
+
+
+  const loadCarriers = useCallback(async () => {
+    try {
+      const r = await fetch('/api/hired/carriers', { headers: hdr() });
+      const d = await r.json();
+      setCarriers(Array.isArray(d) ? d : d.carriers || []);
+    } catch (e) { console.error(e); }
+  }, []);
+
+  useEffect(() => { loadCarriers(); }, [loadCarriers]);
+  useEffect(() => {
+    fetch('/api/hired-dashboard', { headers: hdr() }).then(r => r.json()).then(setDashboard).catch(() => {});
+  }, []);
+  useEffect(() => { if (tab === 'trips') loadTrips(); }, [tab, loadTrips]);
+
+  // Alerts
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [alertCount, setAlertCount] = useState(0);
+  useEffect(() => {
+    fetch('/api/hired-dashboard/alerts', { headers: hdr() })
+      .then(r => r.json()).then(d => { setAlerts(d.alerts || []); setAlertCount(d.count || 0); }).catch(() => {});
+  }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setCarrierDropdown(null);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const savePrice = async (tripId: number) => {
+    setSavingPrice(tripId);
+    try {
+      await fetch(`/api/hired/trips/${tripId}/price`, {
+        method: 'PATCH', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ our_price: parseInt(priceVal) || null }),
+      });
+      setTrips(prev => prev.map(t => t.id === tripId ? { ...t, our_price: parseInt(priceVal) || null } : t));
+    } catch (e) { console.error(e); }
+    setSavingPrice(null);
+    setEditingPrice(null);
+  };
+
+  const assignCarrier = async (tripId: number, carrierId: string|null) => {
+    try {
+      await fetch(`/api/hired/trips/${tripId}/carrier`, {
+        method: 'PATCH', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ carrier_id: carrierId }),
+      });
+      const c = carriers.find(c => c.id === carrierId);
+      setTrips(prev => prev.map(t => t.id === tripId ? { ...t, carrier_id: carrierId, carrier_name: c?.name || null } : t));
+    } catch (e) { console.error(e); }
+    setCarrierDropdown(null);
+  };
+
+  const totalPages = Math.ceil(total / LIMIT);
+  const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('ru-RU') : '—';
+
+  const allTabs: {key:Tab;label:string}[] = [
+    { key: 'contracts', label: '📋 Мои заявки' },
+    { key: 'trips', label: '📦 Все рейсы WB' },
+    { key: 'carriers', label: '👥 Перевозчики' },
+    { key: 'penalties', label: 'Штрафы' },
+    { key: 'settlements' as Tab, label: '💰 Расчёты' },
+    { key: 'audit' as Tab, label: '🔍 Аудит' },
+  ];
+  const adminOnlyTabs: Tab[] = ['audit' as Tab];
+  const [tabs, setVisibleTabs] = useState(allTabs);
+  useEffect(() => {
+    const role = getUserRole() || '';
+    const isAdmin = ['director','admin','superadmin'].includes(role);
+    setVisibleTabs(isAdmin ? allTabs : allTabs.filter(t => !adminOnlyTabs.includes(t.key)));
+  }, []);
+
+  return (
+    <div className="max-w-[1400px] mx-auto p-4 space-y-4">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">🚛 Наёмный транспорт</h1>
+        <a href="/hired/contracts/create" className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium">
+          + Создать ДЗ
+        </a>
+      </div>
+
+      {/* KPI Cards */}
+      {dashboard && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <button onClick={() => document.getElementById('alerts-section')?.scrollIntoView({behavior:'smooth'})}
+            className={"rounded-xl p-4 border text-left transition hover:scale-[1.02] " + (alertCount > 0 ? "bg-red-900/30 border-red-500/50" : "bg-slate-800 border-slate-700")}>
+            <div className={"text-2xl font-bold " + (alertCount > 0 ? "text-red-400" : "text-white")}>{alertCount}</div>
+            <div className="text-xs text-slate-400">🔴 Требуют внимания</div>
+          </button>
+          <div className="bg-slate-800 rounded-xl p-4 border border-blue-500/30">
+            <div className="text-2xl font-bold text-blue-400">{dashboard.active_contracts ?? 0}</div>
+            <div className="text-xs text-slate-400">🚛 В работе</div>
+          </div>
+          <div className="bg-slate-800 rounded-xl p-4 border border-green-500/30">
+            <div className="text-2xl font-bold text-green-400">{dashboard.completed_month ?? 0}</div>
+            <div className="text-xs text-slate-400">✅ Закрыто за месяц</div>
+          </div>
+          <div className="bg-slate-800 rounded-xl p-4 border border-amber-500/30">
+            <div className="text-2xl font-bold text-amber-400">{fmt(dashboard.balance || 0)} ₽</div>
+            <div className="text-xs text-slate-400">💰 К оплате перевозчикам</div>
+          </div>
+        </div>
+      )}
+
+      {/* Alerts Section */}
+      <div id="alerts-section">
+        {alerts.length > 0 && (
+          <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
+              <h3 className="text-white font-medium">⚠️ Алерты</h3>
+              <span className="text-xs text-slate-400">{alerts.length} событий</span>
+            </div>
+            <div className="divide-y divide-slate-700/50">
+              {alerts.map((a: any, i: number) => (
+                <div key={i} className={"px-4 py-3 flex items-start gap-3 hover:bg-slate-700/30 " + (a.priority === 'high' ? 'border-l-4 border-red-500' : a.priority === 'medium' ? 'border-l-4 border-amber-500' : 'border-l-4 border-green-500')}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={"text-xs px-1.5 py-0.5 rounded font-medium " + (a.priority === 'high' ? 'bg-red-500/20 text-red-400' : a.priority === 'medium' ? 'bg-amber-500/20 text-amber-400' : 'bg-green-500/20 text-green-400')}>
+                        {a.priority === 'high' ? '🔴' : a.priority === 'medium' ? '🟡' : '🟢'}
+                      </span>
+                      <span className="text-white text-sm font-medium truncate">{a.title}</span>
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      {a.carrier_name && <span>{a.carrier_name} · </span>}
+                      {a.contract_number && <span>{a.contract_number}</span>}
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5 shrink-0">
+                    {a.actions?.includes('call') && a.carrier_phone && (
+                      <a href={'tel:' + a.carrier_phone} className="px-2 py-1 bg-blue-600/20 text-blue-400 text-xs rounded hover:bg-blue-600/30">📞</a>
+                    )}
+                    {a.actions?.includes('penalty') && (
+                      <button className="px-2 py-1 bg-red-600/20 text-red-400 text-xs rounded hover:bg-red-600/30">⚠️ Штраф</button>
+                    )}
+                    {a.actions?.includes('upload_scan') && (
+                      <button className="px-2 py-1 bg-amber-600/20 text-amber-400 text-xs rounded hover:bg-amber-600/30">📎 Скан</button>
+                    )}
+                    {a.actions?.includes('settlement') && (
+                      <button onClick={() => setTab('settlements' as Tab)} className="px-2 py-1 bg-green-600/20 text-green-400 text-xs rounded hover:bg-green-600/30">💰 Оплата</button>
+                    )}
+                    {a.contract_id && (
+                      <a href={'/hired/contracts/' + a.contract_id} className="px-2 py-1 bg-slate-600/30 text-slate-300 text-xs rounded hover:bg-slate-600/50">→</a>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Map */}
+      <HiredMap />
+
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-slate-700 overflow-x-auto scrollbar-hide">
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => { setTab(t.key); if (t.key === 'trips') setPage(1); }}
+            data-tab={t.key}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${tab === t.key ? 'bg-slate-800 text-white border-b-2 border-blue-500' : 'text-slate-400 hover:text-white'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Trips tab */}
+      {tab === 'trips' && (
+        <>
+          {/* Filters */}
+          <div className="flex flex-wrap gap-2">
+            <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1); }}
+              className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs" placeholder="От" />
+            <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1); }}
+              className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs" placeholder="До" />
+            <input value={filterVehicle} onChange={e => { setFilterVehicle(e.target.value); setPage(1); }}
+              placeholder="Машина" className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs w-28" />
+            <input value={filterRoute} onChange={e => { setFilterRoute(e.target.value); setPage(1); }}
+              placeholder="Маршрут" className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs w-32" />
+            <select value={filterCarrier} onChange={e => { setFilterCarrier(e.target.value); setPage(1); }}
+              className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs">
+              <option value="">Все перевозчики</option>
+              <option value="unassigned">Не определён</option>
+              {carriers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <select value={filterConfirmed} onChange={e => { setFilterConfirmed(e.target.value); setPage(1); }}
+              className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs">
+              <option value="">Все</option>
+              <option value="true">Подтверждено</option>
+              <option value="false">Не подтверждено</option>
+            </select>
+          </div>
+
+          {/* Bulk actions */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {selected.size > 0 && (
+              <div className="flex items-center gap-2 bg-blue-900/30 border border-blue-700 rounded-lg px-3 py-1.5">
+                <span className="text-xs text-blue-300">Выбрано: {selected.size}</span>
+                <button onClick={bulkConfirm} disabled={bulkLoading}
+                  className="px-2 py-1 bg-green-600 hover:bg-green-500 text-white text-xs rounded disabled:opacity-50">
+                  ✓ Подтвердить
+                </button>
+                <button onClick={bulkUnconfirm} disabled={bulkLoading}
+                  className="px-2 py-1 bg-orange-600 hover:bg-orange-500 text-white text-xs rounded disabled:opacity-50">
+                  ↩ Снять
+                </button>
+                <button onClick={() => setSelected(new Set())}
+                  className="px-2 py-1 text-slate-400 hover:text-white text-xs">✕</button>
+              </div>
+            )}
+            <div className="ml-auto flex gap-1">
+              <button onClick={() => runAutoMatch(true)} disabled={bulkLoading}
+                className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-xs rounded disabled:opacity-50">
+                🔍 Авто-привязка (preview)
+              </button>
+              <button onClick={() => { if(confirm('Запустить авто-привязку рейсов к перевозчикам?')) runAutoMatch(false); }} disabled={bulkLoading}
+                className="px-2 py-1 bg-indigo-700 hover:bg-indigo-600 text-xs rounded disabled:opacity-50">
+                ⚡ Привязать
+              </button>
+            </div>
+          </div>
+
+          {/* Auto-match result */}
+          {autoMatchResult && (
+            <div className="bg-slate-800 border border-slate-700 rounded-lg p-3 text-xs">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-semibold text-slate-300">
+                  {autoMatchResult.dry_run ? '🔍 Preview' : '✅ Результат'} авто-привязки
+                </span>
+                <button onClick={() => setAutoMatchResult(null)} className="text-slate-500 hover:text-white">✕</button>
+              </div>
+              <div className="grid grid-cols-3 gap-2 mb-2">
+                <div className="text-center"><div className="text-lg font-bold text-green-400">{autoMatchResult.matched}</div><div className="text-slate-500">Привязано</div></div>
+                <div className="text-center"><div className="text-lg font-bold text-yellow-400">{autoMatchResult.ambiguous}</div><div className="text-slate-500">Неоднозначно</div></div>
+                <div className="text-center"><div className="text-lg font-bold text-slate-400">{autoMatchResult.no_match}</div><div className="text-slate-500">Без совпадения</div></div>
+              </div>
+              {autoMatchResult.examples?.length > 0 && (
+                <details><summary className="cursor-pointer text-blue-400">Примеры ({autoMatchResult.examples.length})</summary>
+                  <div className="mt-1 space-y-1">{autoMatchResult.examples.map((e: any, i: number) => (
+                    <div key={i} className="text-slate-400">{e.plate_raw} → {e.carrier_name} ({e.reason})</div>
+                  ))}</div>
+                </details>
+              )}
+            </div>
+          )}
+
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-700 text-slate-400 text-xs">
+                  <th className="py-2 px-1 text-center w-8"><input type="checkbox" checked={selected.size === trips.length && trips.length > 0} onChange={toggleSelectAll} className="accent-blue-500"/></th>
+                  <th className="py-2 px-2 text-left">РЕЙС WB</th>
+                  <th className="py-2 px-2 text-left">МАРШРУТ</th>
+                  <th className="py-2 px-2 text-left">МАШИНА</th>
+                  <th className="py-2 px-2 text-left">ДАТА</th>
+                  <th className="py-2 px-2 text-left">ВОДИТЕЛЬ</th>
+                  <th className="py-2 px-2 text-right">СУММА WB</th>
+                  <th className="py-2 px-2 text-right">НАША ЦЕНА</th>
+                  <th className="py-2 px-2 text-right">ШТРАФ</th>
+                  <th className="py-2 px-2 text-left">ПЕРЕВОЗЧИК</th>
+                  <th className="py-2 px-1 text-center">✓</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={12} className="text-center py-12 text-slate-500"><Loader2 className="animate-spin inline mr-2" size={16}/>Загрузка...</td></tr>
+                ) : trips.length === 0 ? (
+                  <tr><td colSpan={12} className="text-center py-12 text-slate-500">Нет рейсов</td></tr>
+                ) : trips.map(t => (
+                  <tr key={t.id} className="border-b border-slate-800 hover:bg-slate-800/50 transition">
+                    <td className="py-2 px-1 text-center"><input type="checkbox" checked={selected.has(t.id)} onChange={() => toggleSelect(t.id)} className="accent-blue-500"/></td>
+                    <td className="py-2 px-2 font-mono text-xs text-blue-400">{t.wb_trip_number}</td>
+                    <td className="py-2 px-2 max-w-[200px] truncate" title={t.route_name || ''}>{t.route_name || '—'}</td>
+                    <td className="py-2 px-2">
+                      <span className="bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded text-xs font-mono">{t.vehicle_plate || '—'}</span>
+                    </td>
+                    <td className="py-2 px-2 text-xs text-slate-300">{fmtDate(t.close_dt)}</td>
+                    <td className="py-2 px-2 text-xs text-slate-300 max-w-[160px] truncate" title={t.driver_name || ''}>{t.driver_name || '—'}</td>
+                    <td className="py-2 px-2 text-right text-xs">{fmt(t.total_price)} ₽</td>
+                    {/* Inline price */}
+                    <td className="py-1 px-2 text-right">
+                      {editingPrice === t.id ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <input autoFocus type="number" value={priceVal}
+                            onChange={e => setPriceVal(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') savePrice(t.id); if (e.key === 'Escape') setEditingPrice(null); }}
+                            onBlur={() => savePrice(t.id)}
+                            className="w-20 bg-slate-700 text-white text-xs px-1 py-0.5 rounded border border-blue-500 text-right focus:outline-none" />
+                          {savingPrice === t.id && <Loader2 size={10} className="animate-spin text-blue-400"/>}
+                        </div>
+                      ) : (
+                        <button onClick={() => { setEditingPrice(t.id); setPriceVal(String(t.our_price || '')); }}
+                          className={`text-xs px-2 py-0.5 rounded cursor-pointer transition ${(!t.our_price || t.our_price === 0) ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30' : 'text-slate-200 hover:bg-slate-700'}`}>
+                          {t.our_price ? fmt(t.our_price) + ' ₽' : '0'}
+                        </button>
+                      )}
+                    </td>
+                    <td className="py-2 px-2 text-right text-xs">
+                      {t.fine_sum && Number(t.fine_sum) > 0 ? (
+                        <button onClick={() => setFineDetail(t)} className="bg-amber-600/20 text-amber-400 px-1.5 py-0.5 rounded hover:bg-amber-600/30 cursor-pointer inline-flex items-center gap-1">
+                          {fmt(t.fine_sum)}
+                          {t.is_fine_under_consideration && <span className="bg-yellow-500/20 text-yellow-400 text-[10px] px-1 rounded">?</span>}
+                        </button>
+                      ) : <span className="text-slate-600">0</span>}
+                    </td>
+                    {/* Carrier dropdown */}
+                    <td className="py-1 px-2 relative">
+                      <button onClick={() => setCarrierDropdown(carrierDropdown === t.id ? null : t.id)}
+                        className={`text-xs px-2 py-0.5 rounded cursor-pointer transition truncate max-w-[140px] block ${t.carrier_name ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-500 hover:bg-slate-700'}`}>
+                        {t.carrier_name || 'Не определён'}
+                      </button>
+                      {carrierDropdown === t.id && (
+                        <div ref={dropdownRef} className="absolute z-50 top-full left-0 mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl py-1 w-56 max-h-48 overflow-y-auto">
+                          <button onClick={() => assignCarrier(t.id, null)}
+                            className="w-full text-left px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-700">Не определён</button>
+                          {carriers.map(c => (
+                            <button key={c.id} onClick={() => assignCarrier(t.id, c.id)}
+                              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-slate-700 ${t.carrier_id === c.id ? 'text-blue-400' : 'text-slate-200'}`}>
+                              {c.name}
+                            </button>
+                          ))}
+                          <div className="border-t border-slate-700 mt-1 pt-1">
+                            <button onClick={() => { setCarrierDropdown(null); setShowAdd(true); }}
+                              className="w-full text-left px-3 py-1.5 text-xs text-blue-400 hover:bg-slate-700">
+                              <Plus size={10} className="inline mr-1"/>Создать нового
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-2 px-1 text-center">
+                      {t.is_confirmed ? <Check size={14} className="text-green-400 mx-auto"/> : <span className="text-slate-700">—</span>}
+                      <button onClick={() => claimOwn(t.id)} title="Это наша машина" className="text-slate-600 hover:text-blue-400 text-xs ml-1">🏠</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-xs text-slate-500">Показано {(page-1)*LIMIT+1}–{Math.min(page*LIMIT, total)} из {total}</span>
+              <div className="flex gap-1">
+                <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page <= 1}
+                  className="px-2 py-1 text-xs bg-slate-800 rounded hover:bg-slate-700 disabled:opacity-30"><ChevronLeft size={14}/></button>
+                <span className="px-3 py-1 text-xs text-slate-400">{page} / {totalPages}</span>
+                <button onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={page >= totalPages}
+                  className="px-2 py-1 text-xs bg-slate-800 rounded hover:bg-slate-700 disabled:opacity-30"><ChevronRight size={14}/></button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Other tabs - placeholder with iframe-like approach using existing components */}
+      {tab === 'carriers' && <CarriersTab carriers={carriers} onRefresh={loadCarriers} />}
+      {tab === 'contracts' && <ContractsTab />}
+      {tab === 'penalties' && <PenaltiesTab />}
+      {tab === 'settlements' && <SettlementsTab />}
+      {tab === 'audit' && <AuditTab />}
+
+      {/* Fine detail popup */}
+      {fineDetail && <FineDetailPopup trip={fineDetail} onClose={() => setFineDetail(null)} />}
+
+      {/* Wizard modal */}
+      
+      {/* Wizard */}
+      {showWizard && <CarrierWizard onClose={() => { setShowWizard(false); loadCarriers(); fetch('/api/hired-dashboard', { headers: hdr() }).then(r => r.json()).then(setDashboard).catch(() => {}); }} />}
+      {showAdd && <CreateCarrierModal onClose={() => setShowAdd(false)} onCreated={() => { setShowAdd(false); loadCarriers(); loadTrips(); }} />}
+    </div>
+  );
+}
+
+// === Sub-tab components (preserved from existing page logic) ===
+
+
+function EmptyState({ icon, title, desc, action }: { icon: string; title: string; desc: string; action?: { label: string; href: string } }) {
+  return (
+    <div className="text-center py-12">
+      <div className="text-4xl mb-3">{icon}</div>
+      <div className="text-white font-medium mb-1">{title}</div>
+      <div className="text-sm text-slate-400 mb-4">{desc}</div>
+      {action && <a href={action.href} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white">{action.label}</a>}
+    </div>
+  );
+}
+
+
+function CarriersTab({ carriers: propCarriers, onRefresh }: { carriers: Carrier[]; onRefresh: () => void }) {
+  const [list, setList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [showWizardInTab, setShowWizardInTab] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch('/api/hired/carriers', { headers: hdr() }).then(r=>r.json()).then(d => {
+      setList(Array.isArray(d) ? d : d.carriers || []);
+    }).catch(()=>{}).finally(()=>setLoading(false));
+  }, []);
+
+  const filtered = list.filter(c => !search || (c.name||'').toLowerCase().includes(search.toLowerCase()));
+  const fmtP = (n: any) => n ? Number(n).toLocaleString('ru-RU') : '0';
+  const stars = (r: number) => { const full = Math.floor(r); const half = r - full >= 0.5; return '⭐'.repeat(full) + (half ? '½' : ''); };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-between items-center">
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Поиск перевозчика..."
+          className="bg-slate-800 border border-slate-600 rounded px-3 py-1.5 text-sm w-64" />
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-slate-400">{filtered.length} перевозчиков</span>
+          <button onClick={() => setShowWizardInTab(true)} className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-sm"><Plus size={14}/> Создать</button>
+        </div>
+      </div>
+      {showWizardInTab && <CarrierWizard onClose={() => { setShowWizardInTab(false); setLoading(true); fetch('/api/hired/carriers', { headers: hdr() }).then(r=>r.json()).then(d => setList(Array.isArray(d) ? d : d.carriers || [])).finally(()=>setLoading(false)); }} />}
+      {loading ? <div className="text-center py-8 text-slate-500">Загрузка...</div> :
+       filtered.length === 0 ? <div className="text-center py-8 text-slate-500">Нет перевозчиков</div> :
+       <table className="w-full text-sm">
+        <thead><tr className="border-b border-slate-700 text-slate-400 text-xs uppercase">
+          <th className="py-2 px-2 text-left">ПЕРЕВОЗЧИК</th>
+          <th className="py-2 px-2 text-left">ИНН</th>
+          <th className="py-2 px-2 text-center">РЕЙСОВ</th>
+          <th className="py-2 px-2 text-center">ВОВРЕМЯ</th>
+          <th className="py-2 px-2 text-center">ШТРАФЫ</th>
+          <th className="py-2 px-2 text-right">СУММА</th>
+          <th className="py-2 px-2 text-center">РЕЙТИНГ</th>
+        </tr></thead>
+        <tbody>{filtered.map(c => (
+          <tr key={c.id} className="border-b border-slate-800 hover:bg-slate-800/50 cursor-pointer"
+            onClick={() => window.location.href = '/hired/carriers/' + c.id}>
+            <td className="py-2 px-2">
+              <div className="flex items-center gap-2"><span className={"w-2.5 h-2.5 rounded-full " + ((c.rating||0) >= 4 ? "bg-green-500" : (c.rating||0) >= 3 ? "bg-yellow-500" : "bg-red-500")} /><span className="text-white font-medium">{c.name}</span></div>
+              <div className="text-xs text-slate-500">{c.contact_person || c.phone || ''}</div>
+            </td>
+            <td className="py-2 px-2 text-xs font-mono text-slate-400">{c.inn || '—'}</td>
+            <td className="py-2 px-2 text-center">{c.trip_count || 0}</td>
+            <td className="py-2 px-2 text-center">
+              <span className={(c.on_time_pct||100) >= 90 ? 'text-green-400' : (c.on_time_pct||100) >= 70 ? 'text-yellow-400' : 'text-red-400'}>
+                {c.on_time_pct || 100}%
+              </span>
+            </td>
+            <td className="py-2 px-2 text-center text-red-400">{c.fine_count || 0}</td>
+            <td className="py-2 px-2 text-right font-mono">{fmtP(c.total_price)} ₽</td>
+            <td className="py-2 px-2 text-center whitespace-nowrap">
+              {stars(c.rating || 0)} <span className="text-slate-400 text-xs">{(c.rating || 0).toFixed(1)}</span>
+            </td>
+          </tr>
+        ))}</tbody>
+       </table>}
+    </div>
+  );
+}
+
+function PenaltiesTab() {
+  const router = useRouter();
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all');
+  const [sending, setSending] = useState<string|null>(null);
+
+  const load = () => {
+    setLoading(true);
+    fetch('/api/hired/accounting/penalties', { headers: hdr() })
+      .then(r => r.json())
+      .then(d => setItems(d.items || (Array.isArray(d) ? d : d.penalties || [])))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const sendNotify = async (p: any) => {
+    if (!p.carrier_email) { alert('У перевозчика не указан email. Заполните в карточке.'); return; }
+    if (!confirm(`Отправить уведомление о штрафе на ${p.carrier_email}?`)) return;
+    setSending(p.id);
+    try {
+      const r = await fetch(`/api/hired/accounting/penalties/${p.id}/notify`, {
+        method: 'POST', headers: { ...hdr(), 'Content-Type': 'application/json' }, body: '{}'
+      });
+      const d = await r.json();
+      if (d.ok) { alert('✅ ' + d.message); load(); }
+      else alert('❌ ' + (d.error || 'Ошибка'));
+    } catch(e: any) { alert('Ошибка: ' + e.message); }
+    setSending(null);
+  };
+
+  const confirmPenalty = async (id: string) => {
+    if (!confirm('Подтвердить штраф?')) return;
+    await fetch(`/api/hired/accounting/penalties/${id}/confirm`, { method: 'POST', headers: hdr() });
+    load();
+  };
+
+  const cancelPenalty = async (id: string) => {
+    const reason = prompt('Причина отмены:');
+    if (!reason) return;
+    await fetch(`/api/hired/accounting/penalties/${id}/cancel`, {
+      method: 'POST', headers: { ...hdr(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason })
+    });
+    load();
+  };
+
+  if (loading) return <div className="text-center py-8 text-slate-500">Загрузка...</div>;
+
+  const filtered = filter === 'all' ? items
+    : filter === 'not_notified' ? items.filter(p => !p.notification_sent_at && !['cancelled','confirmed'].includes(p.status))
+    : filter === 'no_contract' ? items.filter(p => !p.contract_id)
+    : filter === 'attention' ? items.filter(p => ['new'].includes(p.status))
+    : items.filter(p => p.status === filter);
+
+  const counts = {
+    all: items.length,
+    not_notified: items.filter(p => !p.notification_sent_at && !['cancelled','confirmed'].includes(p.status)).length,
+    no_contract: items.filter(p => !p.contract_id).length,
+    attention: items.filter(p => p.status === 'new').length,
+  };
+
+  const totalSum = filtered.reduce((s, p) => s + Number(p.penalty_amount || 0), 0);
+
+  const ptypes: Record<string,string> = {late_arrival:'Опоздание',late_delivery:'Просрочка',cargo_damage:'Повреждение груза',document_late:'Задержка документов',wb_penalty:'Штраф WB',other:'Прочее'};
+  const statusStyles: Record<string,{label:string,bg:string}> = {
+    new: {label:'🔴 Новый', bg:'bg-red-500/20 text-red-400'},
+    notified: {label:'📧 Уведомлён', bg:'bg-purple-500/20 text-purple-400'},
+    confirmed: {label:'✅ Подтверждён', bg:'bg-green-500/20 text-green-400'},
+    disputed: {label:'⚡ Оспаривается', bg:'bg-yellow-500/20 text-yellow-400'},
+    deducted: {label:'💰 Удержан', bg:'bg-emerald-500/20 text-emerald-400'},
+    cancelled: {label:'❌ Отменён', bg:'bg-slate-500/20 text-slate-400'},
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Summary bar */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div className="bg-slate-800 border border-slate-700 rounded-lg p-3 text-center">
+          <div className="text-2xl font-bold text-red-400">{totalSum.toLocaleString('ru-RU')} ₽</div>
+          <div className="text-xs text-slate-400">Сумма ({filtered.length} шт)</div>
+        </div>
+        <div className="bg-slate-800 border border-slate-700 rounded-lg p-3 text-center cursor-pointer hover:border-red-500/50"
+          onClick={() => setFilter('attention')}>
+          <div className="text-2xl font-bold text-red-400">{counts.attention}</div>
+          <div className="text-xs text-slate-400">⚠️ Требуют внимания</div>
+        </div>
+        <div className="bg-slate-800 border border-slate-700 rounded-lg p-3 text-center cursor-pointer hover:border-purple-500/50"
+          onClick={() => setFilter('not_notified')}>
+          <div className="text-2xl font-bold text-purple-400">{counts.not_notified}</div>
+          <div className="text-xs text-slate-400">📧 Не уведомлены</div>
+        </div>
+        <div className="bg-slate-800 border border-slate-700 rounded-lg p-3 text-center cursor-pointer hover:border-yellow-500/50"
+          onClick={() => setFilter('no_contract')}>
+          <div className="text-2xl font-bold text-yellow-400">{counts.no_contract}</div>
+          <div className="text-xs text-slate-400">🔗 Без ДЗ</div>
+        </div>
+      </div>
+
+      {/* Filter tabs */}
+      <div className="flex gap-1 flex-wrap">
+        {[
+          {key:'all', label:'Все'},
+          {key:'attention', label:'⚠️ Требуют внимания'},
+          {key:'not_notified', label:'📧 Не уведомлены'},
+          {key:'no_contract', label:'🔗 Без ДЗ'},
+          {key:'new', label:'Новые'},
+          {key:'notified', label:'Уведомлены'},
+          {key:'confirmed', label:'Подтверждены'},
+          {key:'cancelled', label:'Отменены'},
+        ].map(f => (
+          <button key={f.key} onClick={() => setFilter(f.key)}
+            className={`text-xs px-2 py-1 rounded ${filter === f.key ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}>
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Penalties list */}
+      {filtered.length === 0 ? (
+        <EmptyState icon="🎉" title="Нет штрафов" desc={filter !== 'all' ? 'По выбранному фильтру нет результатов' : 'Все рейсы без нарушений'} />
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((p: any) => {
+            const st = statusStyles[p.status] || statusStyles.new;
+            return (
+              <div key={p.id} className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    {/* Top line: amount + type + status */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-red-400 font-bold text-lg">{Number(p.penalty_amount || 0).toLocaleString('ru-RU')} ₽</span>
+                      <span className="text-slate-300 text-sm">{ptypes[p.penalty_type] || p.penalty_type}</span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded ${st.bg}`}>{st.label}</span>
+                      {p.notification_sent_at && <span className="text-[10px] text-purple-400">📧 {new Date(p.notification_sent_at).toLocaleDateString('ru-RU')}</span>}
+                    </div>
+
+                    {/* Context line: carrier + vehicle + route */}
+                    <div className="text-sm text-slate-400 mt-1">
+                      {p.carrier_name && <span className="text-slate-300">{p.carrier_name}</span>}
+                      {p.vehicle_plate && <span className="ml-2 font-mono text-slate-400">{displayPlate(p.vehicle_plate)}</span>}
+                      {p.route && <span className="ml-2 text-slate-500">{p.route}</span>}
+                    </div>
+
+                    {/* Contract + reason */}
+                    <div className="text-xs text-slate-500 mt-1">
+                      {p.contract_number ? (
+                        <button onClick={() => router.push('/hired/contracts/' + p.contract_id)} className="text-blue-400 hover:underline">
+                          📋 {p.contract_number}
+                        </button>
+                      ) : (
+                        <span className="text-yellow-500">⚠️ Без ДЗ</span>
+                      )}
+                      {p.reason && <span className="ml-2">— {p.reason}</span>}
+                      {p.penalty_date && <span className="ml-2">{new Date(p.penalty_date).toLocaleDateString('ru-RU')}</span>}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                {!['cancelled', 'confirmed', 'deducted'].includes(p.status) && (
+                  <div className="flex gap-1 mt-2 flex-wrap">
+                    <button onClick={() => sendNotify(p)} disabled={sending === p.id}
+                      className="px-2 py-1 bg-purple-700 hover:bg-purple-600 rounded text-[11px] text-white disabled:opacity-50">
+                      {sending === p.id ? '...' : p.notification_sent_at ? '📧 Повторно' : '📧 Уведомить'}
+                    </button>
+                    {['new','notified'].includes(p.status) && (
+                      <button onClick={() => confirmPenalty(p.id)} className="px-2 py-1 bg-green-700 hover:bg-green-600 rounded text-[11px] text-white">
+                        ✅ Подтвердить
+                      </button>
+                    )}
+                    {p.carrier_id && (
+                      <button onClick={() => router.push('/hired/carriers/' + p.carrier_id)}
+                        className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-[11px] text-slate-300">
+                        👤 Перевозчик
+                      </button>
+                    )}
+                    <button onClick={() => cancelPenalty(p.id)}
+                      className="px-2 py-1 bg-red-700/40 hover:bg-red-700/60 rounded text-[11px] text-red-300">
+                      🗑 Отменить
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ContractsTab() {
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState<'kanban'|'table'>('kanban');
+  const [actionLoading, setActionLoading] = useState('');
+  const [dragItem, setDragItem] = useState<string|null>(null);
+
+  const load = () => {
+    setLoading(true);
+    fetch('/api/hired/contracts?show_completed=true', { headers: hdr() })
+      .then(r=>r.json()).then(d => setItems(d.contracts || d || []))
+      .catch(()=>{}).finally(()=>setLoading(false));
+  };
+  useEffect(() => { load(); }, []);
+
+  const changeStatus = async (id: string, newStatus: string) => {
+    setActionLoading(id);
+    try {
+      const r = await fetch(`/api/hired/contracts/${id}/status`, {
+        method: 'PATCH', headers: { ...hdr(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (r.ok) load();
+    } catch {} finally { setActionLoading(''); }
+  };
+
+  const fmtD = (d: string) => d ? new Date(d).toLocaleDateString('ru-RU', {day:'2-digit',month:'2-digit'}) : '—';
+  const fmtP = (n: any) => n ? Number(n).toLocaleString('ru-RU') : '—';
+
+  const COLS: {key:string;label:string;icon:string;color:string;next?:string;action?:string}[] = [
+    { key:'draft', label:'Черновики', icon:'📝', color:'border-slate-500', next:'sent', action:'📧 Отправить' },
+    { key:'sent', label:'Отправлены', icon:'📧', color:'border-yellow-500', next:'signed', action:'✅ Подписана' },
+    { key:'signed', label:'Подписаны', icon:'✍️', color:'border-purple-500', next:'in_progress', action:'🚛 В работу' },
+    { key:'in_progress', label:'В работе', icon:'🚛', color:'border-blue-500', next:'completed', action:'✅ Завершить' },
+    { key:'completed', label:'Завершены', icon:'✅', color:'border-green-500' },
+    { key:'accepted', label:'Приняты', icon:'💰', color:'border-emerald-500' },
+    { key:'rejected', label:'Отклонены', icon:'❌', color:'border-red-500' },
+    { key:'paid', label:'Оплачены', icon:'🏦', color:'border-teal-500' },
+  ];
+
+  const STATE_TRANSITIONS: Record<string,string[]> = {
+    draft: ['sent','cancelled'],
+    sent: ['signed','cancelled'],
+    signed: ['in_progress'],
+    in_progress: ['completed'],
+    completed: ['accepted','rejected'],
+    rejected: ['completed'],
+    accepted: ['paid'],
+  };
+
+  const canDrop = (fromStatus: string, toStatus: string) => {
+    return STATE_TRANSITIONS[fromStatus]?.includes(toStatus) || false;
+  };
+
+  const handleDrop = (targetStatus: string) => {
+    if (!dragItem) return;
+    const item = items.find(i => i.id === dragItem);
+    if (!item || item.status === targetStatus) { setDragItem(null); return; }
+    if (!canDrop(item.status, targetStatus)) { setDragItem(null); return; }
+    changeStatus(dragItem, targetStatus);
+    setDragItem(null);
+  };
+
+  if (loading) return <div className="text-center py-8 text-slate-500">Загрузка...</div>;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-between items-center">
+        <div className="flex gap-1 bg-slate-800 rounded-lg p-0.5">
+          <button onClick={() => setView('kanban')} className={"px-3 py-1 text-xs rounded " + (view === 'kanban' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white')}>📋 Канбан</button>
+          <button onClick={() => setView('table')} className={"px-3 py-1 text-xs rounded " + (view === 'table' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white')}>📊 Таблица</button>
+        </div>
+        <a href="/hired/contracts/create" className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-sm">+ Создать ДЗ</a>
+      </div>
+
+      {view === 'kanban' ? (
+        <div className="flex gap-3 overflow-x-auto pb-2" style={{minHeight:'400px'}}>
+          {COLS.map(col => {
+            const colItems = items.filter(i => i.status === col.key);
+            return (
+              <div key={col.key}
+                onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = dragItem && canDrop(items.find(i=>i.id===dragItem)?.status||'', col.key) ? 'move' : 'none'; }}
+                onDrop={() => handleDrop(col.key)}
+                className={"flex-shrink-0 w-[240px] md:w-[220px] bg-slate-800/50 rounded-xl border-t-2 " + col.color}>
+                <div className="px-3 py-2 flex items-center justify-between">
+                  <span className="text-sm font-medium text-white">{col.icon} {col.label}</span>
+                  <span className="text-xs bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded-full">{colItems.length}</span>
+                </div>
+                <div className="px-2 pb-2 space-y-2 min-h-[300px]">
+                  {colItems.map(c => (
+                    <div key={c.id} draggable
+                      onDragStart={() => setDragItem(c.id)}
+                      onDragEnd={() => setDragItem(null)}
+                      onClick={() => window.location.href = '/hired/contracts/' + c.id}
+                      className={"bg-slate-800 border border-slate-700 rounded-lg p-3 cursor-pointer hover:border-slate-500 transition " + (dragItem === c.id ? 'opacity-50 scale-95' : '') + (actionLoading === c.id ? ' animate-pulse' : '')}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-blue-400 text-xs font-medium">{c.contract_number}</span>
+                        <span className="text-slate-500 text-[10px]">{fmtD(c.created_at)}</span>
+                      </div>
+                      <div className="text-white text-sm font-medium truncate">{c.carrier_name || '—'}</div>
+                      <div className="text-xs text-slate-400 truncate mt-0.5">{c.route || '—'}</div>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-xs font-mono bg-blue-500/20 text-blue-300 px-1 rounded">{c.vehicle_plate || '—'}</span>
+                        <span className="text-xs font-medium text-white">{fmtP(c.price)} ₽</span>
+                      </div>
+                      {(c.penalty_count > 0 || c.linked_trips > 0) && (
+                        <div className="flex gap-2 mt-1.5 text-[10px]">
+                          {c.linked_trips > 0 && <span className="text-emerald-400">📦 {c.linked_trips}/{c.trip_count}</span>}
+                          {c.penalty_count > 0 && <span className="text-red-400">⚠️ {c.penalty_count} шт</span>}
+                        </div>
+                      )}
+                      {c.status === 'accepted' && <div className="mt-1.5 text-[10px] text-emerald-400">✅ Принята бухгалтером</div>}
+                      {c.status === 'rejected' && <div className="mt-1.5 text-[10px] text-red-400" title={c.rejected_reason || ''}>❌ Отклонена{c.rejected_reason ? ': ' + c.rejected_reason.substring(0,30) : ''}</div>}
+                      {c.status === 'completed' && <div className="mt-1.5 text-[10px] text-yellow-400">⏳ На проверке</div>}
+                      {c.status === 'paid' && <div className="mt-1.5 text-[10px] text-teal-400">🏦 Оплачена</div>}
+                      {col.next && (
+                        <button onClick={(e) => { e.stopPropagation(); changeStatus(c.id, col.next!); }}
+                          disabled={actionLoading === c.id}
+                          className="mt-2 w-full text-center text-xs px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded disabled:opacity-50">
+                          {col.action}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {colItems.length === 0 && <div className="text-center text-slate-600 text-xs py-8">Пусто</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* Table view - compact */
+        items.length === 0 ? <div className="text-center py-8 text-slate-500">Нет заявок</div> :
+        <div className="overflow-x-auto"><table className="w-full text-sm">
+          <thead><tr className="border-b border-slate-700 text-slate-400 text-xs">
+            <th className="py-2 px-2 text-left">№ ДЗ</th><th className="py-2 px-2 text-left">ПЕРЕВОЗЧИК</th>
+            <th className="py-2 px-2 text-left">МАШИНА</th><th className="py-2 px-2 text-left">МАРШРУТ</th>
+            <th className="py-2 px-2 text-right">СТАВКА</th><th className="py-2 px-2 text-center">СТАТУС</th>
+          </tr></thead>
+          <tbody>{items.map(c => (
+            <tr key={c.id} className="border-b border-slate-800 hover:bg-slate-800/50 cursor-pointer"
+              onClick={() => window.location.href = '/hired/contracts/' + c.id}>
+              <td className="py-2 px-2 text-blue-400 font-medium">{c.contract_number}<div className="text-[10px] text-slate-500">{fmtD(c.created_at)}</div></td>
+              <td className="py-2 px-2 max-w-[150px] truncate">{c.carrier_name || '—'}</td>
+              <td className="py-2 px-2"><span className="font-mono text-xs bg-blue-500/20 text-blue-300 px-1 rounded">{c.vehicle_plate || '—'}</span></td>
+              <td className="py-2 px-2 max-w-[140px] truncate text-slate-300">{c.route || '—'}</td>
+              <td className="py-2 px-2 text-right whitespace-nowrap">{fmtP(c.price)} ₽</td>
+              <td className="py-2 px-2 text-center"><span className={"px-2 py-0.5 rounded text-xs " + (COLS.find(co=>co.key===c.status)?.color?.replace('border-','bg-').replace('500','500/20') || 'bg-slate-500/20') + ' text-slate-300'}>{COLS.find(co=>co.key===c.status)?.label || c.status}</span></td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+      )}
+    </div>
+  );
+}
+
+function ClaimsTab() {
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    fetch('/api/hired/claims', { headers: hdr() }).then(r=>r.json()).then(d => setItems(Array.isArray(d) ? d : d.claims || [])).catch(()=>{}).finally(()=>setLoading(false));
+  }, []);
+  const fmtD = (d: string) => d ? new Date(d).toLocaleDateString('ru-RU') : '—';
+  const fmtP = (n: any) => n ? Number(n).toLocaleString('ru-RU') : '—';
+  const st: Record<string,{l:string;c:string}> = { open:{l:'Открыта',c:'bg-red-500/20 text-red-400'}, resolved:{l:'Решена',c:'bg-green-500/20 text-green-400'}, pending:{l:'В работе',c:'bg-yellow-500/20 text-yellow-400'} };
+  return loading ? <div className="text-center py-8 text-slate-500">Загрузка...</div> :
+    items.length === 0 ? <EmptyState icon="📋" title="Нет претензий" desc="Претензии создаются при нарушениях перевозчиками" /> :
+    <table className="w-full text-sm">
+      <thead><tr className="border-b border-slate-700 text-slate-400 text-xs">
+        <th className="py-2 px-2 text-left">№</th><th className="py-2 px-2 text-left">ПЕРЕВОЗЧИК</th>
+        <th className="py-2 px-2 text-right">СУММА</th><th className="py-2 px-2 text-left">ДАТА</th>
+        <th className="py-2 px-2 text-center">СТАТУС</th><th className="py-2 px-2 text-left">ОПИСАНИЕ</th>
+      </tr></thead>
+      <tbody>{items.map((c,i) => { const s = st[c.status]||st.open; return (
+        <tr key={i} className="border-b border-slate-800 hover:bg-slate-800/50">
+          <td className="py-2 px-2 font-medium">{c.claim_number || c.id || i+1}</td>
+          <td className="py-2 px-2">{c.company_name || c.carrier_name || '—'}</td>
+          <td className="py-2 px-2 text-right text-red-400">{fmtP(c.amount)} ₽</td>
+          <td className="py-2 px-2 text-xs">{fmtD(c.claim_date || c.created_at)}</td>
+          <td className="py-2 px-2 text-center"><span className={"px-2 py-0.5 rounded text-xs " + s.c}>{s.l}</span></td>
+          <td className="py-2 px-2 max-w-[200px] truncate text-slate-400">{c.description || c.title || '—'}</td>
+        </tr>
+      ); })}</tbody>
+    </table>;
+}
+function FineDetailPopup({ trip, onClose }: { trip: Trip; onClose: () => void }) {
+  const planMileage = trip.plan_mileage || 0;
+  const normSpeed = Number(trip.norm_speed) || 0;
+  const factSpeed = Number(trip.fact_speed) || 0;
+  const fineSum = Number(trip.fine_sum) || 0;
+
+  const planTimeHrs = normSpeed > 0 ? planMileage / normSpeed : 0;
+  const planH = Math.floor(planTimeHrs);
+  const planM = Math.round((planTimeHrs - planH) * 60);
+
+  let factTimeHrs = 0;
+  let startTime = '';
+  let endTime = '';
+  if (trip.open_dt && trip.close_dt) {
+    const open = new Date(trip.open_dt);
+    const close = new Date(trip.close_dt);
+    factTimeHrs = (close.getTime() - open.getTime()) / 3600000;
+    startTime = open.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    endTime = close.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  }
+  const factH = Math.floor(factTimeHrs);
+  const factM = Math.round((factTimeHrs - factH) * 60);
+
+  const lateMin = Math.max(0, Math.round((factTimeHrs - planTimeHrs) * 60));
+  const speedDev = normSpeed > 0 ? ((normSpeed - factSpeed) / normSpeed * 100) : 0;
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-slate-800 rounded-xl w-full max-w-md border border-slate-700 p-5 space-y-3">
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="text-white font-semibold">Детали штрафа — рейс {trip.wb_trip_number}</h3>
+            {trip.is_fine_under_consideration && (
+              <span className="bg-yellow-500/20 text-yellow-400 text-xs px-2 py-0.5 rounded mt-1 inline-block">На рассмотрении</span>
+            )}
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+        </div>
+
+        <div className="text-sm space-y-1 text-slate-300">
+          <p>Маршрут: <span className="text-white">{trip.route_name || '—'}</span></p>
+          <p>Водитель: <span className="text-white">{trip.driver_name || '—'}</span></p>
+          <p>Машина: <span className="text-white font-mono">{trip.vehicle_plate || '—'}</span></p>
+        </div>
+
+        <div className="border-t border-slate-700 pt-3 space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-slate-400">📏 Плановый километраж</span>
+            <span className="text-white">{planMileage} км</span>
+          </div>
+          {trip.open_dt && (
+            <div className="flex justify-between">
+              <span className="text-slate-400">🚀 Выезд</span>
+              <span className="text-white">{new Date(trip.open_dt).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}</span>
+            </div>
+          )}
+          {trip.open_dt && normSpeed > 0 && (() => {
+            const planned = new Date(new Date(trip.open_dt).getTime() + planTimeHrs * 3600000);
+            return (
+              <div className="flex justify-between">
+                <span className="text-slate-400">🕐 Плановое прибытие</span>
+                <span className="text-white">{planned.toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })} <span className="text-slate-500 text-xs">({planMileage} ÷ {normSpeed.toFixed(1)} = {planH} ч {planM} мин)</span></span>
+              </div>
+            );
+          })()}
+          {trip.close_dt && (
+            <div className="flex justify-between">
+              <span className="text-slate-400">🏁 Фактическое прибытие</span>
+              <span className="text-white">{new Date(trip.close_dt).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}</span>
+            </div>
+          )}
+          {trip.open_dt && trip.close_dt && (
+            <div className="flex justify-between">
+              <span className="text-slate-400">⏱️ Время в пути</span>
+              <span className="text-white">{factH} ч {factM} мин</span>
+            </div>
+          )}
+          {normSpeed > 0 && factSpeed > 0 && (
+            <div className="flex justify-between">
+              <span className="text-slate-400">⚡ Скорость</span>
+              <span className="text-white">факт {factSpeed.toFixed(1)} / норм {normSpeed.toFixed(1)} км/ч</span>
+            </div>
+          )}
+          {lateMin > 0 && (
+            <div className="flex justify-between">
+              <span className="text-slate-400">⏱️ Опоздание</span>
+              <span className="text-red-400 font-medium">{Math.floor(lateMin/60) > 0 ? `${Math.floor(lateMin/60)} ч ${lateMin%60} мин` : `${lateMin} мин`} ({lateMin} мин)</span>
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-slate-700 pt-3">
+          <div className="flex justify-between text-base">
+            <span className="text-slate-300 font-medium">💰 Штраф</span>
+            <span className="text-amber-400 font-bold">{Number(fineSum).toLocaleString('ru-RU', { minimumFractionDigits: 2 })} ₽</span>
+          </div>
+          {speedDev > 0 && (
+            <p className="text-xs text-slate-500 mt-2">
+              ℹ️ Причина: фактическая скорость ниже нормативной на {speedDev.toFixed(1)}% → опоздание
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SettlementsTab() {
+  const now = new Date();
+  const defFrom = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+  const defTo = now.toISOString().slice(0,10);
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [openCarrier, setOpenCarrier] = useState<string>('');
+  const [from, setFrom] = useState(defFrom);
+  const [to, setTo] = useState(defTo);
+  const [detail, setDetail] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const fmtM = (n: any) => Number(n||0).toLocaleString('ru-RU', {minimumFractionDigits:2, maximumFractionDigits:2});
+  // hdr() is module-level
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`/api/hired/balance?from=${from}&to=${to}`, {headers:hdr()});
+      const d = await r.json();
+      setItems(d.carriers || d.balance || (Array.isArray(d) ? d : []));
+    } catch {} finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const loadDetail = async (carrierId: string) => {
+    setDetailLoading(true);
+    try {
+      const r = await fetch(`/api/hired/balance/details?from=${from}&to=${to}&carrier_id=${carrierId}`, {headers:hdr()});
+      if (r.ok) setDetail(await r.json());
+    } catch {} finally { setDetailLoading(false); }
+  };
+
+  const totalAccrued = items.reduce((s: number, c: any) => s + Number(c.total_accrued || 0), 0);
+  const totalPenalties = items.reduce((s: number, c: any) => s + Number(c.total_penalties || 0), 0);
+  const totalBalance = items.reduce((s: number, c: any) => s + Number(c.balance || 0), 0);
+
+  return (
+    <div className="space-y-3">
+      {/* Period selector */}
+      <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">Период с</label>
+            <input type="date" value={from} onChange={e=>setFrom(e.target.value)}
+              className="bg-slate-700 text-white text-sm px-3 py-2 rounded border border-slate-600 focus:border-blue-500 focus:outline-none"/>
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 block mb-1">по</label>
+            <input type="date" value={to} onChange={e=>setTo(e.target.value)}
+              className="bg-slate-700 text-white text-sm px-3 py-2 rounded border border-slate-600 focus:border-blue-500 focus:outline-none"/>
+          </div>
+          <button onClick={load} disabled={loading}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded font-medium disabled:opacity-50">
+            {loading ? '...' : '📊 Рассчитать'}
+          </button>
+          <a href={`/api/hired/settlements/export?from=${from}&to=${to}`} target="_blank"
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded font-medium">
+            📥 Excel
+          </a>
+        </div>
+      </div>
+
+      {/* KPI cards */}
+      {items.length > 0 && (
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
+            <div className="text-xs text-slate-400">Начислено</div>
+            <div className="text-lg font-bold text-white">{fmtM(totalAccrued)} ₽</div>
+          </div>
+          <div className="bg-slate-800 rounded-lg p-3 border border-red-500/30">
+            <div className="text-xs text-slate-400">Штрафы</div>
+            <div className="text-lg font-bold text-red-400">{fmtM(totalPenalties)} ₽</div>
+          </div>
+          <div className="bg-slate-800 rounded-lg p-3 border border-green-500/30">
+            <div className="text-xs text-slate-400">К выплате</div>
+            <div className="text-lg font-bold text-green-400">{fmtM(totalBalance)} ₽</div>
+          </div>
+        </div>
+      )}
+
+      {loading ? <div className="text-center py-8 text-slate-500">Загрузка...</div> :
+       items.length === 0 ? <EmptyState icon="📊" title="Нет данных за период" desc="Измените период или дождитесь привязки рейсов" /> :
+       /* Carrier table */
+       <div className="overflow-x-auto"><table className="w-full text-sm">
+        <thead><tr className="border-b border-slate-700 text-slate-400 text-xs">
+          <th className="py-2 px-3 text-left">ПЕРЕВОЗЧИК</th>
+          <th className="py-2 px-3 text-center">РЕЙСОВ</th>
+          <th className="py-2 px-3 text-right">НАЧИСЛЕНО</th>
+          <th className="py-2 px-3 text-right">ШТРАФЫ</th>
+          <th className="py-2 px-3 text-right">К ОПЛАТЕ</th>
+        </tr></thead>
+        <tbody>{items.map((c: any, i: number) => {
+          const bal = Number(c.balance || 0);
+          return (
+          <tr key={i} className="border-b border-slate-800 hover:bg-slate-800/50 cursor-pointer"
+            onClick={() => { setOpenCarrier(openCarrier === c.carrier_id ? '' : c.carrier_id); if (openCarrier !== c.carrier_id) loadDetail(c.carrier_id); }}>
+            <td className="py-2 px-3">
+              <div className="flex items-center gap-2">
+                <span className={"w-2 h-2 rounded-full shrink-0 " + (bal > 0 ? "bg-green-500" : bal < 0 ? "bg-red-500" : "bg-slate-500")} />
+                <span className="text-white font-medium">{c.carrier_name || '—'}</span>
+              </div>
+            </td>
+            <td className="py-2 px-3 text-center">{c.trip_count || 0}</td>
+            <td className="py-2 px-3 text-right text-white">{fmtM(c.total_accrued)} ₽</td>
+            <td className="py-2 px-3 text-right text-red-400">{Number(c.total_penalties) > 0 ? `-${fmtM(c.total_penalties)} ₽` : '—'}</td>
+            <td className="py-2 px-3 text-right font-medium"><span className={bal >= 0 ? 'text-green-400' : 'text-red-400'}>{fmtM(bal)} ₽</span></td>
+          </tr>);
+        })}</tbody>
+        <tfoot><tr className="border-t-2 border-slate-600 font-bold">
+          <td className="py-2 px-3 text-slate-300">ИТОГО ({items.length} перевозчиков)</td>
+          <td className="py-2 px-3 text-center text-white">{items.reduce((s: number,c: any)=>s+Number(c.trip_count||0),0)}</td>
+          <td className="py-2 px-3 text-right text-white">{fmtM(totalAccrued)} ₽</td>
+          <td className="py-2 px-3 text-right text-red-400">{totalPenalties > 0 ? `-${fmtM(totalPenalties)} ₽` : '—'}</td>
+          <td className="py-2 px-3 text-right text-green-400">{fmtM(totalBalance)} ₽</td>
+        </tr></tfoot>
+       </table></div>
+      }
+
+      {/* Detail panel */}
+      {openCarrier && detail && !detailLoading && (
+        <div className="bg-slate-800 border border-blue-500/30 rounded-xl p-4">
+          <h3 className="text-white font-medium mb-3">📋 Детализация: {items.find((c:any)=>c.carrier_id===openCarrier)?.carrier_name}</h3>
+          {detail.trips?.length > 0 && (
+            <table className="w-full text-xs mb-3">
+              <thead><tr className="text-slate-400 border-b border-slate-700">
+                <th className="py-1 px-2 text-left">Дата</th><th className="py-1 px-2 text-left">Маршрут</th>
+                <th className="py-1 px-2 text-left">Машина</th><th className="py-1 px-2 text-right">Сумма</th>
+              </tr></thead>
+              <tbody>{detail.trips.map((t:any, j:number) => (
+                <tr key={j} className="border-b border-slate-800/50">
+                  <td className="py-1 px-2">{t.trip_date ? new Date(t.trip_date).toLocaleDateString('ru-RU') : '—'}</td>
+                  <td className="py-1 px-2 max-w-[200px] truncate">{t.route || '—'}</td>
+                  <td className="py-1 px-2 font-mono">{t.vehicle_plate}</td>
+                  <td className="py-1 px-2 text-right text-white">{fmtM(t.our_price || t.trip_cost)} ₽</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
+          <div className="flex justify-between text-sm font-medium pt-2 border-t border-slate-700">
+            <span className="text-slate-300">Итого: {fmtM(detail.total_accrued)} ₽ − штрафы {fmtM(detail.total_penalties)} ₽</span>
+            <span className="text-green-400">= {fmtM(detail.balance)} ₽</span>
+          </div>
+        </div>
+      )}
+      {detailLoading && <div className="text-center py-4 text-slate-500">Загрузка детализации...</div>}
+    </div>
+  );
+}
+
+
+function HiredMap() {
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [contracts, setContracts] = useState<any[]>([]);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    const load = () => {
+      Promise.all([
+        fetch('/api/dispatch-wp/gps', { headers: hdr() }).then(r=>r.json()).catch(()=>[]),
+        fetch('/api/hired/contracts?status=in_progress,signed', { headers: hdr() }).then(r=>r.json()).catch(()=>({contracts:[]}))
+      ]).then(([gps, cData]) => {
+        const allGps = Array.isArray(gps) ? gps : [];
+        const allC = cData.contracts || cData || [];
+        setContracts(allC);
+        // Match GPS to hired contracts
+        const hiredPlates = new Set(allC.map((c: any) => c.vehicle_plate?.replace(/\s/g,'').toUpperCase()));
+        const matched = allGps.filter((v: any) => hiredPlates.has(v.vehicle?.replace(/\s/g,'').toUpperCase()));
+        setVehicles(matched);
+      });
+    };
+    load();
+    const iv = setInterval(load, 60000);
+    return () => clearInterval(iv);
+  }, []);
+
+  if (contracts.length === 0) return null;
+
+  return (
+    <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden mb-4">
+      <button onClick={() => setCollapsed(!collapsed)}
+        className="w-full px-4 py-2 flex items-center justify-between hover:bg-slate-700/50">
+        <span className="text-white text-sm font-medium">🗺️ Наёмные на карте ({vehicles.length}/{contracts.length})</span>
+        <span className="text-slate-400 text-xs">{collapsed ? '▼ Развернуть' : '▲ Свернуть'}</span>
+      </button>
+      {!collapsed && (
+        <div>
+          {vehicles.length > 0 ? (
+            <div className="h-[250px] relative">
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-900/50 z-10 text-slate-400 text-sm">
+                <div className="text-center">
+                  {vehicles.map((v: any, i: number) => {
+                    const age = (Date.now() - new Date(v.gps_time || v.updated_at).getTime()) / 3600000;
+                    const color = v.speed > 5 ? '🟢' : age > 24 ? '🔴' : '🔵';
+                    return <div key={i} className="text-xs py-0.5">{color} {v.vehicle} — {v.speed > 5 ? `${Math.round(v.speed)} км/ч` : age > 24 ? 'Нет связи' : 'Стоит'}</div>;
+                  })}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="px-4 py-4 text-center text-slate-500 text-sm">
+              Нет GPS-данных для наёмных машин
+              <div className="text-xs mt-1">{contracts.length} активных ДЗ без GPS-трекинга</div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AuditTab() {
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [editId, setEditId] = useState<number|null>(null);
+  const [editPrice, setEditPrice] = useState('');
+  const [editCarrier, setEditCarrier] = useState('');
+  const [saving, setSaving] = useState(false);
+  const LIMIT = 30;
+
+  const load = () => {
+    setLoading(true);
+    fetch('/api/hired/audit?limit=' + LIMIT + '&offset=' + ((page-1)*LIMIT), { headers: hdr() })
+      .then(r=>r.json()).then(d => { setItems(d.items || []); setTotal(d.total_filtered || d.total || 0); })
+      .catch(()=>{}).finally(()=>setLoading(false));
+  };
+  useEffect(load, [page]);
+
+  const saveEdit = async (wbId: number) => {
+    setSaving(true);
+    try {
+      if (editPrice) {
+        await fetch('/api/hired/trips/' + wbId + '/price', {
+          method: 'PATCH', headers: { ...hdr(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ our_price: Number(editPrice) })
+        });
+      }
+      setEditId(null); load();
+    } catch(e) { console.error(e); }
+    setSaving(false);
+  };
+
+  if (loading && items.length === 0) return <div className="text-center py-8 text-slate-500">Загрузка...</div>;
+  if (items.length === 0) return <EmptyState icon="✅" title="Всё проверено" desc="Нет рейсов на проверку" />;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-between text-sm text-slate-400">
+        <span>{total} рейсов на проверку</span>
+        <div className="flex gap-2">
+          <button onClick={() => setPage(Math.max(1, page-1))} disabled={page===1} className="px-2 py-1 bg-slate-700 rounded disabled:opacity-30">&lt;</button>
+          <span className="px-2 py-1">{page}/{Math.ceil(total/LIMIT)}</span>
+          <button onClick={() => setPage(page+1)} disabled={page*LIMIT >= total} className="px-2 py-1 bg-slate-700 rounded disabled:opacity-30">&gt;</button>
+        </div>
+      </div>
+      <div className="divide-y divide-slate-700/50">
+        {items.map(item => (
+          <div key={item.wb_waysheet_id} className="py-2 flex items-center gap-3 text-sm hover:bg-slate-800/50 px-2 rounded">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-white font-mono">{displayPlate(item.vehicle_plate)}</span>
+                <span className="text-slate-500 text-xs">{item.trip_date ? new Date(item.trip_date).toLocaleDateString('ru-RU') : ''}</span>
+              </div>
+              <div className="text-xs text-slate-400 truncate">{item.route || '—'}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              {editId === item.wb_waysheet_id ? (
+                <>
+                  <input value={editPrice} onChange={e => setEditPrice(e.target.value)} placeholder="Цена"
+                    className="w-20 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs" autoFocus />
+                  <button onClick={() => saveEdit(item.wb_waysheet_id)} disabled={saving}
+                    className="text-green-400 hover:text-green-300 text-xs">✓</button>
+                  <button onClick={() => setEditId(null)} className="text-slate-400 hover:text-white text-xs">✗</button>
+                </>
+              ) : (
+                <>
+                  <span className={item.our_price ? 'text-green-400' : 'text-orange-400'}>
+                    {item.our_price ? Number(item.our_price).toLocaleString('ru-RU') + ' ₽' : 'нет цены'}
+                  </span>
+                  <span className={item.carrier_name ? 'text-blue-400 text-xs' : 'text-slate-500 text-xs'}>
+                    {item.carrier_name || 'нет перевозчика'}
+                  </span>
+                  <button onClick={() => { setEditId(item.wb_waysheet_id); setEditPrice(item.our_price || ''); }}
+                    className="text-slate-500 hover:text-white text-xs">✏️</button>
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+

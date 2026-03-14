@@ -1,9 +1,9 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ChevronRight, Search, Calendar, Users, TrendingUp, AlertTriangle, Route } from "lucide-react";
+import { ChevronRight, Search, Calendar, Users, TrendingUp, AlertTriangle, Route, Trophy, Star } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 
 const MONTHS = [
@@ -75,10 +75,25 @@ export default function DriversPage() {
     const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${lastDay}`;
   });
+  const [showAll, setShowAll] = useState(false);
+  const [allDrivers, setAllDrivers] = useState<any[]>([]);
+  useEffect(() => {
+    if (showAll) {
+      fetch("/api/drivers-ext/all").then(r => r.json()).then(setAllDrivers).catch(() => {});
+    }
+  }, [showAll]);
+
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  const [tab, setTab] = useState<"list" | "rating">("list");
+  const [ratingData, setRatingData] = useState<any>(null);
+  const [ratingLoading, setRatingLoading] = useState(false);
   
-  const { user } = useAuth();
+  const [showArchived, setShowArchived] = useState(false);
+  const [driverStatuses, setDriverStatuses] = useState<Record<string, string>>({});
+
+  const { user, effectiveRole } = useAuth();
+  const isReadOnly = ["logist"].includes(effectiveRole);
   const isAccountant = user?.role === "accountant";
 
   const month = `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}-01`;
@@ -87,6 +102,20 @@ export default function DriversPage() {
   for (let y = 2023; y <= now.getFullYear(); y++) {
     years.push(y);
   }
+
+  // Загружаем статусы водителей
+  useEffect(() => {
+    fetch("/rest/v1/drivers?select=full_name,status")
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          const map: Record<string, string> = {};
+          data.forEach((d: any) => { if (d.full_name) map[d.full_name] = d.status || 'active'; });
+          setDriverStatuses(map);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const { data: drivers = [], isLoading } = useQuery({
     queryKey: ["drivers", mode, mode === "month" ? month : `${startDate}-${endDate}`],
@@ -104,6 +133,9 @@ export default function DriversPage() {
 
   const filtered = drivers.filter((d: any) => {
     if (!d.driver_name) return false;
+    // Фильтр по статусу: по умолчанию active + reserve, с кнопкой показать архив
+    const driverStatus = driverStatuses[d.driver_name] || 'active';
+    if (!showArchived && driverStatus === 'archived') return false;
     if (search && !d.driver_name.toLowerCase().includes(search.toLowerCase())) return false;
     if (filter === "trf" && !d.trf_trips) return false;
     if (filter === "wb" && !d.wb_trips) return false;
@@ -123,9 +155,106 @@ export default function DriversPage() {
     <div>
       <div className="mb-4">
         <h1 className="text-xl sm:text-2xl font-bold text-white">Водители</h1>
+        <div className="flex gap-2 ml-4">
+          <button onClick={() => setShowAll(false)} className={`px-3 py-1.5 rounded text-sm font-medium ${!showAll ? "bg-blue-600 text-white" : "bg-slate-700 text-slate-300 hover:bg-slate-600"}`}>За период</button>
+          <button onClick={() => setShowAll(true)} className={`px-3 py-1.5 rounded text-sm font-medium ${showAll ? "bg-blue-600 text-white" : "bg-slate-700 text-slate-300 hover:bg-slate-600"}`}>Все водители ({allDrivers.length})</button>
+        </div>
         <p className="text-slate-400 text-sm">Экономика по каждому водителю</p>
       </div>
 
+      {/* Tab Switcher */}
+      <div className="flex gap-2 mb-4">
+        <button onClick={() => setTab("list")} className={`px-4 py-2 rounded-lg font-medium transition-colors ${tab === "list" ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-400 border border-slate-700 hover:text-white"}`}>
+          👤 Список
+        </button>
+        <button onClick={() => {
+          setTab("rating");
+          if (!ratingData) {
+            setRatingLoading(true);
+            const m = `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}`;
+            fetch(`/api/drivers-ext/rating?month=${m}`).then(r => r.json()).then(d => { setRatingData(d); setRatingLoading(false); });
+          }
+        }} className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${tab === "rating" ? "bg-yellow-600 text-white" : "bg-slate-800 text-slate-400 border border-slate-700 hover:text-white"}`}>
+          🏆 Рейтинг
+        </button>
+      </div>
+
+      {tab === "rating" && (
+        <div className="space-y-4 mb-4">
+          {ratingLoading ? (
+            <div className="text-center py-8 text-slate-400">Загрузка рейтинга...</div>
+          ) : ratingData ? (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                  <div className="text-slate-400 text-xs">Водителей</div>
+                  <div className="text-xl font-bold text-white">{ratingData.summary.total}</div>
+                </div>
+                <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                  <div className="text-slate-400 text-xs">Средний рейтинг</div>
+                  <div className="text-xl font-bold text-blue-400">{ratingData.summary.avg_rating}/100</div>
+                </div>
+                <div className="bg-slate-800 rounded-xl p-4 border border-green-500/30">
+                  <div className="text-slate-400 text-xs">🟢 Отличные (80+)</div>
+                  <div className="text-xl font-bold text-green-400">{ratingData.summary.excellent}</div>
+                </div>
+                <div className="bg-slate-800 rounded-xl p-4 border border-red-500/30">
+                  <div className="text-slate-400 text-xs">🔴 Низкие (&lt;60)</div>
+                  <div className="text-xl font-bold text-red-400">{ratingData.summary.poor}</div>
+                </div>
+              </div>
+
+              <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-700/50">
+                      <tr>
+                        <th className="text-left p-3 text-slate-400">#</th>
+                        <th className="text-left p-3 text-slate-400">Водитель</th>
+                        <th className="text-center p-3 text-slate-400">Рейтинг</th>
+                        <th className="text-center p-3 text-slate-400 hidden md:table-cell">Расход</th>
+                        <th className="text-center p-3 text-slate-400 hidden md:table-cell">₽/км</th>
+                        <th className="text-right p-3 text-slate-400 hidden lg:table-cell">Рейсов</th>
+                        <th className="text-right p-3 text-slate-400">Пробег</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ratingData.drivers.map((d: any, i: number) => (
+                        <tr key={d.driver_name} className="border-t border-slate-700/50 hover:bg-slate-700/30">
+                          <td className="p-3 text-slate-500">{i + 1}</td>
+                          <td className="p-3">
+                            <div className="text-white font-medium">{d.driver_name}</div>
+                            <div className="text-slate-500 text-xs">{d.vehicle_number}</div>
+                          </td>
+                          <td className="p-3 text-center">
+                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm font-bold ${
+                              d.rating >= 80 ? 'bg-green-500/20 text-green-400' :
+                              d.rating >= 60 ? 'bg-yellow-500/20 text-yellow-400' :
+                              'bg-red-500/20 text-red-400'
+                            }`}>
+                              {d.rating >= 80 ? '⭐' : d.rating >= 60 ? '✅' : '❌'} {d.rating}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center hidden md:table-cell">
+                            <span className={d.consumption <= 28 ? 'text-green-400' : d.consumption <= 35 ? 'text-yellow-400' : 'text-red-400'}>
+                              {d.consumption} л/100
+                            </span>
+                          </td>
+                          <td className="p-3 text-center hidden md:table-cell text-slate-300">{d.revenue_per_km}</td>
+                          <td className="p-3 text-right hidden lg:table-cell text-slate-300">{d.trip_count}</td>
+                          <td className="p-3 text-right text-slate-300">{d.total_mileage.toLocaleString('ru-RU')} км</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
+
+      {tab === "list" && <>
       {/* Period Selector */}
       <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50 mb-4">
         {/* Mode toggle */}
@@ -177,6 +306,13 @@ export default function DriversPage() {
               WB
             </button>
           </div>
+          
+          <button
+            onClick={() => setShowArchived(!showArchived)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition border ${showArchived ? 'bg-slate-700 text-white border-slate-500' : 'bg-transparent text-slate-500 border-slate-700 hover:text-slate-300'}`}
+          >
+            {showArchived ? '🗂 Скрыть архив' : '📁 Показать архив'}
+          </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -374,15 +510,38 @@ export default function DriversPage() {
             </div>
           </div>
 
-          {filtered.length === 0 && (
+          {showAll ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-800 sticky top-0"><tr>
+                  <th className="p-3 text-left text-slate-300 font-medium">Водитель</th>
+                  <th className="p-3 text-left text-slate-300 font-medium">Последняя машина</th>
+                  <th className="p-3 text-left text-slate-300 font-medium">Последний отчёт</th>
+                  <th className="p-3 text-right text-slate-300 font-medium">Отчётов</th>
+                </tr></thead>
+                <tbody>
+                  {allDrivers.filter((d: any) => !search || d.driver_name?.toLowerCase().includes(search.toLowerCase())).map((d: any, i: number) => (
+                    <tr key={i} className="border-t border-slate-700 hover:bg-slate-700/50">
+                      <td className="p-3 text-white font-medium">{d.driver_name}</td>
+                      <td className="p-3 text-slate-300 font-mono">{d.last_vehicle || "—"}</td>
+                      <td className="p-3 text-slate-400">{d.last_report ? new Date(d.last_report).toLocaleDateString("ru-RU") : "—"}</td>
+                      <td className="p-3 text-right text-slate-400">{d.report_count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="p-3 text-slate-500 text-xs border-t border-slate-700">{allDrivers.length} водителей</div>
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="text-center py-8 text-slate-400">Нет данных за выбранный период</div>
-          )}
+          ) : null}
           
           <div className="mt-4 text-center text-slate-500 text-sm">
             Всего: {filtered.length} водителей
           </div>
         </>
       )}
+    </>}
     </div>
   );
 }
