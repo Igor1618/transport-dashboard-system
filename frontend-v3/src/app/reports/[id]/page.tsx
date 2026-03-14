@@ -11,6 +11,7 @@ import { useFuelCards } from './hooks/useFuelCards';
 import { FuelCardModals } from './components/FuelCardModals';
 import { DriverReportSection } from './components/DriverReportSection';
 import { TotalsSummary } from './components/TotalsSummary';
+import { SimpleListBlock } from './components/SimpleListBlock';
 
 export default function NewReportPage() {
   const params = useParams();
@@ -141,13 +142,9 @@ export default function NewReportPage() {
   
   // Удержания
   const [deductions, setDeductions] = useState<{name: string, amount: number}[]>([]);
-  const [newDeductionName, setNewDeductionName] = useState("");
-  const [newDeductionAmount, setNewDeductionAmount] = useState<number | "">("");
   
   // Штрафы
   const [fines, setFines] = useState<{name: string, amount: number}[]>([]);
-  const [newFineName, setNewFineName] = useState("");
-  const [newFineAmount, setNewFineAmount] = useState<number | "">("");
   
   // Справочники
   const [workTypes, setWorkTypes] = useState<WorkType[]>([]);
@@ -2474,48 +2471,24 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
         </div>
 
         {/* Удержания (-) */}
-        <div className="bg-slate-800 rounded-xl p-4 border border-red-500/30">
-          <h2 className="font-semibold text-red-400 mb-1">💸 Удержания</h2>
-          <p className="text-xs text-slate-400 mb-2">За порчу груза, недостачу и т.д.</p>
-          {deductions.map((d, i) => (
-            <div key={i} className="flex justify-between bg-slate-700/50 rounded px-3 py-1 mb-1 text-sm">
-              <span>{d.name}</span>
-              <div className="flex gap-2">
-                <span className="text-red-400">−{d.amount.toLocaleString()} ₽</span>
-                <button onClick={() => setDeductions(deductions.filter((_, j) => j !== i))} className="text-slate-500"><Trash2 className="w-3 h-3" /></button>
-              </div>
-            </div>
-          ))}
-          <div className="flex flex-col sm:flex-row gap-2 mt-2">
-            <input placeholder="Причина удержания..." value={newDeductionName} onChange={e => setNewDeductionName(e.target.value)} className="flex-1 bg-slate-700 text-white rounded px-3 py-2 sm:py-1 border border-slate-600 text-sm" />
-            <div className="flex gap-2">
-              <input type="number" placeholder="₽" value={newDeductionAmount} onChange={e => setNewDeductionAmount(e.target.value ? Number(e.target.value) : "")} className="flex-1 sm:w-20 sm:flex-none bg-slate-700 text-white rounded px-3 py-2 sm:py-1 border border-slate-600 text-sm" />
-              <button onClick={() => { if (newDeductionName && newDeductionAmount) { setDeductions([...deductions, {name: newDeductionName, amount: Number(newDeductionAmount)}]); setNewDeductionName(""); setNewDeductionAmount(""); }}} disabled={!newDeductionName || !newDeductionAmount} className="bg-red-600 disabled:bg-slate-600 text-white px-4 sm:px-3 py-2 sm:py-1 rounded min-h-[44px] sm:min-h-0"><Plus className="w-4 h-4" /></button>
-            </div>
-          </div>
-        </div>
+        <SimpleListBlock
+          title="💸 Удержания"
+          subtitle="За порчу груза, недостачу и т.д."
+          items={deductions}
+          setItems={setDeductions}
+          color="red"
+          namePlaceholder="Причина удержания..."
+        />
 
         {/* Штрафы (-) */}
-        <div className="bg-slate-800 rounded-xl p-4 border border-amber-500/30">
-          <h2 className="font-semibold text-amber-400 mb-1">⚠️ Штрафы</h2>
-          <p className="text-xs text-slate-400 mb-2">ПДД, весовой контроль и т.д.</p>
-          {fines.map((f, i) => (
-            <div key={i} className="flex justify-between bg-slate-700/50 rounded px-3 py-1 mb-1 text-sm">
-              <span>{f.name}</span>
-              <div className="flex gap-2">
-                <span className="text-amber-400">−{f.amount.toLocaleString()} ₽</span>
-                <button onClick={() => setFines(fines.filter((_, j) => j !== i))} className="text-slate-500"><Trash2 className="w-3 h-3" /></button>
-              </div>
-            </div>
-          ))}
-          <div className="flex flex-col sm:flex-row gap-2 mt-2">
-            <input placeholder="Причина штрафа..." value={newFineName} onChange={e => setNewFineName(e.target.value)} className="flex-1 bg-slate-700 text-white rounded px-3 py-2 sm:py-1 border border-slate-600 text-sm" />
-            <div className="flex gap-2">
-              <input type="number" placeholder="₽" value={newFineAmount} onChange={e => setNewFineAmount(e.target.value ? Number(e.target.value) : "")} className="flex-1 sm:w-20 sm:flex-none bg-slate-700 text-white rounded px-3 py-2 sm:py-1 border border-slate-600 text-sm" />
-              <button onClick={() => { if (newFineName && newFineAmount) { setFines([...fines, {name: newFineName, amount: Number(newFineAmount)}]); setNewFineName(""); setNewFineAmount(""); }}} disabled={!newFineName || !newFineAmount} className="bg-amber-600 disabled:bg-slate-600 text-white px-4 sm:px-3 py-2 sm:py-1 rounded min-h-[44px] sm:min-h-0"><Plus className="w-4 h-4" /></button>
-            </div>
-          </div>
-        </div>
+        <SimpleListBlock
+          title="⚠️ Штрафы"
+          subtitle="ПДД, весовой контроль и т.д."
+          items={fines}
+          setItems={setFines}
+          color="amber"
+          namePlaceholder="Причина штрафа..."
+        />
 
         {/* Выдано (-) */}
         <div className="bg-slate-800 rounded-xl p-4 border border-orange-500/30">
