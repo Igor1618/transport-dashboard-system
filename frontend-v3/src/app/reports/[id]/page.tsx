@@ -9,6 +9,7 @@ import type { Driver, Vehicle, WbTrip, RfContract, FuelBySource, Expense, Paymen
 import { normPlate } from './utils/report-helpers';
 import { useFuelCards } from './hooks/useFuelCards';
 import { useWbTrips } from './hooks/useWbTrips';
+import { useRfContracts } from './hooks/useRfContracts';
 import { FuelCardModals } from './components/FuelCardModals';
 import { DriverReportSection } from './components/DriverReportSection';
 import { TotalsSummary } from './components/TotalsSummary';
@@ -67,6 +68,30 @@ export default function NewReportPage() {
     totalIdleData, fuelUsedWb, avgFuelConsumptionWb,
     loadWbTrips, restoreWbData, resetWb, getUniqueDays,
   } = useWbTrips(fuelWb);
+
+  const rf = useRfContracts({
+    gpsMileage, wbGpsMileage, fuelRf, bonusEnabled, bonusRate,
+    reportLoaded, reportLoadedRef, isNew: params.id === 'new',
+  });
+  const {
+    rfContracts, setRfContracts, rfPeriods, setRfPeriods,
+    rfDateFrom, setRfDateFrom, rfDateTo, setRfDateTo,
+    rfGpsMileage, setRfGpsMileage, rfGpsLoading,
+    rfRatePerKm, setRfRatePerKm, rfDaysManual, setRfDaysManual,
+    rfDays, setRfDays, rfDailyRate, setRfDailyRate,
+    rfFuelStartTank, setRfFuelStartTank, rfFuelEndTank, setRfFuelEndTank,
+    selectedVehicleType, setSelectedVehicleType, selectedSeason, setSelectedSeason,
+    autoRate, setAutoRate, tariffRates, vehicleTypes, setVehicleTypes,
+    hasRfPeriods, hasRfData, effectiveRfMileage,
+    rfDriverPay, rfDailyPay, rfBonus, avgFuelConsumption,
+    loadRfGps: loadRfGpsHook, restoreRfData, resetRf,
+  } = rf;
+
+  const loadRfGps = () => loadRfGpsHook(vehicleNumber, {
+    setVehicleData, setFuelRf, setHasFuelSensor,
+    setFuelStartTank, setFuelEndTank,
+    fuelStartTank, fuelEndTank,
+  });
   const { vehicleCards, showCardModal, cardSearchQ, cardSearchResults, cardSearching, cardTxModal, cardTransactions } = fuelCards;
   const { setShowCardModal, setCardSearchQ, setCardTxModal } = fuelCards;
   
@@ -75,10 +100,6 @@ export default function NewReportPage() {
   const [vehicleSuggestions, setVehicleSuggestions] = useState<{vehicle_number: string; trips: number}[]>([]);
   
   
-  const [rfContracts, setRfContracts] = useState<RfContract[]>([]);
-  const [rfPeriods, setRfPeriods] = useState<{from: string; to: string; mileage: number}[]>([{from: "", to: "", mileage: 0}]);
-  const [rfDateFrom, setRfDateFrom] = useState("");
-  const [rfDateTo, setRfDateTo] = useState("");
   
   // Порожний перегон
   const [relocations, setRelocations] = useState<{from: string; to: string; mileage: number; date: string}[]>([]);
@@ -91,9 +112,6 @@ export default function NewReportPage() {
   
   // Выплаты из ведомостей
   const [salaryData, setSalaryData] = useState<{payments: {full_name: string; amount: number; register_number: string; register_date: string; tl_number: number; payment_purpose: string}[]; total: number}>({ payments: [], total: 0 });
-  const [rfGpsMileage, setRfGpsMileage] = useState(0);
-  const [rfGpsLoading, setRfGpsLoading] = useState(false);
-  const [rfRatePerKm, setRfRatePerKm] = useState(7.0);
   
   const [gpsMileage, setGpsMileage] = useState(0);
   // GPS coverage
@@ -122,8 +140,6 @@ export default function NewReportPage() {
   const [fuelStartTank, setFuelStartTank] = useState<number | "">(""); // Остаток на начало
   const [fuelEndTank, setFuelEndTank] = useState<number | "">(""); // Остаток на конец
   // Остатки топлива для периода РФ
-  const [rfFuelStartTank, setRfFuelStartTank] = useState<number | "">(""); // Остаток на начало РФ
-  const [rfFuelEndTank, setRfFuelEndTank] = useState<number | "">(""); // Остаток на конец РФ
   const [hasFuelSensor, setHasFuelSensor] = useState(false); // Есть датчик топлива
   const [sensorLoading, setSensorLoading] = useState(false);
   
@@ -170,8 +186,6 @@ export default function NewReportPage() {
   };
   
   // Суточные РФ
-  const [rfDailyRate, setRfDailyRate] = useState(1000);
-  const [rfDays, setRfDays] = useState(0);
   
   // Премия за выполнение требований ТК
   const [bonusEnabled, setBonusEnabled] = useState(true);
@@ -182,11 +196,6 @@ export default function NewReportPage() {
   
   // Тип машины и авто-расчёт ставки
   const [vehicleModel, setVehicleModel] = useState("");
-  const [autoRate, setAutoRate] = useState<number | null>(null);
-  const [vehicleTypes, setVehicleTypes] = useState<string[]>([]);
-  const [selectedVehicleType, setSelectedVehicleType] = useState("");
-  const [selectedSeason, setSelectedSeason] = useState("");
-  const [tariffRates, setTariffRates] = useState<{fuel_consumption: number; rate: number}[]>([]);
 
   const [ownVehicleNums, setOwnVehicleNums] = useState<Set<string>>(new Set());
   const isHiredVehicle = vehicleNumber && ownVehicleNums.size > 0 && !ownVehicleNums.has(vehicleNumber.replace(/\s/g, '').replace(/0(\d{2})$/, '$1').toUpperCase());
@@ -241,7 +250,6 @@ export default function NewReportPage() {
             const dto = r.date_to ? `${r.date_to}T${tt}` : "";
             setDateFrom(dfrom); setDateTo(dto);
             setRfDateFrom(dfrom); setRfDateTo(dto);
-            setRfGpsMileage(r.mileage || 0);
             // For approved reports: use total_mileage and wb_mileage as fallbacks
             if (r.status === 'approved') {
               if (r.total_mileage && !r.mileage) setGpsMileage(Number(r.total_mileage) || 0);
@@ -251,39 +259,13 @@ export default function NewReportPage() {
             setFuelStartTank(r.fuel_start || ""); setFuelEndTank(r.fuel_end || "");
             // Загрузка сохранённых периодов РФ и типа машины
             reportLoadedRef.current = true; // Mark loaded before setting state to prevent useEffect race
-            if (r.rf_periods && Array.isArray(r.rf_periods) && r.rf_periods.length > 0) {
-              setRfPeriods(r.rf_periods);
-              // Пересчитываем общий пробег из периодов (если rf_mileage не сохранён)
-              const totalFromPeriods = r.rf_periods.reduce((sum: number, p: any) => sum + (Number(p.mileage) || 0), 0);
-              console.log('[LOAD] rf_periods total mileage:', totalFromPeriods);
-              if (totalFromPeriods > 0) setRfGpsMileage(totalFromPeriods);
-            }
-            if (r.vehicle_type) setSelectedVehicleType(r.vehicle_type);
-            if (r.season) setSelectedSeason(r.season);
-            if (r.rate_per_km) setRfRatePerKm(Number(r.rate_per_km));
             // Детали из expense_categories
             const details = r.expense_categories;
             console.log('[LOAD] r.mileage:', r.mileage, 'r.rate_per_km:', r.rate_per_km);
             console.log('[LOAD] details:', details);
             if (details && typeof details === 'object' && !Array.isArray(details)) {
               console.log('[LOAD] rf_mileage:', details.rf_mileage, 'rf_rate:', details.rf_rate);
-              if (details.rf_rate) setRfRatePerKm(details.rf_rate);
-              if (details.rf_mileage) setRfGpsMileage(details.rf_mileage);
-              if (details.rf_days != null) { setRfDays(Number(details.rf_days)); setRfDaysManual(true); }
-              if (details.rf_daily_rate != null) setRfDailyRate(Number(details.rf_daily_rate));
-              // Fallback: if rf_days not saved but rf_periods exist, calculate
-              if (details.rf_days == null && r.rf_periods && Array.isArray(r.rf_periods) && r.rf_periods.length > 0) {
-                const validPeriods = r.rf_periods.filter((p: any) => p.from && p.to);
-                if (validPeriods.length > 0) {
-                  const firstFrom = new Date(validPeriods[0].from.slice(0, 10) + 'T00:00:00');
-                  const lastTo = new Date(validPeriods[validPeriods.length - 1].to.slice(0, 10) + 'T00:00:00');
-                  const calcDays = Math.round((lastTo.getTime() - firstFrom.getTime()) / 86400000) + 1;
-                  if (calcDays > 0) { setRfDays(calcDays); setRfDaysManual(true); }
-                }
-              }
               if (details.gps_coverage_snapshot) setGpsCoverage(details.gps_coverage_snapshot);
-              if (details.rf_fuel_start) setRfFuelStartTank(details.rf_fuel_start);
-              if (details.rf_fuel_end) setRfFuelEndTank(details.rf_fuel_end);
               if (details.fuel_rf) setFuelRf(details.fuel_rf);
               if (details.bonus_enabled !== undefined) setBonusEnabled(details.bonus_enabled);
               if (details.bonus_rate) setBonusRate(details.bonus_rate);
@@ -297,28 +279,7 @@ export default function NewReportPage() {
               if (details.comment) setComment(details.comment);
               // Восстановление WB рейсов
               await restoreWbData(r, details);
-              // Восстановление заявок РФ
-              if (details.rf_contracts_data && Array.isArray(details.rf_contracts_data) && details.rf_contracts_data.length > 0) {
-                setRfContracts(details.rf_contracts_data);
-                console.log('[LOAD] rf_contracts_data:', details.rf_contracts_data.length, 'contracts');
-              } else if (r.vehicle_number && r.date_from && r.date_to) {
-                // No saved RF data — auto-fetch from API using loading_date filter
-                console.log('[LOAD] No rf_contracts_data, fetching from API...');
-                try {
-                  const tf2 = r.time_from ? r.time_from.slice(0,5) : '00:00';
-                  const tt2 = r.time_to ? r.time_to.slice(0,5) : '23:59';
-                  const rfFrom = r.date_from + 'T' + tf2;
-                  const rfTo = r.date_to + 'T' + tt2;
-                  const rfBp = new URLSearchParams({ vehicle: r.vehicle_number, from: rfFrom, to: rfTo });
-                  if (r.driver_name) rfBp.append('driver', r.driver_name);
-                  const rfR = await fetch(`/api/reports/contracts-rf-v2?${rfBp}`);
-                  const rfD = await rfR.json();
-                  if (rfD.contracts && rfD.contracts.length > 0) {
-                    setRfContracts(rfD.contracts);
-                    console.log('[LOAD] Fetched', rfD.contracts.length, 'RF contracts from API');
-                  }
-                } catch (e) { console.warn('[LOAD] RF fetch error:', e); }
-              }
+              await restoreRfData(r, details);
               // Восстановление топлива по источникам
               if (details.fuel_by_source && Array.isArray(details.fuel_by_source)) {
                 setFuelBySource(details.fuel_by_source);
@@ -363,35 +324,7 @@ export default function NewReportPage() {
   
   // Расчёт дней командировки РФ (все дни в периоде)
   // Автоподсчёт дней НЕ перезаписывает если уже загружено из отчёта
-  const [rfDaysManual, setRfDaysManual] = useState(false); // Флаг: дни заданы вручную/из БД
-  useEffect(() => {
-    if (rfDaysManual || reportLoaded || reportLoadedRef.current) return; // Не перезаписываем если уже установлено или отчёт загружен
-    if (rfDateFrom && rfDateTo) {
-      // Считаем по датам без времени: 16.01—31.01 = 16 дней
-      const from = new Date(rfDateFrom.slice(0, 10) + 'T00:00:00');
-      const to = new Date(rfDateTo.slice(0, 10) + 'T00:00:00');
-      const diffDays = Math.round((to.getTime() - from.getTime()) / 86400000) + 1;
-      setRfDays(diffDays > 0 ? diffDays : 0);
-    } else if (rfContracts.length > 0) {
-      // Fallback: по датам погрузки/выгрузки если период не задан
-      const allDates = rfContracts.flatMap(c => [c.loading_date, c.unloading_date, c.date].filter(Boolean)).map(d => d!.slice(0,10)).sort();
-      const from = new Date(allDates[0] + 'T00:00:00');
-      const to = new Date(allDates[allDates.length - 1] + 'T00:00:00');
-      const diffDays = Math.round((to.getTime() - from.getTime()) / 86400000) + 1;
-      setRfDays(diffDays > 0 ? diffDays : 0);
-    }
-    // NOTE: no else{setRfDays(0)} — не обнуляем если уже загружено из отчёта
-  }, [rfDateFrom, rfDateTo, rfContracts, rfDaysManual]);
   
-  // Загрузка тарифов при выборе типа машины и сезона
-  useEffect(() => {
-    if (selectedVehicleType && selectedSeason) {
-      fetch(`/api/reports/tariffs/rates?vehicle_type=${encodeURIComponent(selectedVehicleType)}&season=${encodeURIComponent(selectedSeason)}`)
-        .then(r => r.json())
-        .then(d => setTariffRates(d.rates || []))
-        .catch(() => setTariffRates([]));
-    }
-  }, [selectedVehicleType, selectedSeason]);
   
   // Авто-расчёт ставки по расходу топлива (перемещено после объявления fuelUsed)
   
@@ -502,111 +435,6 @@ export default function NewReportPage() {
   // Расчёт общего простоя WB (с учётом исключений)
 
 
-  const loadRfGps = async () => {
-    if (!vehicleNumber) return;
-    setRfGpsLoading(true);
-    
-    // Загружаем данные машины (для норм)
-    try {
-      const vRes = await fetch(`/api/vehicles/by-number?number=${encodeURIComponent(vehicleNumber)}`);
-      const vData = await vRes.json();
-      console.log('[loadRfGps] vehicleData:', vData);
-      setVehicleData(vData);
-      if (vData.vehicle_type) setSelectedVehicleType(vData.vehicle_type);
-    } catch (e) { console.error('[loadRfGps] vehicleData error:', e); }
-    
-    let totalMileage = 0;
-    let totalFuelLiters = 0;
-    let totalFuelAmount = 0;
-    const newPeriods = [...rfPeriods];
-    
-    for (let i = 0; i < rfPeriods.length; i++) {
-      const p = rfPeriods[i];
-      if (!p.from || !p.to) continue;
-      // Передаём полное datetime (для пробега и топлива)
-      const fromParam = p.from; // "2026-01-13T02:15" или "2026-01-13"
-      const toParam = p.to;
-      const fromDate = p.from; // Полный datetime для топлива тоже!
-      const toDate = p.to;
-      
-      // Загружаем пробег (с временем!)
-      try {
-        const res = await fetch(`/api/reports/telematics/mileage?vehicle=${encodeURIComponent(vehicleNumber)}&from=${fromParam}&to=${toParam}`);
-        const data = await res.json();
-        const mileage = data.mileage || 0;
-        newPeriods[i] = { ...p, mileage };
-        totalMileage += mileage;
-      } catch (e) {
-        console.error('[loadRfGps] mileage error:', e);
-        newPeriods[i] = { ...p, mileage: 0 };
-      }
-      
-      // Загружаем топливо за этот период (отдельный try-catch)
-      try {
-        const fuelUrl = `/api/reports/fuel/detail?vehicle=${encodeURIComponent(vehicleNumber)}&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`;
-        console.log('[loadRfGps] fuel URL:', fuelUrl);
-        const fuelRes = await fetch(fuelUrl);
-        const fuelData = await fuelRes.json();
-        console.log('[loadRfGps] fuelData:', fuelData);
-        if (!fuelData.error) {
-          const periodLiters = Number(fuelData.total?.liters) || 0;
-          const periodAmount = Number(fuelData.total?.amount) || 0;
-          console.log('[loadRfGps] period fuel:', periodLiters, 'L', periodAmount, '₽');
-          totalFuelLiters += periodLiters;
-          totalFuelAmount += periodAmount;
-        }
-      } catch (e) {
-        console.error('[loadRfGps] fuel error:', e);
-      }
-    }
-    
-    setRfPeriods(newPeriods);
-    setRfGpsMileage(totalMileage);
-    console.log('[loadRfGps] TOTAL fuelRf:', totalFuelLiters, 'L', totalFuelAmount, '₽');
-    setFuelRf({ liters: totalFuelLiters, amount: totalFuelAmount });
-    // Обновляем rfDateFrom/rfDateTo для совместимости
-    if (rfPeriods[0]?.from) setRfDateFrom(rfPeriods[0].from);
-    if (rfPeriods[rfPeriods.length - 1]?.to) setRfDateTo(rfPeriods[rfPeriods.length - 1].to);
-    
-    // Загружаем уровень топлива в баке (начало и конец периода)
-    const firstPeriod = rfPeriods[0];
-    const lastPeriod = rfPeriods[rfPeriods.length - 1];
-    if (firstPeriod?.from && lastPeriod?.to) {
-      try {
-        const [startRes, endRes] = await Promise.all([
-          fetch(`/api/reports/telematics/fuel-level?vehicle=${encodeURIComponent(vehicleNumber)}&datetime=${firstPeriod.from}`),
-          fetch(`/api/reports/telematics/fuel-level?vehicle=${encodeURIComponent(vehicleNumber)}&datetime=${lastPeriod.to}`)
-        ]);
-        const startData = await startRes.json();
-        const endData = await endRes.json();
-        console.log('[loadRfGps] FuelLevel start:', startData, 'end:', endData);
-        
-        // Не перезаписываем если уже заполнено вручную
-        if (startData.hasSensor && startData.level >= 0 && !rfFuelStartTank) {
-          setRfFuelStartTank(startData.level);
-        }
-        if (!startData.hasSensor && !rfFuelStartTank) {
-          setHasFuelSensor(false);
-        }
-        if (endData.hasSensor && endData.level >= 0 && !rfFuelEndTank) {
-          setRfFuelEndTank(endData.level);
-        }
-        // Устанавливаем также общие остатки в баке
-        if (startData.hasSensor && startData.level >= 0 && !fuelStartTank) {
-          setFuelStartTank(startData.level);
-        }
-        if (endData.hasSensor && endData.level >= 0 && !fuelEndTank) {
-          setFuelEndTank(endData.level);
-        }
-        setHasFuelSensor(startData.hasSensor || endData.hasSensor);
-      } catch (e) {
-        console.error('[loadRfGps] FuelLevel error:', e);
-        setHasFuelSensor(false);
-      }
-    }
-    
-    setRfGpsLoading(false);
-  };
 
   const loadFuel = async () => {
     if (isDeleted) return;
@@ -655,7 +483,7 @@ export default function NewReportPage() {
     
     setAutoLoading(true);
     resetWb();
-    setRfContracts([]);
+    resetRf();
     // NOTE: Не сбрасываем rfGpsMileage и rfPeriods — они берутся из сохранённого отчёта
     // setRfGpsMileage(0); setRfDateFrom(""); setRfDateTo("");
     setGpsMileage(0);
@@ -765,14 +593,6 @@ export default function NewReportPage() {
   // Fuel card functions from useFuelCards hook
   const { searchFuelCards, bindFuelCard, unbindFuelCard, loadCardTransactions, loadVehicleCards } = fuelCards;
 
-  const hasRfPeriods = rfPeriods.some(p => p.from && p.to);
-  // Без периодов — нет РФ данных (даже если rf_mileage/rf_days сохранены в БД)
-  const hasRfData = hasRfPeriods || (gpsMileage > 0 && wbGpsMileage > 0 && gpsMileage > wbGpsMileage);
-  // Пробег РФ: только если есть периоды с датами
-  const effectiveRfMileage = hasRfData ? (rfGpsMileage || 0) : (gpsMileage > 0 && wbGpsMileage > 0 ? Math.max(gpsMileage - wbGpsMileage, 0) : 0);
-  const rfDriverPay = hasRfData ? Math.round(effectiveRfMileage * (rfRatePerKm || 0)) : 0;
-  const rfDailyPay = (hasRfData || rfDaysManual) ? (rfDays || 0) * (rfDailyRate || 0) : 0; // Суточные РФ (+)
-  const rfBonus = hasRfData && bonusEnabled ? Math.round(effectiveRfMileage * (bonusRate || 0)) : 0; // Премия ТК (+)
   const totalDeductions = deductions.reduce((sum, d) => sum + (Number(d.amount) || 0), 0); // Удержания (−)
   const totalFines = fines.reduce((sum, f) => sum + (Number(f.amount) || 0), 0); // Штрафы (−)
   const relocationMileage = relocations.reduce((sum, r) => sum + (Number(r.mileage) || 0), 0);
@@ -784,10 +604,6 @@ export default function NewReportPage() {
   const fuelUsed = fuelTotal.liters + (Number(fuelStartTank) || 0) - (Number(fuelEndTank) || 0);
   // ОБЩИЙ расход: всё топливо / полный GPS пробег
   const avgFuelConsumptionTotal = gpsMileage > 0 && fuelTotal.liters > 0 ? (fuelTotal.liters / gpsMileage * 100).toFixed(2) : gpsMileage === 0 && fuelTotal.liters > 0 ? "—" : "0";
-  // Расход РФ: топливо РФ / пробег РФ
-  const fuelUsedRf = fuelRf.liters || 0;
-  const avgFuelConsumption = effectiveRfMileage > 0 && fuelUsedRf > 0 ? (fuelUsedRf / effectiveRfMileage * 100).toFixed(2) : "0";
-  // Расход WB: топливо WB / пробег WB
   const earnPerKm = effectiveRfMileage > 0 && !isNaN(totalToPay) ? (totalToPay / effectiveRfMileage).toFixed(2) : "0";
   
   // Расчёт топлива по периодам WB и РФ (только если есть транзакции)
@@ -844,35 +660,6 @@ export default function NewReportPage() {
     setFuelRf({ liters: rfL, amount: rfA });
   }, [fuelTransactions, wbTrips, rfPeriods]);
   
-  // Авто-расчёт ставки по расходу топлива из таблицы тарифов (с учётом остатков)
-  useEffect(() => {
-    const rfFuelUsedCalc = fuelRf.liters + (Number(rfFuelStartTank) || 0) - (Number(rfFuelEndTank) || 0);
-    // Не ставим авто-тариф если:
-    // - нет данных по топливу (liters=0 и нет остатков)
-    // - расход отрицательный (бак прибыл, а заправки не загружены)
-    // - нет пробега
-    const hasFuelInfo = fuelRf.liters > 0 || (Number(rfFuelStartTank) > 0 && Number(rfFuelEndTank) > 0);
-    if (selectedVehicleType && selectedSeason && rfFuelUsedCalc > 0 && effectiveRfMileage > 0 && hasFuelInfo) {
-      const consumption = rfFuelUsedCalc / effectiveRfMileage * 100;
-      console.log('[autoRate] consumption:', consumption, 'type:', selectedVehicleType, 'season:', selectedSeason, 'fuel:', rfFuelUsedCalc);
-      fetch(`/api/tariffs/calculate?vehicle_type=${encodeURIComponent(selectedVehicleType)}&season=${encodeURIComponent(selectedSeason)}&consumption=${consumption}`)
-        .then(r => r.json())
-        .then(data => {
-          console.log('[autoRate] response:', data);
-          if (data.rate) {
-            setAutoRate(data.rate);
-            // Автоставка только если отчёт НЕ загружен из БД (новый отчёт)
-            if (!reportLoaded && params.id === 'new') {
-              setRfRatePerKm(data.rate);
-            }
-          }
-        })
-        .catch((e) => console.error('[autoRate] error:', e));
-    } else if (rfFuelUsedCalc < 0 && effectiveRfMileage > 0) {
-      console.warn('[autoRate] Расход отрицательный:', rfFuelUsedCalc, '— заправки не загружены? Авто-тариф не применяется.');
-      setAutoRate(null);
-    }
-  }, [selectedVehicleType, selectedSeason, fuelRf.liters, rfGpsMileage, rfFuelStartTank, rfFuelEndTank]);
   
   // Определение сезона
   const getSeason = () => {
