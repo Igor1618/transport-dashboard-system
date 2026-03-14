@@ -5,8 +5,15 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Truck, User, Save, Loader2, Zap, Plus, Trash2, RefreshCw, Fuel, X as XIcon } from "lucide-react";
 
-import type { Driver, Vehicle, WbTrip, RfContract, FuelBySource, Expense, Payment, ExtraWork, WorkType, ValidationResult, DriverSuggestion, VehicleSuggestion, RfPeriod, Relocation, WbPenalty, SalaryData, GpsCoverage, FuelTransaction, VehicleData, GpsDayMileage, Deduction, Fine, TariffRate, FuelTotals, FuelPeriod, WbTotals } from './types/report';
-import { normPlate } from './utils/report-helpers';
+interface Driver { name: string; }
+interface Vehicle { number: string; trips?: number; vehicle_type?: string; }
+interface WbTrip { loading_date: string; loading_time?: string; unloading_date?: string; unloading_time?: string; route_name: string; driver_rate: number; tender_id?: number; rate_source?: string; wb_id?: number; log_route?: string; }
+interface RfContract { number: string; date: string; route: string; loading_date?: string; unloading_date?: string; amount?: string; }
+interface FuelBySource { source: string; liters: number; amount: number; count: number; }
+interface Expense { name: string; amount: number; }
+interface Payment { date: string; amount: number; type: string; description: string; }
+interface ExtraWork { name: string; count: number; rate: number; }
+interface WorkType { id: number; name: string; category: string; default_rate: number; }
 
 export default function NewReportPage() {
   const params = useParams();
@@ -43,7 +50,11 @@ export default function NewReportPage() {
   const [cardSearching, setCardSearching] = useState(false);
   const [cardTxModal, setCardTxModal] = useState<any>(null);
   const [cardTransactions, setCardTransactions] = useState<any[]>([]);
-  // normPlate moved to ./utils/report-helpers.ts
+  const normPlate = (s: string) => {
+    const map: Record<string,string> = {'A':'А','B':'В','C':'С','E':'Е','H':'Н','K':'К','M':'М','O':'О','P':'Р','T':'Т','X':'Х','Y':'У',
+      'a':'А','b':'В','c':'С','e':'Е','h':'Н','k':'К','m':'М','o':'О','p':'Р','t':'Т','x':'Х','y':'У'};
+    return s.split('').map(c => map[c] || c).join('').toUpperCase();
+  };
   const [showDriverList, setShowDriverList] = useState(false);
   const [showVehicleList, setShowVehicleList] = useState(false);
   const [driverVehicles, setDriverVehicles] = useState<Vehicle[]>([]);
