@@ -10,6 +10,7 @@ import { normPlate } from './utils/report-helpers';
 import { useFuelCards } from './hooks/useFuelCards';
 import { FuelCardModals } from './components/FuelCardModals';
 import { DriverReportSection } from './components/DriverReportSection';
+import { TotalsSummary } from './components/TotalsSummary';
 
 export default function NewReportPage() {
   const params = useParams();
@@ -2551,69 +2552,33 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
         </div>
 
         {/* Итого */}
-        <div className="bg-gradient-to-r from-green-900/30 to-emerald-900/30 rounded-xl p-4 border border-green-500/30">
-          <div className="space-y-1 text-sm mb-3">
-            {wbTotals.driver_rate > 0 && <div className="flex justify-between"><span className="text-slate-400">WB</span><span className="text-purple-400">+{wbTotals.driver_rate.toLocaleString()} ₽</span></div>}
-            {totalIdleData.amount > 0 && <div className="flex justify-between"><span className="text-slate-400">Простой ({totalIdleData.paidHours} ч.)</span><span className="text-yellow-400">+{totalIdleData.amount.toLocaleString()} ₽</span></div>}
-            {rfDriverPay > 0 && <div className="flex justify-between"><span className="text-slate-400">РФ ({effectiveRfMileage.toLocaleString()}×{rfRatePerKm})</span><span className="text-blue-400">+{rfDriverPay.toLocaleString()} ₽</span></div>}
-            {rfBonus > 0 && <div className="flex justify-between"><span className="text-slate-400">Премия ТК</span><span className="text-emerald-400">+{rfBonus.toLocaleString()} ₽</span></div>}
-            {rfDailyPay > 0 && <div className="flex justify-between"><span className="text-slate-400">Суточные ({rfDays}×{rfDailyRate})</span><span className="text-yellow-400">+{rfDailyPay.toLocaleString()} ₽</span></div>}
-            {relocationPay > 0 && <div className="flex justify-between"><span className="text-slate-400">🚛 Порожний ({relocationMileage}×{rfRatePerKm})</span><span className="text-orange-300">+{relocationPay.toLocaleString()} ₽</span></div>}
-            {totalExtraWorks > 0 && <div className="flex justify-between"><span className="text-slate-400">Доп. работы</span><span className="text-green-400">+{totalExtraWorks.toLocaleString()} ₽</span></div>}
-            {totalExpenses > 0 && <div className="flex justify-between"><span className="text-slate-400">Компенсация</span><span className="text-cyan-400">+{totalExpenses.toLocaleString()} ₽</span></div>}
-            {totalDeductions > 0 && <div className="flex justify-between"><span className="text-slate-400">💸 Удержания</span><span className="text-red-400">−{totalDeductions.toLocaleString()} ₽</span></div>}
-            {totalFines > 0 && <div className="flex justify-between"><span className="text-slate-400">⚠️ Штрафы</span><span className="text-red-400">−{totalFines.toLocaleString()} ₽</span></div>}
-            {totalPayments > 0 && <div className="flex justify-between"><span className="text-slate-400">Выдано</span><span className="text-orange-400">−{totalPayments.toLocaleString()} ₽</span></div>}
-            {salaryData.total > 0 && <div className="flex justify-between"><span className="text-slate-400">💰 Ведомости</span><span className="text-emerald-400">−{salaryData.total.toLocaleString()} ₽</span></div>}
-          </div>
-          <div className="text-center border-t border-slate-700 pt-3 mb-3">
-            <div className="text-slate-400 text-xs">К выплате</div>
-            <div className={`text-2xl sm:text-3xl font-bold ${totalToPay >= 0 ? 'text-green-400' : 'text-red-400'}`}>{isNaN(totalToPay) ? 0 : totalToPay.toLocaleString()} ₽</div>
-            {salaryData.total > 0 && (
-              <div className={`text-sm mt-1 ${totalToPay - salaryData.total > 100 ? 'text-yellow-400' : 'text-green-400'}`}>
-                Остаток: {(totalToPay - salaryData.total).toLocaleString()} ₽
-              </div>
-            )}
-            {effectiveRfMileage > 0 && <div className="text-slate-500 text-xs mt-1">Заработок: {earnPerKm} ₽/км</div>}
-          </div>
-          <div className="flex gap-2 w-full">
-            <button onClick={handleSave} disabled={loading || isDeleted} className="bg-green-600 hover:bg-green-700 disabled:bg-slate-600 text-white px-4 py-4 sm:py-3 rounded-lg flex-1 flex items-center justify-center gap-2 text-base sm:text-sm min-h-[48px]">
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} Сохранить
-            </button>
-            <button onClick={() => handleValidate()} disabled={validating || isDeleted} className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white px-4 py-4 sm:py-3 rounded-lg flex items-center justify-center gap-2 text-base sm:text-sm min-h-[48px]">
-              {validating ? <Loader2 className="w-5 h-5 animate-spin" /> : <span>✓</span>} Проверить
-            </button>
-          </div>
-          {validationResult && (
-            <div className={`mt-2 rounded-lg p-3 text-sm border ${
-              validationResult.status === 'ok' ? 'bg-green-500/10 border-green-500/30' :
-              validationResult.status === 'warning' ? 'bg-yellow-500/10 border-yellow-500/30' :
-              'bg-red-500/10 border-red-500/30'
-            }`}>
-              <div className="flex items-center gap-2 mb-2 font-medium">
-                {validationResult.status === 'ok' ? '✅ Всё в порядке' :
-                 validationResult.status === 'warning' ? '⚠️ Есть замечания' : '❌ Есть ошибки'}
-              </div>
-              <div className="space-y-1">
-                {validationResult.checks.map((c, i) => (
-                  <div key={i} className="flex items-start gap-2 text-xs">
-                    <span className="mt-0.5 flex-shrink-0">
-                      {c.status === 'ok' ? '✅' : c.status === 'warning' ? '⚠️' : '❌'}
-                    </span>
-                    <div>
-                      <span className={c.status === 'ok' ? 'text-green-400' : c.status === 'warning' ? 'text-yellow-400' : 'text-red-400'}>
-                        {c.message}
-                      </span>
-                      {c.details && <div className="text-slate-500">{c.details}</div>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        <TotalsSummary
+          lines={[
+            { label: 'WB', amount: Number(wbTotals.driver_rate) || 0, color: 'text-purple-400', prefix: '+' },
+            { label: 'Простой', amount: totalIdleData.amount, color: 'text-yellow-400', prefix: '+', detail: `${totalIdleData.paidHours} ч.` },
+            { label: 'РФ', amount: rfDriverPay, color: 'text-blue-400', prefix: '+', detail: `${effectiveRfMileage.toLocaleString()}×${rfRatePerKm}` },
+            { label: 'Премия ТК', amount: rfBonus, color: 'text-emerald-400', prefix: '+' },
+            { label: 'Суточные', amount: rfDailyPay, color: 'text-yellow-400', prefix: '+', detail: `${rfDays}×${rfDailyRate}` },
+            { label: '🚛 Порожний', amount: relocationPay, color: 'text-orange-300', prefix: '+', detail: `${relocationMileage}×${rfRatePerKm}` },
+            { label: 'Доп. работы', amount: totalExtraWorks, color: 'text-green-400', prefix: '+' },
+            { label: 'Компенсация', amount: totalExpenses, color: 'text-cyan-400', prefix: '+' },
+            { label: '💸 Удержания', amount: totalDeductions, color: 'text-red-400', prefix: '−' },
+            { label: '⚠️ Штрафы', amount: totalFines, color: 'text-red-400', prefix: '−' },
+            { label: 'Выдано', amount: totalPayments, color: 'text-orange-400', prefix: '−' },
+            { label: '💰 Ведомости', amount: salaryData.total, color: 'text-emerald-400', prefix: '−' },
+          ]}
+          totalToPay={totalToPay}
+          salaryTotal={salaryData.total}
+          effectiveRfMileage={effectiveRfMileage}
+          earnPerKm={earnPerKm}
+          loading={loading}
+          validating={validating}
+          isDeleted={isDeleted}
+          onSave={handleSave}
+          onValidate={() => handleValidate()}
+          validationResult={validationResult}
+        />
 
-        {/* Текстовый отчёт для водителя */}
         <DriverReportSection
           reportText={reportText}
           comment={comment}
