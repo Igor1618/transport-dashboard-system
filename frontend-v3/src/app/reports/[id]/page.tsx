@@ -12,6 +12,7 @@ import { FuelCardModals } from './components/FuelCardModals';
 import { DriverReportSection } from './components/DriverReportSection';
 import { TotalsSummary } from './components/TotalsSummary';
 import { SimpleListBlock } from './components/SimpleListBlock';
+import { RelocationsBlock } from './components/RelocationsBlock';
 
 export default function NewReportPage() {
   const params = useParams();
@@ -82,10 +83,6 @@ export default function NewReportPage() {
   
   // Выплаты из ведомостей
   const [salaryData, setSalaryData] = useState<{payments: {full_name: string; amount: number; register_number: string; register_date: string; tl_number: number; payment_purpose: string}[]; total: number}>({ payments: [], total: 0 });
-  const [relFrom, setRelFrom] = useState("");
-  const [relTo, setRelTo] = useState("");
-  const [relMileage, setRelMileage] = useState("");
-  const [relDate, setRelDate] = useState("");
   const [rfGpsMileage, setRfGpsMileage] = useState(0);
   const [rfGpsLoading, setRfGpsLoading] = useState(false);
   const [rfRatePerKm, setRfRatePerKm] = useState(7.0);
@@ -2444,31 +2441,13 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
         )}
 
         {/* Порожний перегон */}
-        <div className="bg-slate-800 rounded-xl p-4 border border-orange-500/30">
-          <h2 className="font-semibold text-orange-400 mb-1">🚛 Порожний перегон</h2>
-          <p className="text-xs text-slate-500 mb-2">Тариф = РФ ({rfRatePerKm} ₽/км)</p>
-          {relocations.map((r, i) => (
-            <div key={i} className="flex items-center gap-2 mb-2 text-sm">
-              <span className="text-orange-300">{r.from} → {r.to}</span>
-              <span className="text-slate-400">{r.mileage} км</span>
-              <span className="text-slate-500">{r.date}</span>
-              <span className="text-orange-400 ml-auto">+{Math.round(r.mileage * (rfRatePerKm || 0)).toLocaleString()} ₽</span>
-              <button onClick={() => setRelocations(relocations.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-300"><Trash2 className="w-3 h-3" /></button>
-            </div>
-          ))}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-2">
-            <input placeholder="Откуда" value={relFrom} onChange={e => setRelFrom(e.target.value)}
-              className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white" />
-            <input placeholder="Куда" value={relTo} onChange={e => setRelTo(e.target.value)}
-              className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white" />
-            <input placeholder="Пробег, км" type="number" value={relMileage} onChange={e => setRelMileage(e.target.value)}
-              className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white" />
-            <input type="date" value={relDate} onChange={e => setRelDate(e.target.value)}
-              className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white" />
-            <button onClick={() => { if (relFrom && relTo && relMileage) { setRelocations([...relocations, {from: relFrom, to: relTo, mileage: Number(relMileage), date: relDate}]); setRelFrom(""); setRelTo(""); setRelMileage(""); setRelDate(""); }}} disabled={!relFrom || !relTo || !relMileage} className="bg-orange-600 disabled:bg-slate-600 text-white px-4 py-1 rounded min-h-[44px] sm:min-h-0"><Plus className="w-4 h-4 mx-auto" /></button>
-          </div>
-          {relocationPay > 0 && <div className="text-right text-orange-400 font-bold mt-2">{relocationMileage} км × {rfRatePerKm} = {relocationPay.toLocaleString()} ₽</div>}
-        </div>
+        <RelocationsBlock
+          relocations={relocations}
+          setRelocations={setRelocations}
+          rfRatePerKm={rfRatePerKm}
+          relocationMileage={relocationMileage}
+          relocationPay={relocationPay}
+        />
 
         {/* Удержания (-) */}
         <SimpleListBlock
