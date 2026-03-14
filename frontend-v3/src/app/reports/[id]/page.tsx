@@ -8,6 +8,8 @@ import { ArrowLeft, Truck, User, Save, Loader2, Zap, Plus, Trash2, RefreshCw, Fu
 import type { Driver, Vehicle, WbTrip, RfContract, FuelBySource, Expense, Payment, ExtraWork, WorkType, ValidationResult, DriverSuggestion, VehicleSuggestion, RfPeriod, Relocation, WbPenalty, SalaryData, GpsCoverage, FuelTransaction, VehicleData, GpsDayMileage, Deduction, Fine, TariffRate, FuelTotals, FuelPeriod, WbTotals } from './types/report';
 import { normPlate } from './utils/report-helpers';
 import { useFuelCards } from './hooks/useFuelCards';
+import { FuelCardModals } from './components/FuelCardModals';
+import { DriverReportSection } from './components/DriverReportSection';
 
 export default function NewReportPage() {
   const params = useParams();
@@ -2612,132 +2614,37 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
         </div>
 
         {/* Текстовый отчёт для водителя */}
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-600">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2">
-            <h2 className="font-semibold text-slate-300">📋 Отчёт для водителя</h2>
-            <div className="flex gap-2 w-full sm:w-auto">
-              <button onClick={() => { navigator.clipboard.writeText(reportText); alert("Скопировано!"); }} className="flex-1 sm:flex-none bg-slate-600 hover:bg-slate-500 text-white px-3 py-2 sm:py-1 rounded text-sm min-h-[44px] sm:min-h-0">Копировать</button>
-              <button onClick={() => {
-                const printWindow = window.open('', '_blank');
-                if (printWindow) {
-                  printWindow.document.write(`
-                    <html>
-                    <head>
-                      <title>Отчёт - ${driverName}</title>
-                      <style>
-                        body { font-family: Arial, sans-serif; padding: 20px; font-size: 12px; }
-                        h1 { font-size: 16px; margin-bottom: 10px; }
-                        table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-                        th, td { border: 1px solid #000; padding: 5px; text-align: left; }
-                        th { background: #f0f0f0; }
-                        .total { font-weight: bold; }
-                        .right { text-align: right; }
-                        @media print { body { padding: 0; } }
-                      </style>
-                    </head>
-                    <body>
-                      <h1>ОТЧЁТ ВОДИТЕЛЯ</h1>
-                      <table>
-                        <tr><td>Водитель:</td><td><strong>${driverName}</strong></td></tr>
-                        <tr><td>Период:</td><td>${dateFrom?.split('T')[0]} — ${dateTo?.split('T')[0]}</td></tr>
-                        <tr><td>Т/С:</td><td>${vehicleNumber}</td></tr>
-                        <tr><td>Тип:</td><td>${selectedVehicleType}</td></tr>
-                      </table>
-                      
-                      <h2>Пробег и расход</h2>
-                      <table>
-                        <tr><td>Пробег общий:</td><td class="right">${gpsMileage.toLocaleString()} км</td></tr>
-                        <tr><td>Пробег РФ:</td><td class="right">${effectiveRfMileage.toLocaleString()} км</td></tr>
-                        <tr><td>Топливо РФ:</td><td class="right">${Math.round(fuelRf.liters).toLocaleString()} л</td></tr>
-                        <tr><td>Расход общий:</td><td class="right">${avgFuelConsumptionTotal} л/100км</td></tr>
-                        ${effectiveRfMileage > 0 && fuelUsedRf > 0 ? `<tr><td>Расход РФ:</td><td class="right">${avgFuelConsumption} л/100км</td></tr>` : ''}
-                        <tr><td>Сезон:</td><td>${selectedSeason}</td></tr>
-                        <tr><td>Ставка:</td><td class="right">${rfRatePerKm} ₽/км</td></tr>
-                      </table>
-                      
-                      <h2>Начисления</h2>
-                      <table>
-                        ${rfDriverPay > 0 ? `<tr><td>За км (${effectiveRfMileage}×${rfRatePerKm}):</td><td class="right">${rfDriverPay.toLocaleString()} ₽</td></tr>` : ''}
-                        ${rfBonus > 0 ? `<tr><td>Премия ТК:</td><td class="right">${rfBonus.toLocaleString()} ₽</td></tr>` : ''}
-                        ${rfDailyPay > 0 ? `<tr><td>Суточные (${rfDays} дн × ${rfDailyRate}):</td><td class="right">${rfDailyPay.toLocaleString()} ₽</td></tr>` : ''}
-                        ${wbTotals.driver_rate > 0 ? `<tr><td>WB рейсы:</td><td class="right">${wbTotals.driver_rate.toLocaleString()} ₽</td></tr>` : ''}
-                        ${totalIdleData.amount > 0 ? `<tr><td>Простой (${totalIdleData.paidHours} ч.):</td><td class="right">${totalIdleData.amount.toLocaleString()} ₽</td></tr>` : ''}
-                        <tr class="total"><td>ИТОГО начислено:</td><td class="right">${totalDriverPay.toLocaleString()} ₽</td></tr>
-                      </table>
-                      
-                      ${totalPayments > 0 ? `
-                      <h2>Выплачено</h2>
-                      <table>
-                        <tr><td>Выплачено:</td><td class="right">-${totalPayments.toLocaleString()} ₽</td></tr>
-                      </table>
-                      ` : ''}
-                      
-                      <h2 style="margin-top: 20px; border-top: 2px solid #000; padding-top: 10px;">
-                        К ВЫПЛАТЕ: <span style="font-size: 18px;">${totalToPay.toLocaleString()} ₽</span>
-                      </h2>
-                      
-                      <div style="margin-top: 30px;">
-                        <p>Дата: _________________ Подпись: _________________</p>
-                      </div>
-                    </body>
-                    </html>
-                  `);
-                  printWindow.document.close();
-                  printWindow.print();
-                }
-              }} className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 sm:py-1 rounded text-sm min-h-[44px] sm:min-h-0">🖨️ Печать</button>
-            </div>
-          </div>
-          <div className="mb-2">
-            <input placeholder="Комментарий..." value={comment} onChange={e => setComment(e.target.value)} className="w-full bg-slate-700 text-white rounded px-3 py-1 border border-slate-600 text-sm" />
-          <pre className="bg-slate-900 text-slate-300 p-3 rounded text-xs whitespace-pre-wrap font-mono overflow-x-auto">{reportText}</pre>
-        </div>
-      </div>
-      {/* Fuel Card Search Modal */}
-      {showCardModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onClick={() => setShowCardModal(false)}>
-          <div className="bg-slate-800 rounded-lg p-4 w-[400px] max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-3">Добавить топливную карту</h3>
-            <p className="text-sm text-slate-400 mb-2">Машина: {vehicleNumber}</p>
-            <input type="text" value={cardSearchQ} onChange={e => {setCardSearchQ(e.target.value); searchFuelCards(e.target.value);}}
-              placeholder="Последние 4+ цифры карты" className="w-full p-2 rounded bg-slate-700 text-white mb-3" autoFocus />
-            {cardSearching && <p className="text-sm text-slate-400">Поиск...</p>}
-            {cardSearchResults.map((c: any, i: number) => (
-              <div key={i} className="p-2 rounded bg-slate-700/50 mb-2 flex justify-between items-center">
-                <div>
-                  <div className="text-sm font-medium">{c.card_number}</div>
-                  <div className="text-xs text-slate-400">{c.source} | {c.tx_count} запр. | {Number(c.total_liters||0).toFixed(0)} л | {Number(c.total_amount||0).toLocaleString()} ₽</div>
-                  {c.vehicle_number && <div className="text-xs text-yellow-400">Привязана к {c.vehicle_number}</div>}
-                </div>
-                <button onClick={() => bindFuelCard(c.card_number, c.source)}
-                  className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 rounded text-sm whitespace-nowrap ml-2">Привязать</button>
-              </div>
-            ))}
-            {cardSearchQ.length >= 3 && !cardSearching && cardSearchResults.length === 0 && (
-              <p className="text-sm text-slate-400">Карты не найдены</p>
-            )}
-            <button onClick={() => setShowCardModal(false)} className="mt-3 w-full p-2 bg-slate-700 hover:bg-slate-600 rounded">Закрыть</button>
-          </div>
-        </div>
-      )}
-      {/* Card Transactions Modal */}
-      {cardTxModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onClick={() => setCardTxModal(null)}>
-          <div className="bg-slate-800 rounded-lg p-4 w-[500px] max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-3">Транзакции ****{cardTxModal.card.slice(-4)} ({cardTxModal.source})</h3>
-            {cardTransactions.length === 0 && <p className="text-sm text-slate-400">Нет транзакций</p>}
-            {cardTransactions.map((t: any, i: number) => (
-              <div key={i} className="flex justify-between text-sm py-1 border-b border-slate-700/50">
-                <span>{t.transaction_date?.slice(0,10)} {t.transaction_time?.slice(0,5)}</span>
-                <span>{t.station_name || ''}</span>
-                <span className="font-medium">{Number(t.quantity||0).toFixed(0)} л</span>
-                <span className="text-slate-400">{Number(t.amount||0).toLocaleString()} ₽</span>
-              </div>
-            ))}
-            <button onClick={() => setCardTxModal(null)} className="mt-3 w-full p-2 bg-slate-700 hover:bg-slate-600 rounded">Закрыть</button>
-          </div>
-        </div>
-      )}
+        <DriverReportSection
+          reportText={reportText}
+          comment={comment}
+          setComment={setComment}
+          printData={{
+            driverName, vehicleNumber, dateFrom, dateTo, selectedVehicleType,
+            gpsMileage, effectiveRfMileage, fuelRfLiters: fuelRf.liters,
+            avgFuelConsumptionTotal: String(avgFuelConsumptionTotal),
+            avgFuelConsumption: String(avgFuelConsumption),
+            selectedSeason, rfRatePerKm, rfDriverPay, rfBonus,
+            rfDailyPay, rfDays, rfDailyRate,
+            wbDriverRate: Number(wbTotals.driver_rate) || 0,
+            idleAmount: totalIdleData.amount,
+            idlePaidHours: totalIdleData.paidHours,
+            totalPayments, totalToPay, fuelUsedRf: fuelUsedRf
+          }}
+        />
+      <FuelCardModals
+        vehicleNumber={vehicleNumber}
+        showCardModal={fuelCards.showCardModal}
+        setShowCardModal={fuelCards.setShowCardModal}
+        cardSearchQ={fuelCards.cardSearchQ}
+        setCardSearchQ={fuelCards.setCardSearchQ}
+        searchFuelCards={fuelCards.searchFuelCards}
+        cardSearching={fuelCards.cardSearching}
+        cardSearchResults={fuelCards.cardSearchResults}
+        bindFuelCard={fuelCards.bindFuelCard}
+        cardTxModal={fuelCards.cardTxModal}
+        setCardTxModal={fuelCards.setCardTxModal}
+        cardTransactions={fuelCards.cardTransactions}
+      />
     </div>
   );
 }
