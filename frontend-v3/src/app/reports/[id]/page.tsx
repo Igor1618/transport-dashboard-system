@@ -61,6 +61,13 @@ export default function NewReportPage() {
   const [timeFrom, setTimeFrom] = useState("00:00");
   const [timeTo, setTimeTo] = useState("23:59");
 
+  // Hook parameters (must be declared BEFORE custom hooks to avoid TDZ)
+  const [gpsMileage, setGpsMileage] = useState(0);
+  const [fuelWb, setFuelWb] = useState({ liters: 0, amount: 0 });
+  const [fuelRf, setFuelRf] = useState({ liters: 0, amount: 0 });
+  const [bonusEnabled, setBonusEnabled] = useState(true);
+  const [bonusRate, setBonusRate] = useState(1); // ₽/км
+
   // Fuel cards — isolated hook (prevents dark screen if cards API fails)
   const fuelCards = useFuelCards(vehicleNumber);
   const fuel = useFuel(gpsMileage);
@@ -117,8 +124,6 @@ export default function NewReportPage() {
   const [driverSuggestions, setDriverSuggestions] = useState<{driver_name: string; trips: number; source?: string}[]>([]);
   const [vehicleSuggestions, setVehicleSuggestions] = useState<{vehicle_number: string; trips: number}[]>([]);
   
-  
-  
   // Порожний перегон
   const [relocations, setRelocations] = useState<{from: string; to: string; mileage: number; date: string}[]>([]);
   
@@ -131,7 +136,6 @@ export default function NewReportPage() {
   // Выплаты из ведомостей
   const [salaryData, setSalaryData] = useState<{payments: {full_name: string; amount: number; register_number: string; register_date: string; tl_number: number; payment_purpose: string}[]; total: number}>({ payments: [], total: 0 });
   
-  const [gpsMileage, setGpsMileage] = useState(0);
   // GPS coverage
   const [gpsRecovery, setGpsRecovery] = useState<any>(null);
   const [gpsCoverage, setGpsCoverage] = useState<{total_days:number;covered_days:number;coverage_pct:number;days:{date:string;points:number;km:number;status:string}[]}|null>(null);
@@ -139,9 +143,6 @@ export default function NewReportPage() {
   const [gpsByDay, setGpsByDay] = useState<{date: string; km: number}[]>([]);
   
   // Топливо
-  // Топливо по периодам
-  const [fuelWb, setFuelWb] = useState({ liters: 0, amount: 0 });
-  const [fuelRf, setFuelRf] = useState({ liters: 0, amount: 0 });
   // Исключённые простои (индексы рейсов после которых простой)
   // Данные машины (тип, карты, нормы)
   const [vehicleData, setVehicleData] = useState<{id?: number; vehicle_type?: string; fuel_cards?: Record<string, string>; fuel_norm_winter?: number; fuel_norm_summer?: number; fuel_norm_autumn?: number}>({});
@@ -190,12 +191,6 @@ export default function NewReportPage() {
     }
     return data.type;
   };
-  
-  // Суточные РФ
-  
-  // Премия за выполнение требований ТК
-  const [bonusEnabled, setBonusEnabled] = useState(true);
-  const [bonusRate, setBonusRate] = useState(1); // ₽/км
   
   // Комментарий
   const [comment, setComment] = useState("");
@@ -324,7 +319,6 @@ export default function NewReportPage() {
   // Расчёт дней командировки РФ (все дни в периоде)
   // Автоподсчёт дней НЕ перезаписывает если уже загружено из отчёта
   
-  
   // Авто-расчёт ставки по расходу топлива (перемещено после объявления fuelUsed)
   
   // Загрузка модели машины
@@ -430,11 +424,7 @@ export default function NewReportPage() {
     }
   }, [driverName, vehicleNumber, dateFrom, dateTo]);
 
-
   // Расчёт общего простоя WB (с учётом исключений)
-
-
-
 
   const handleAutoFill = async () => {
     if (!driverName || !dateFrom || !dateTo) { alert("Выберите водителя и даты"); return; }
@@ -504,7 +494,6 @@ export default function NewReportPage() {
       const penData = await penRes.json();
       setWbPenalties(penData.penalties || []);
     } catch (e) { console.error('[penalties]', e); }
-    
     
         // GPS coverage — загружается из snapshot, обновляется по кнопке
     
@@ -613,7 +602,6 @@ export default function NewReportPage() {
     setFuelWb({ liters: wbL, amount: wbA });
     setFuelRf({ liters: rfL, amount: rfA });
   }, [fuelTransactions, wbTrips, rfPeriods]);
-  
   
   // Определение сезона
   const getSeason = () => {
@@ -832,7 +820,6 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
   if (pageLoading) {
     return <div className="p-4 md:p-6 max-w-6xl mx-auto flex items-center justify-center min-h-screen"><Loader2 className="w-8 h-8 animate-spin text-slate-400" /></div>;
   }
-
 
   if (notFound) return (
     <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
@@ -1116,7 +1103,6 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
             </div>
           </div>
         )}
-
 
         {/* 📡 Покрытие GPS */}
         <GpsCoverageBlock
