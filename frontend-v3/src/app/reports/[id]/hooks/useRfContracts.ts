@@ -209,6 +209,27 @@ export function useRfContracts(params: {
     setRfGpsLoading(false);
   };
 
+  /** Auto-fill RF period from contracts, clamped to report dates */
+  const autoFillPeriodFromContracts = (contracts: any[], reportDateFrom: string, reportDateTo: string) => {
+    if (!contracts.length || !reportDateFrom || !reportDateTo) return;
+    const allStarts = contracts.map((c: any) => new Date(c.loading_date));
+    const allEnds = contracts.map((c: any) => new Date(c.unloading_date));
+    const repFrom = new Date(reportDateFrom.split('T')[0] + 'T00:00:00');
+    const repTo = new Date(reportDateTo.split('T')[0] + 'T23:59:00');
+    const rfFrom = new Date(Math.max(Math.min(...allStarts.map((d: Date) => d.getTime())), repFrom.getTime()));
+    const rfTo = new Date(Math.min(Math.max(...allEnds.map((d: Date) => d.getTime())), repTo.getTime()));
+    const fromStr = rfFrom.toISOString().slice(0, 10);
+    const toStr = rfTo.toISOString().slice(0, 10);
+    setRfPeriods([{ from: fromStr, to: toStr, mileage: 0 }]);
+    setRfDateFrom(fromStr);
+    setRfDateTo(toStr);
+    // Пересчитать суточные по авто-периоду (обрезанному по отчёту)
+    const days = Math.round((rfTo.getTime() - rfFrom.getTime()) / 86400000) + 1;
+    if (days > 0) { setRfDays(days); setRfDaysManual(true); }
+    console.log('[autoFill] RF period from contracts:', fromStr, '→', toStr, 'days:', days);
+    return { from: fromStr, to: toStr };
+  };
+
   /** Restore RF data from saved report */
   const restoreRfData = async (reportRow: any, details: any) => {
     if (reportRow.mileage) setRfGpsMileage(reportRow.mileage);
@@ -240,9 +261,15 @@ export function useRfContracts(params: {
       if (details.rf_fuel_start) setRfFuelStartTank(details.rf_fuel_start);
       if (details.rf_fuel_end) setRfFuelEndTank(details.rf_fuel_end);
       // RF contracts restore
+      const hasSavedPeriods = reportRow.rf_periods && Array.isArray(reportRow.rf_periods) && reportRow.rf_periods.length > 0
+        && reportRow.rf_periods.some((p: any) => p.from && p.to);
       if (details.rf_contracts_data && Array.isArray(details.rf_contracts_data) && details.rf_contracts_data.length > 0) {
         setRfContracts(details.rf_contracts_data);
         console.log('[LOAD] rf_contracts_data:', details.rf_contracts_data.length, 'contracts');
+        // Авто-заполнение периода если не сохранён
+        if (!hasSavedPeriods && reportRow.date_from && reportRow.date_to) {
+          autoFillPeriodFromContracts(details.rf_contracts_data, reportRow.date_from, reportRow.date_to);
+        }
       } else if (reportRow.vehicle_number && reportRow.date_from && reportRow.date_to) {
         console.log('[LOAD] No rf_contracts_data, fetching from API...');
         try {
@@ -257,6 +284,10 @@ export function useRfContracts(params: {
           if (rfD.contracts && rfD.contracts.length > 0) {
             setRfContracts(rfD.contracts);
             console.log('[LOAD] Fetched', rfD.contracts.length, 'RF contracts from API');
+            // Авто-заполнение периода если не сохранён
+            if (!hasSavedPeriods) {
+              autoFillPeriodFromContracts(rfD.contracts, reportRow.date_from, reportRow.date_to);
+            }
           }
         } catch (e) { console.warn('[LOAD] RF fetch error:', e); }
       }

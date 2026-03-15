@@ -433,8 +433,43 @@ export default function NewReportPage() {
       const rfData = await rfRes.json();
       if (rfData.contracts && rfData.contracts.length > 0) {
         setRfContracts(rfData.contracts);
+
+        // Авто-заполнение РФ-периода из рейсов 1С (если период пустой)
+        const isPeriodsEmpty = rfPeriods.length === 0 || rfPeriods.every(p => !p.from && !p.to);
+        if (isPeriodsEmpty && vehicleNumber) {
+          const allStarts = rfData.contracts.map((c: any) => new Date(c.loading_date));
+          const allEnds = rfData.contracts.map((c: any) => new Date(c.unloading_date));
+          const reportFromDate = new Date(dateFrom.split('T')[0] + 'T00:00:00');
+          const reportToDate = new Date(dateTo.split('T')[0] + 'T23:59:00');
+          // Обрезаем по границам отчёта
+          const rfFromDate = new Date(Math.max(Math.min(...allStarts.map((d: Date) => d.getTime())), reportFromDate.getTime()));
+          const rfToDate = new Date(Math.min(Math.max(...allEnds.map((d: Date) => d.getTime())), reportToDate.getTime()));
+          const rfFromStr = rfFromDate.toISOString().slice(0, 10);
+          const rfToStr = rfToDate.toISOString().slice(0, 10);
+
+          // Загружаем GPS пробег за авто-период
+          try {
+            const rfMileageRes = await fetch(`/api/reports/telematics/mileage?vehicle=${encodeURIComponent(vehicleNumber)}&from=${rfFromStr}&to=${rfToStr}`);
+            const rfMileageData = await rfMileageRes.json();
+            const rfMil = rfMileageData.mileage || 0;
+            setRfPeriods([{ from: rfFromStr, to: rfToStr, mileage: rfMil }]);
+            setRfGpsMileage(rfMil);
+            setRfDateFrom(rfFromStr);
+            setRfDateTo(rfToStr);
+            console.log('[autoFill] RF auto-period:', rfFromStr, '→', rfToStr, 'mileage:', rfMil);
+          } catch (e) { console.error('[autoFill] RF auto-period error:', e); }
+
+          // Загружаем топливо за авто-период
+          try {
+            const rfFuelRes = await fetch(`/api/reports/fuel/detail?vehicle=${encodeURIComponent(vehicleNumber)}&from=${rfFromStr}&to=${rfToStr}`);
+            const rfFuelData = await rfFuelRes.json();
+            if (!rfFuelData.error) {
+              setFuelRf({ liters: Number(rfFuelData.total?.liters) || 0, amount: Number(rfFuelData.total?.amount) || 0 });
+            }
+          } catch (e) { console.error('[autoFill] RF fuel error:', e); }
+        }
       }
-      
+
       if (vehicleNumber) {
         // Общий GPS
         const mileageRes = await fetch(`/api/reports/telematics/mileage?vehicle=${encodeURIComponent(vehicleNumber)}&from=${dateFrom.split('T')[0]}&to=${dateTo.split('T')[0]}`);
