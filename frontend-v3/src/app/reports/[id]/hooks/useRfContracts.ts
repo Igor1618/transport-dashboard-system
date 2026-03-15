@@ -289,7 +289,7 @@ export function useRfContracts(params: {
     // Computed
     hasRfPeriods, hasRfData, effectiveRfMileage,
     rfDriverPay, rfDailyPay, rfBonus,
-    avgFuelConsumption,
+    avgFuelConsumption, fuelUsedRf,
     // Functions
     loadRfGps, restoreRfData, resetRf,
   };

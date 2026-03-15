@@ -68,6 +68,52 @@ export default function NewReportPage() {
   const [bonusEnabled, setBonusEnabled] = useState(true);
   const [bonusRate, setBonusRate] = useState(1); // ₽/км
 
+  // Подсказки водителей/машин
+  const [driverSuggestions, setDriverSuggestions] = useState<{driver_name: string; trips: number; source?: string}[]>([]);
+  const [vehicleSuggestions, setVehicleSuggestions] = useState<{vehicle_number: string; trips: number}[]>([]);
+  // Порожний перегон
+  const [relocations, setRelocations] = useState<{from: string; to: string; mileage: number; date: string}[]>([]);
+  // Штрафы WB
+  const [wbPenalties, setWbPenalties] = useState<{wb_trip_number: string; loading_date: string; route_name: string; has_penalty: boolean; penalty_pending: boolean; penalty_amount: number}[]>([]);
+  // Popup прочий пробег
+  const [showOtherMileage, setShowOtherMileage] = useState(false);
+  // Выплаты из ведомостей
+  const [salaryData, setSalaryData] = useState<{payments: {full_name: string; amount: number; register_number: string; register_date: string; tl_number: number; payment_purpose: string}[]; total: number}>({ payments: [], total: 0 });
+  // GPS coverage
+  const [gpsRecovery, setGpsRecovery] = useState<any>(null);
+  const [gpsCoverage, setGpsCoverage] = useState<{total_days:number;covered_days:number;coverage_pct:number;days:{date:string;points:number;km:number;status:string}[]}|null>(null);
+  const [gpsByDay, setGpsByDay] = useState<{date: string; km: number}[]>([]);
+  // Топливо
+  // Исключённые простои (индексы рейсов после которых простой)
+  // Данные машины (тип, карты, нормы)
+  const [vehicleData, setVehicleData] = useState<{id?: number; vehicle_type?: string; fuel_cards?: Record<string, string>; fuel_norm_winter?: number; fuel_norm_summer?: number; fuel_norm_autumn?: number}>({});
+  // Остатки топлива в баке (общие)
+  // Остатки топлива для периода РФ
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [newExpenseName, setNewExpenseName] = useState("");
+  const [newExpenseAmount, setNewExpenseAmount] = useState<number | "">("");
+  // Выдано (вычитается)
+  const [payments, setPayments] = useState<Payment[]>([]);
+  // Доп. работы
+  const [extraWorks, setExtraWorks] = useState<ExtraWork[]>([]);
+  const [newWorkName, setNewWorkName] = useState("");
+  const [newWorkCount, setNewWorkCount] = useState<number | "">(1);
+  const [newWorkRate, setNewWorkRate] = useState<number | "">(0);
+  // Удержания
+  const [deductions, setDeductions] = useState<{name: string, amount: number}[]>([]);
+  // Штрафы
+  const [fines, setFines] = useState<{name: string, amount: number}[]>([]);
+  // Справочники
+  const [workTypes, setWorkTypes] = useState<WorkType[]>([]);
+  const [compTypes, setCompTypes] = useState<WorkType[]>([]);
+  const [workSearch, setWorkSearch] = useState("");
+  const [compSearch, setCompSearch] = useState("");
+  // Комментарий
+  const [comment, setComment] = useState("");
+  // Тип машины и авто-расчёт ставки
+  const [vehicleModel, setVehicleModel] = useState("");
+  const [ownVehicleNums, setOwnVehicleNums] = useState<Set<string>>(new Set());
+
   // Fuel cards — isolated hook (prevents dark screen if cards API fails)
   const fuelCards = useFuelCards(vehicleNumber);
   const fuel = useFuel(gpsMileage);
@@ -108,7 +154,7 @@ export default function NewReportPage() {
     selectedVehicleType, setSelectedVehicleType, selectedSeason, setSelectedSeason,
     autoRate, setAutoRate, tariffRates, vehicleTypes, setVehicleTypes,
     hasRfPeriods, hasRfData, effectiveRfMileage,
-    rfDriverPay, rfDailyPay, rfBonus, avgFuelConsumption,
+    rfDriverPay, rfDailyPay, rfBonus, avgFuelConsumption, fuelUsedRf,
     loadRfGps: loadRfGpsHook, restoreRfData, resetRf,
   } = rf;
 
@@ -119,61 +165,6 @@ export default function NewReportPage() {
   });
   const { vehicleCards, showCardModal, cardSearchQ, cardSearchResults, cardSearching, cardTxModal, cardTransactions } = fuelCards;
   const { setShowCardModal, setCardSearchQ, setCardTxModal } = fuelCards;
-  
-  // Подсказки водителей/машин
-  const [driverSuggestions, setDriverSuggestions] = useState<{driver_name: string; trips: number; source?: string}[]>([]);
-  const [vehicleSuggestions, setVehicleSuggestions] = useState<{vehicle_number: string; trips: number}[]>([]);
-  
-  // Порожний перегон
-  const [relocations, setRelocations] = useState<{from: string; to: string; mileage: number; date: string}[]>([]);
-  
-  // Штрафы WB
-  const [wbPenalties, setWbPenalties] = useState<{wb_trip_number: string; loading_date: string; route_name: string; has_penalty: boolean; penalty_pending: boolean; penalty_amount: number}[]>([]);
-  
-  // Popup прочий пробег
-  const [showOtherMileage, setShowOtherMileage] = useState(false);
-  
-  // Выплаты из ведомостей
-  const [salaryData, setSalaryData] = useState<{payments: {full_name: string; amount: number; register_number: string; register_date: string; tl_number: number; payment_purpose: string}[]; total: number}>({ payments: [], total: 0 });
-  
-  // GPS coverage
-  const [gpsRecovery, setGpsRecovery] = useState<any>(null);
-  const [gpsCoverage, setGpsCoverage] = useState<{total_days:number;covered_days:number;coverage_pct:number;days:{date:string;points:number;km:number;status:string}[]}|null>(null);
-
-  const [gpsByDay, setGpsByDay] = useState<{date: string; km: number}[]>([]);
-  
-  // Топливо
-  // Исключённые простои (индексы рейсов после которых простой)
-  // Данные машины (тип, карты, нормы)
-  const [vehicleData, setVehicleData] = useState<{id?: number; vehicle_type?: string; fuel_cards?: Record<string, string>; fuel_norm_winter?: number; fuel_norm_summer?: number; fuel_norm_autumn?: number}>({});
-  
-  // Остатки топлива в баке (общие)
-  // Остатки топлива для периода РФ
-  
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [newExpenseName, setNewExpenseName] = useState("");
-  const [newExpenseAmount, setNewExpenseAmount] = useState<number | "">("");
-  
-  // Выдано (вычитается)
-  const [payments, setPayments] = useState<Payment[]>([]);
-  
-  // Доп. работы
-  const [extraWorks, setExtraWorks] = useState<ExtraWork[]>([]);
-  const [newWorkName, setNewWorkName] = useState("");
-  const [newWorkCount, setNewWorkCount] = useState<number | "">(1);
-  const [newWorkRate, setNewWorkRate] = useState<number | "">(0);
-  
-  // Удержания
-  const [deductions, setDeductions] = useState<{name: string, amount: number}[]>([]);
-  
-  // Штрафы
-  const [fines, setFines] = useState<{name: string, amount: number}[]>([]);
-  
-  // Справочники
-  const [workTypes, setWorkTypes] = useState<WorkType[]>([]);
-  const [compTypes, setCompTypes] = useState<WorkType[]>([]);
-  const [workSearch, setWorkSearch] = useState("");
-  const [compSearch, setCompSearch] = useState("");
   
   // Добавление нового типа в справочник
   const addNewWorkType = async (name: string, category: string, rate: number) => {
@@ -192,13 +183,6 @@ export default function NewReportPage() {
     return data.type;
   };
   
-  // Комментарий
-  const [comment, setComment] = useState("");
-  
-  // Тип машины и авто-расчёт ставки
-  const [vehicleModel, setVehicleModel] = useState("");
-
-  const [ownVehicleNums, setOwnVehicleNums] = useState<Set<string>>(new Set());
   const isHiredVehicle = vehicleNumber && ownVehicleNums.size > 0 && !ownVehicleNums.has(vehicleNumber.replace(/\s/g, '').replace(/0(\d{2})$/, '$1').toUpperCase());
 
   useEffect(() => {
