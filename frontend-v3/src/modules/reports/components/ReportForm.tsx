@@ -1580,23 +1580,27 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
               {(fuelWb.liters > 0 || fuelRf.liters > 0) && (
                 <div className="mt-3 pt-3 border-t border-slate-700">
                   <div className="text-sm text-slate-400 mb-2">📊 По периодам работы:</div>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="bg-purple-500/10 rounded p-2">
-                      <div className="text-purple-400 text-xs">🚛 WB</div>
-                      <div className="font-bold text-purple-300">{Math.round(fuelWb.liters).toLocaleString()} л</div>
-                      <div className="text-xs text-slate-400">{fuelWb.amount.toLocaleString()} ₽</div>
-                      {wbGpsMileage > 0 && fuelWb.liters > 0 && (
-                        <div className="text-xs text-purple-400 mt-1">{(fuelWb.liters / wbGpsMileage * 100).toFixed(2)} л/100км</div>
-                      )}
-                    </div>
-                    <div className="bg-orange-500/10 rounded p-2">
-                      <div className="text-orange-400 text-xs">📋 РФ</div>
-                      <div className="font-bold text-orange-300">{Math.round(fuelRf.liters).toLocaleString()} л</div>
-                      <div className="text-xs text-slate-400">{fuelRf.amount.toLocaleString()} ₽</div>
-                      {effectiveRfMileage > 0 && fuelRf.liters > 0 && (
-                        <div className="text-xs text-orange-400 mt-1">{(fuelRf.liters / effectiveRfMileage * 100).toFixed(2)} л/100км</div>
-                      )}
-                    </div>
+                  <div className="flex gap-2 text-sm">
+                    {fuelWb.liters > 0 && (
+                      <div className="bg-purple-500/10 rounded p-2 flex-1">
+                        <div className="text-purple-400 text-xs">🚛 WB</div>
+                        <div className="font-bold text-purple-300">{Math.round(fuelWb.liters).toLocaleString()} л</div>
+                        <div className="text-xs text-slate-400">{fuelWb.amount.toLocaleString()} ₽</div>
+                        {wbGpsMileage > 0 && (
+                          <div className="text-xs text-purple-400 mt-1">{(fuelWb.liters / wbGpsMileage * 100).toFixed(2)} л/100км</div>
+                        )}
+                      </div>
+                    )}
+                    {fuelRf.liters > 0 && (
+                      <div className="bg-orange-500/10 rounded p-2 flex-1">
+                        <div className="text-orange-400 text-xs">📋 РФ</div>
+                        <div className="font-bold text-orange-300">{Math.round(fuelRf.liters).toLocaleString()} л</div>
+                        <div className="text-xs text-slate-400">{fuelRf.amount.toLocaleString()} ₽</div>
+                        {effectiveRfMileage > 0 && (
+                          <div className="text-xs text-orange-400 mt-1">{(fuelRf.liters / effectiveRfMileage * 100).toFixed(2)} л/100км</div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

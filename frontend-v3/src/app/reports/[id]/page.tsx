@@ -81,6 +81,7 @@ export default function NewReportPage() {
   const [salaryData, setSalaryData] = useState<{payments: {full_name: string; amount: number; register_number: string; register_date: string; tl_number: number; payment_purpose: string}[]; total: number}>({ payments: [], total: 0 });
   // GPS coverage
   const [gpsRecovery, setGpsRecovery] = useState<any>(null);
+  const manualRecoveryKm = gpsRecovery?.confirmed_km || 0;
   const [gpsCoverage, setGpsCoverage] = useState<{total_days:number;covered_days:number;coverage_pct:number;days:{date:string;points:number;km:number;status:string}[]}|null>(null);
   const [gpsByDay, setGpsByDay] = useState<{date: string; km: number}[]>([]);
   // Топливо
@@ -116,7 +117,7 @@ export default function NewReportPage() {
 
   // Fuel cards — isolated hook (prevents dark screen if cards API fails)
   const fuelCards = useFuelCards(vehicleNumber);
-  const fuel = useFuel(gpsMileage);
+  const fuel = useFuel(gpsMileage + manualRecoveryKm);
   const {
     fuelBySource, setFuelBySource, fuelTotal, setFuelTotal, fuelLoading,
     fuelTransactions, setFuelTransactions, showFuelDetails, setShowFuelDetails,
@@ -143,6 +144,7 @@ export default function NewReportPage() {
   const rf = useRfContracts({
     gpsMileage, wbGpsMileage, fuelRf, bonusEnabled, bonusRate,
     reportLoaded, reportLoadedRef, isNew: params.id === 'new',
+    manualRecoveryKm,
   });
   const {
     rfContracts, setRfContracts, rfPeriods, setRfPeriods,
@@ -284,6 +286,17 @@ export default function NewReportPage() {
         .finally(() => { setPageLoading(false); setReportLoaded(true); });
     }
   }, [isEditMode, reportId]);
+
+  // GPS recovery — load whenever vehicle and dates are set (both new and edit mode)
+  useEffect(() => {
+    if (!vehicleNumber || !dateFrom || !dateTo) return;
+    const from = dateFrom.split('T')[0];
+    const to = dateTo.split('T')[0];
+    fetch(`/api/gps/recovery?vehicle=${encodeURIComponent(vehicleNumber)}&from=${from}&to=${to}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setGpsRecovery(data); })
+      .catch(e => console.error('[gps-recovery]', e));
+  }, [vehicleNumber, dateFrom, dateTo]);
 
   // Cross-check warnings
   useEffect(() => {
@@ -515,30 +528,22 @@ export default function NewReportPage() {
     } catch (e) { console.error('[penalties]', e); }
     
         // GPS coverage — загружается из snapshot, обновляется по кнопке
-    
-        // GPS recovery data
-        if (vehicleNumber && dateFrom && dateTo) {
-          try {
-            const recRes = await fetch(`/api/gps/recovery?vehicle=${encodeURIComponent(vehicleNumber)}&from=${dateFrom.split('T')[0]}&to=${dateTo.split('T')[0]}`);
-            if (recRes.ok) { const recData = await recRes.json(); setGpsRecovery(recData); }
-          } catch(e) { console.error('[gps-recovery]', e); }
-        }
-    // Загрузка выплат из ведомостей
-    if (driverName) {
+
+        // GPS recovery data — now loaded via dedicated useEffect (works in both new and edit mode)
+
+    // Загрузка выплат из ведомостей (через новый эндпоинт salary-items)
+    if (isEditMode && fullReportId) {
       try {
-        const salUrl = isEditMode && fullReportId
-          ? `/api/salary/by-report/${fullReportId}`
-          : `/api/salary/registers/by-driver?driver=${encodeURIComponent(driverName)}&from=${dateFrom.split('T')[0]}&to=${dateTo.split('T')[0]}${fullReportId ? '&report_id='+fullReportId : ''}`;
+        const salRes = await fetch(`/api/reports/${fullReportId}/salary-items`);
+        const salData = await salRes.json();
+        setSalaryData({ payments: salData?.payments || [], total: salData?.total || 0 });
+      } catch (e) { console.error('[salary-items]', e); }
+    } else if (driverName) {
+      try {
+        const salUrl = `/api/salary/registers/by-driver?driver=${encodeURIComponent(driverName)}&from=${dateFrom.split('T')[0]}&to=${dateTo.split('T')[0]}`;
         const salRes = await fetch(salUrl);
         const salData = await salRes.json();
-        if (salData.payments?.length === 0 && isEditMode && fullReportId) {
-          // Fallback — поиск по имени
-          const sal2 = await fetch(`/api/salary/registers/by-driver?driver=${encodeURIComponent(driverName)}&from=${dateFrom.split('T')[0]}&to=${dateTo.split('T')[0]}${fullReportId ? '&report_id='+fullReportId : ''}`);
-          const sal2Data = await sal2.json();
-          setSalaryData({ payments: sal2Data?.payments || [], total: sal2Data?.total || 0 });
-        } else {
-          setSalaryData({ payments: salData?.payments || [], total: salData?.total || 0 });
-        }
+        setSalaryData({ payments: salData?.payments || [], total: salData?.total || 0 });
       } catch (e) { console.error('[salary]', e); }
     }
     
@@ -564,9 +569,24 @@ export default function NewReportPage() {
   const relocationMileage = relocations.reduce((sum, r) => sum + (Number(r.mileage) || 0), 0);
   const relocationPay = Math.round(relocationMileage * (rfRatePerKm || 0)); // Порожний по тарифу РФ
   const totalDriverPay = (Number(wbTotals.driver_rate) || 0) + rfDriverPay + rfDailyPay + rfBonus + (totalIdleData.amount || 0) + relocationPay;
-  const totalToPay = totalDriverPay + totalExpenses + totalExtraWorks - totalPayments - totalDeductions - totalFines;
+  const dailyVedTotal = (salaryData?.payments || []).filter((p: any) => (p.register_type || '').toLowerCase().includes('суточн')).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+  const totalToPay = totalDriverPay + totalExpenses + totalExtraWorks - totalPayments - totalDeductions - totalFines - dailyVedTotal;
   
   const earnPerKm = effectiveRfMileage > 0 && !isNaN(totalToPay) ? (totalToPay / effectiveRfMileage).toFixed(2) : "0";
+
+  // Auto-load salary-items on page open (not just on "Загрузить")
+  useEffect(() => {
+    const rid = fullReportId || reportId;
+    if (!rid || rid === 'new') return;
+    fetch('/api/reports/' + rid + '/salary-items')
+      .then(r => r.json())
+      .then(data => {
+        if (data.payments) {
+          setSalaryData({ payments: data.payments, total: data.total || 0 });
+        }
+      })
+      .catch(e => console.error('[salary-items onload]', e));
+  }, [fullReportId, reportId]);
   
   // Расчёт топлива по периодам WB и РФ (только если есть транзакции)
   useEffect(() => {
@@ -634,24 +654,47 @@ export default function NewReportPage() {
   const reportText = `Водитель: ${driverName}
 Период: ${dateFrom} - ${dateTo}
 Т/С: ${vehicleNumber}
-Пробег: ${gpsMileage.toLocaleString("ru-RU")} км${effectiveRfMileage > 0 ? ` | ВБ: ${Math.max(0, gpsMileage - effectiveRfMileage).toLocaleString("ru-RU")} км | РФ: ${effectiveRfMileage.toLocaleString("ru-RU")} км` : ''}
+Пробег: ${(gpsMileage + manualRecoveryKm).toLocaleString("ru-RU")} км${manualRecoveryKm > 0 ? ` (GPS: ${gpsMileage.toLocaleString("ru-RU")} + ручной: ${manualRecoveryKm.toLocaleString("ru-RU")})` : ''}${effectiveRfMileage > 0 ? ` | ВБ: ${Math.max(0, gpsMileage - effectiveRfMileage).toLocaleString("ru-RU")} км | РФ: ${effectiveRfMileage.toLocaleString("ru-RU")} км` : ''}
 Расход: *${avgFuelConsumptionTotal}* л/100км${Number(avgFuelConsumptionWb) > 0 ? ` | ВБ: ${avgFuelConsumptionWb}` : ''}${Number(avgFuelConsumption) > 0 ? ` | РФ: ${avgFuelConsumption}` : ''}
 Вид тарифа: ${getSeason()}
 Тариф: *${rfRatePerKm}* ₽/км
 -------------
 *Начислено:*
-${rfDriverPay > 0 ? `Начисление за км: ${rfDriverPay.toLocaleString("ru-RU")} ₽\n` : ""}${rfBonus > 0 ? `Премия ТК (${effectiveRfMileage}×${bonusRate}): ${rfBonus.toLocaleString("ru-RU")} ₽\n` : ""}${rfDailyPay > 0 ? `Суточные (${rfDays} дн × ${rfDailyRate}): ${rfDailyPay.toLocaleString("ru-RU")} ₽\n` : ""}${wbTotals.driver_rate > 0 ? `WB рейсы: ${wbTotals.driver_rate.toLocaleString("ru-RU")} ₽\n` : ""}${totalIdleData.amount > 0 ? `Простой (${totalIdleData.paidHours} ч.): ${totalIdleData.amount.toLocaleString("ru-RU")} ₽\n` : ""}${wbPenalties.length > 0 ? `🚨 Штрафы WB (инфо):\n${wbPenalties.map(p => `  #${p.wb_trip_number} ${p.loading_date?.slice(0,10)}: ${(Number(p.penalty_amount)||0).toLocaleString("ru-RU")} ₽${p.penalty_pending ? ' (на рассм.)' : ''}`).join("\n")}\n  Итого: ${wbPenalties.reduce((s,p)=>s+(Number(p.penalty_amount)||0),0).toLocaleString("ru-RU")} ₽\n` : ""}${relocations.length > 0 ? `🚛 Порожний перегон:\n${relocations.map(r => `  ${r.from} → ${r.to}: ${r.mileage} км (${r.date})`).join("\n")}\n  Итого: ${relocationMileage} км × ${rfRatePerKm} = ${relocationPay.toLocaleString("ru-RU")} ₽\n` : ""}${extraWorks.map(w => `${w.name} (${w.count}×${w.rate}): ${(w.count*w.rate).toLocaleString("ru-RU")} ₽`).join("\n")}${extraWorks.length > 0 ? "\n" : ""}${expenses.map(e => `${e.name}: +${e.amount.toLocaleString("ru-RU")} ₽`).join("\n")}${expenses.length > 0 ? "\n" : ""}${deductions.map(d => `💸 Удержание "${d.name}": -${d.amount.toLocaleString("ru-RU")} ₽`).join("\n")}${deductions.length > 0 ? "\n" : ""}${fines.map(f => `⚠️ Штраф "${f.name}": -${f.amount.toLocaleString("ru-RU")} ₽`).join("\n")}${fines.length > 0 ? "\n" : ""}${payments.map(p => `${p.type === "advance" ? "Аванс" : p.type === "daily" ? "Суточные выданные" : p.description || "Выдано"}: -${p.amount.toLocaleString("ru-RU")} ₽`).join("\n")}${payments.length > 0 ? "\n" : ""}-------------
+${rfDriverPay > 0 ? `Начисление за км: ${rfDriverPay.toLocaleString("ru-RU")} ₽\n` : ""}${rfBonus > 0 ? `Премия ТК (${effectiveRfMileage}×${bonusRate}): ${rfBonus.toLocaleString("ru-RU")} ₽\n` : ""}${rfDailyPay > 0 ? `Суточные (${rfDays} дн × ${rfDailyRate}): ${rfDailyPay.toLocaleString("ru-RU")} ₽\n` : ""}${wbTotals.driver_rate > 0 ? `WB рейсы: ${wbTotals.driver_rate.toLocaleString("ru-RU")} ₽\n` : ""}${totalIdleData.amount > 0 ? `Простой (${totalIdleData.paidHours} ч.): ${totalIdleData.amount.toLocaleString("ru-RU")} ₽\n` : ""}${wbPenalties.length > 0 ? `🚨 Штрафы WB (инфо):\n${wbPenalties.map(p => `  #${p.wb_trip_number} ${p.loading_date?.slice(0,10)}: ${(Number(p.penalty_amount)||0).toLocaleString("ru-RU")} ₽${p.penalty_pending ? ' (на рассм.)' : ''}`).join("\n")}\n  Итого: ${wbPenalties.reduce((s,p)=>s+(Number(p.penalty_amount)||0),0).toLocaleString("ru-RU")} ₽\n` : ""}${relocations.length > 0 ? `🚛 Порожний перегон:\n${relocations.map(r => `  ${r.from} → ${r.to}: ${r.mileage} км (${r.date})`).join("\n")}\n  Итого: ${relocationMileage} км × ${rfRatePerKm} = ${relocationPay.toLocaleString("ru-RU")} ₽\n` : ""}${extraWorks.map(w => `${w.name} (${w.count}×${w.rate}): ${(w.count*w.rate).toLocaleString("ru-RU")} ₽`).join("\n")}${extraWorks.length > 0 ? "\n" : ""}${expenses.map(e => `${e.name}: +${(Number(e.amount) || 0).toLocaleString("ru-RU")} ₽`).join("\n")}${expenses.length > 0 ? "\n" : ""}${deductions.map(d => `💸 Удержание "${d.name}": -${(Number(d.amount) || 0).toLocaleString("ru-RU")} ₽`).join("\n")}${deductions.length > 0 ? "\n" : ""}${fines.map(f => `⚠️ Штраф "${f.name}": -${(Number(f.amount) || 0).toLocaleString("ru-RU")} ₽`).join("\n")}${fines.length > 0 ? "\n" : ""}${payments.map(p => `${p.type === "advance" ? "Аванс" : p.type === "daily" ? "Суточные выданные" : p.description || "Выдано"}: -${(Number(p.amount) || 0).toLocaleString("ru-RU")} ₽`).join("\n")}${payments.length > 0 ? "\n" : ""}-------------
 *Всего начислено: ${totalToPay.toLocaleString("ru-RU")} ₽*
 *Заработок за км: ${earnPerKm} ₽/км*
 ${comment ? `Комментарий: ${comment}` : ""}`;
   
+  // Отвязка суточной от отчёта
+  const unlinkPayment = async (paymentId: string) => {
+    if (!confirm('Отвязать эту суточную от отчёта?')) return;
+    try {
+      const resp = await fetch('/api/reports/register-link/' + paymentId + '?report_id=' + (fullReportId || reportId), {
+        method: 'DELETE'
+      });
+      const result = await resp.json();
+      if (!resp.ok) { alert('Ошибка: ' + (result.error || resp.status)); return; }
+      // Reload salaryData
+      if (fullReportId) {
+        const salRes = await fetch('/api/reports/' + fullReportId + '/salary-items');
+        const salData = await salRes.json();
+        setSalaryData({ payments: salData?.payments || [], total: salData?.total || 0 });
+      } else if (driverName) {
+        const salUrl = '/api/salary/registers/by-driver?driver=' + encodeURIComponent(driverName) + '&from=' + (dateFrom||'').split('T')[0] + '&to=' + (dateTo||'').split('T')[0];
+        const salRes = await fetch(salUrl);
+        const salData = await salRes.json();
+        setSalaryData({ payments: salData?.payments || [], total: salData?.total || 0 });
+      }
+    } catch (e) { console.error('unlinkPayment:', e); alert('Ошибка отвязки'); }
+  };
+
   // Загрузка выплат из зарплатных ведомостей
   const loadSalaryPayments = async () => {
     if (!driverName) return;
     try {
       // Определяем период (от первого до последнего дня отчёта)
-      const fromDate = dateFrom?.split('T')[0] || rfPeriods[0]?.from?.split('T')[0];
-      const toDate = dateTo?.split('T')[0] || rfPeriods[rfPeriods.length-1]?.to?.split('T')[0];
+      const fromDate = dateFrom?.split('T')[0] || (rfPeriods && rfPeriods.length > 0 ? rfPeriods[0]?.from?.split('T')[0] : undefined);
+      const toDate = dateTo?.split('T')[0] || (rfPeriods && rfPeriods.length > 0 ? rfPeriods[rfPeriods.length-1]?.to?.split('T')[0] : undefined);
       
       const url = `/api/salary/by-name?name=${encodeURIComponent(driverName)}${fromDate ? `&from=${fromDate}` : ''}${toDate ? `&to=${toDate}` : ''}`;
       const res = await fetch(url);
@@ -666,7 +709,7 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
           description: `Реестр №${p.register_number}${p.payment_purpose ? ' — ' + p.payment_purpose : ''}`
         }));
         setPayments([...payments, ...newPayments]);
-        alert(`Загружено ${data.payments.length} выплат на сумму ${data.total.toLocaleString()} ₽`);
+        alert(`Загружено ${data.payments.length} выплат на сумму ${(data.total || 0).toLocaleString()} ₽`);
       } else {
         alert('Выплат по ведомостям не найдено за этот период');
       }
@@ -791,7 +834,23 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
           relocations: relocations,
           wb_penalties: wbPenalties,
           excluded_idle_trips: Array.from(excludedIdles), // Excluded idles
-          comment: comment
+          comment: comment,
+          report_total: totalToPay,
+          report_total_details: {
+            wb: Number(wbTotals.driver_rate) || 0,
+            idle: totalIdleData.amount || 0,
+            rf: rfDriverPay || 0,
+            rf_bonus: rfBonus || 0,
+            daily_accrued: rfDailyPay || 0,
+            extra_work: totalExtraWorks || 0,
+            compensation: totalExpenses || 0,
+            relocation: relocationPay || 0,
+            deductions: totalDeductions || 0,
+            fines: totalFines || 0,
+            daily_ved: -dailyVedTotal,
+            payments: -totalPayments,
+            total: totalToPay
+          }
         })
       });
       const data = await res.json();
@@ -980,11 +1039,11 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs text-slate-500">С</label>
-              <input type="datetime-local" value={dateFrom} onChange={e => { setDateFrom(e.target.value); if (e.target.value.includes("T")) setTimeFrom(e.target.value.slice(11, 16)); }} className="w-full bg-slate-700 text-white rounded-lg px-2 py-1.5 border border-slate-600 text-xs" />
+              <input type="datetime-local" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setTimeFrom(e.target.value.includes("T") ? e.target.value.slice(11, 16) : "00:00"); }} className="w-full bg-slate-700 text-white rounded-lg px-2 py-1.5 border border-slate-600 text-xs" />
             </div>
             <div>
               <label className="text-xs text-slate-500">По</label>
-              <input type="datetime-local" value={dateTo} onChange={e => { setDateTo(e.target.value); if (e.target.value.includes("T")) setTimeTo(e.target.value.slice(11, 16)); }} className="w-full bg-slate-700 text-white rounded-lg px-2 py-1.5 border border-slate-600 text-xs" />
+              <input type="datetime-local" value={dateTo} onChange={e => { setDateTo(e.target.value); setTimeTo(e.target.value.includes("T") ? e.target.value.slice(11, 16) : "23:59"); }} className="w-full bg-slate-700 text-white rounded-lg px-2 py-1.5 border border-slate-600 text-xs" />
             </div>
           </div>
 
@@ -1064,11 +1123,17 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
           <div className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 rounded-xl p-4 border border-blue-500/30">
             <div className="text-center mb-3">
               <span className="text-slate-400 text-xs sm:text-sm">Общий GPS за период</span>
-              <div className="text-2xl sm:text-3xl font-bold text-white">{gpsMileage.toLocaleString()} км</div>
+              <div className="text-2xl sm:text-3xl font-bold text-white">{(gpsMileage + manualRecoveryKm).toLocaleString()} км</div>
+              {manualRecoveryKm > 0 && (
+                <div className="text-xs text-purple-400 mt-1">GPS: {gpsMileage.toLocaleString()} + 🟣 ручной: {manualRecoveryKm.toLocaleString()} км</div>
+              )}
             </div>
-            <div className="grid grid-cols-3 gap-2 text-center text-sm">
+            <div className={`grid ${manualRecoveryKm > 0 ? 'grid-cols-4' : 'grid-cols-3'} gap-2 text-center text-sm`}>
               <div><span className="text-purple-400 font-bold">{wbGpsMileage.toLocaleString()}</span><div className="text-slate-500 text-xs">WB</div></div>
               <div><span className="text-orange-400 font-bold">{effectiveRfMileage.toLocaleString()}</span><div className="text-slate-500 text-xs">РФ</div></div>
+              {manualRecoveryKm > 0 && (
+                <div><span className="text-fuchsia-400 font-bold">{manualRecoveryKm.toLocaleString()}</span><div className="text-slate-500 text-xs">🟣 Ручной</div></div>
+              )}
               {(() => {
                 const wbDates = new Set(wbTrips.flatMap(t => {
                   const dates: string[] = [];
@@ -1151,6 +1216,30 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
           setShowCardModal={fuelCards.setShowCardModal}
         />
 
+        {/* Топливные карты — отдельный блок */}
+        {(fuelCards.vehicleCards.length > 0 || true) && (
+          <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="font-semibold text-cyan-400">🔋 Топливные карты</h2>
+              <button onClick={() => fuelCards.setShowCardModal(true)} className="text-xs text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded">+ Добавить карту</button>
+            </div>
+            {fuelCards.vehicleCards.length > 0 ? (
+              <div className="flex flex-wrap gap-1">
+                {fuelCards.vehicleCards.map((c: any, i: number) => (
+                  <span key={i} className="bg-slate-700/50 px-2 py-0.5 rounded cursor-pointer hover:bg-slate-600/50 inline-flex items-center gap-1 text-xs"
+                    onClick={() => fuelCards.loadCardTransactions(c.card_number, c.source)}
+                    title={`${c.tx_count} запр., ${Number(c.total_liters||0).toFixed(0)} л`}>
+                    🔋 {c.source} ****{c.card_number.slice(-4)} ({Number(c.total_liters||0).toFixed(0)}л)
+                    <button onClick={(e: any) => {e.stopPropagation(); fuelCards.unbindFuelCard(c.card_number, c.source);}} className="ml-1 text-red-400 hover:text-red-300 text-[10px]">×</button>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">Нет привязанных карт</p>
+            )}
+          </div>
+        )}
+
         {/* РФ */}
         <RfContractsSection
           rfContracts={rfContracts}
@@ -1216,6 +1305,7 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
           avgFuelConsumptionTotal={avgFuelConsumptionTotal}
           autoRate={autoRate}
           vehicleModel={vehicleModel}
+          manualRecoveryKm={manualRecoveryKm}
         />
 
         {/* Суточные РФ */}
@@ -1263,7 +1353,7 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
               <span>{w.name} × {w.count}</span>
               <div className="flex gap-2">
                 <span className="text-green-400">+{(w.count * w.rate).toLocaleString()} ₽</span>
-                <button onClick={() => setExtraWorks(extraWorks.filter((_, j) => j !== i))} className="text-slate-500"><Trash2 className="w-3 h-3" /></button>
+                <button onClick={() => setExtraWorks(prev => prev.filter((_, j) => j !== i))} className="text-slate-500"><Trash2 className="w-3 h-3" /></button>
               </div>
             </div>
           ))}
@@ -1318,47 +1408,41 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
           </div>
         </div>
 
-        {/* Выплаты из ведомостей */}
-        {(salaryData.payments || []).length > 0 && (() => {
-          const daily = salaryData.payments || [];
-          const dailyTotal = daily.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-          const unlinkPayment = async (paymentId: number) => {
-            if (!fullReportId) return;
-            await fetch(`/api/salary/register-link/${paymentId}?report_id=${fullReportId}`, {
-              method: 'DELETE',
-              headers: { 'x-user-role': localStorage.getItem('userRole') || 'director' }
-            });
-            setSalaryData(prev => ({
-              ...prev,
-              payments: prev.payments.filter((p: any) => p.id !== paymentId),
-              total: prev.total - (daily.find((p: any) => p.id === paymentId)?.amount || 0)
-            }));
-          };
+        {/* Из ведомостей — все выплаты за период (read-only) */}
+        {(salaryData.payments || []).filter((p: any) => (p.register_type || '').toLowerCase().includes('суточн')).length > 0 && (() => {
+          const all = salaryData.payments || [];
+          const allTotal = all.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+          const dailyItems = all.filter((p: any) => (p.register_type || '').toLowerCase().includes('суточн'));
+          const salaryItems = all.filter((p: any) => !(p.register_type || '').toLowerCase().includes('суточн'));
+          const dailyTotal = dailyItems.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+          const salaryTotal = salaryItems.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
           return (
           <div className="bg-slate-800 rounded-xl p-4 border border-emerald-500/30">
-            <h2 className="font-semibold text-emerald-400 mb-2">📋 Суточные из ведомостей</h2>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="font-semibold text-emerald-400">📋 Суточные из ведомостей</h2>
+              <span className="text-xs text-slate-500">{dateFrom?.slice(0,10)} — {dateTo?.slice(0,10)}</span>
+            </div>
             <div className="space-y-1 mb-2">
-              {daily.map((p: any) => (
-                <div key={p.id} className="flex items-center justify-between text-sm border-b border-slate-700/50 py-1">
-                  <a href={"/salary/registers/" + p.register_id} className="text-blue-400 hover:underline">Реестр №{p.register_number || p.tl_number}</a>
-                  <span className="text-slate-500 ml-2">({p.register_date?.slice(0, 10)}, {p.organization === 'tl' ? 'ООО ТЛ' : p.organization === 'gp' ? 'ООО ГП' : p.organization})</span>
-                  <span className="text-yellow-300 font-bold ml-2">{Number(p.amount).toLocaleString()} ₽</span>
-                  <button onClick={() => unlinkPayment(p.id)} className="ml-2 text-slate-500 hover:text-red-400" title="Отвязать">✕</button>
+              {dailyItems.map((p: any, i: number) => (
+                <div key={p.id || i} className="flex items-center justify-between text-sm border-b border-slate-700/50 py-1.5">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    {(() => { const d = p.register_date?.slice(0,10); const inPeriod = d >= (dateFrom?.slice(0,10)||'') && d <= (dateTo?.slice(0,10)||''); return p.linked_to_this ? (inPeriod ? <span className="text-emerald-400 text-xs" title="Привязан к отчёту">✓</span> : <span className="text-amber-400 text-xs" title="Вне периода отчёта — проверьте привязку">⚠️</span>) : null; })()}
+                    <a href={"/salary/registers/" + p.register_id} className="text-blue-400 hover:underline truncate">Реестр №{p.register_number || p.tl_number}</a>
+                    <span className="text-slate-500 text-xs shrink-0">{p.register_date?.slice(0, 10)}</span>
+                    {p.register_type && <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${(p.register_type || '').toLowerCase().includes('суточн') ? 'bg-yellow-600/20 text-yellow-400' : 'bg-blue-600/20 text-blue-400'}`}>{p.register_type}</span>}
+                    <span className="text-slate-500 text-xs shrink-0">{p.organization === 'tl' ? 'ООО ТЛ' : p.organization === 'gp' ? 'ООО ГП' : p.organization || ''}</span>
+                  </div>
+                  <span className="text-yellow-300 font-bold ml-2 shrink-0">{(Number(p.amount) || 0).toLocaleString()} ₽</span>
+                  <button onClick={() => unlinkPayment(p.id)} className="ml-1 text-red-400 hover:text-red-300 text-xs shrink-0" title="Отвязать">×</button>
                 </div>
               ))}
             </div>
+
             <div className="flex justify-between mt-2 pt-2 border-t border-slate-700">
-              <span className="text-slate-400 text-sm">Итого суточные:</span>
+              <span className="text-slate-400 text-sm">Итого суточных:</span>
               <span className="text-emerald-400 font-bold">{dailyTotal.toLocaleString()} ₽</span>
             </div>
-            {totalToPay > 0 && (
-              <div className="flex justify-between mt-1">
-                <span className="text-slate-400 text-sm">Остаток к выплате:</span>
-                <span className={`font-bold ${totalToPay - dailyTotal > 0 ? 'text-yellow-400' : 'text-green-400'}`}>
-                  {(totalToPay - dailyTotal).toLocaleString()} ₽
-                </span>
-              </div>
-            )}
+
           </div>);
         })()}
 
@@ -1436,10 +1520,10 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
             { label: '💸 Удержания', amount: totalDeductions, color: 'text-red-400', prefix: '−' },
             { label: '⚠️ Штрафы', amount: totalFines, color: 'text-red-400', prefix: '−' },
             { label: 'Выдано', amount: totalPayments, color: 'text-orange-400', prefix: '−' },
-            { label: '💰 Ведомости', amount: salaryData.total, color: 'text-emerald-400', prefix: '−' },
+            { label: '📋 Суточные (вед.)', amount: (salaryData.payments||[]).filter((p: any) => (p.register_type||'').toLowerCase().includes('суточн')).reduce((s: number, p: any) => s + Number(p.amount||0), 0), color: 'text-yellow-300' as const, prefix: '−' as const },
           ]}
           totalToPay={totalToPay}
-          salaryTotal={salaryData.total}
+          salaryTotal={(salaryData.payments||[]).filter((p: any) => (p.register_type||'').toLowerCase().includes('суточн')).reduce((s: number, p: any) => s + Number(p.amount||0), 0)}
           effectiveRfMileage={effectiveRfMileage}
           earnPerKm={earnPerKm}
           loading={loading}
