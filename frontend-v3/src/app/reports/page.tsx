@@ -16,6 +16,7 @@ interface DriverReport {
   expense_categories?: { gps_mileage?: number; wb_gps_mileage?: number; rf_mileage?: number; fuel_rf?: { liters: number } };
   vehicle_type?: string; season?: string; rf_periods?: { mileage?: number }[];
   updated_at?: string;
+  fuel_start?: number; fuel_end?: number;
 }
 
 function StatusBadge({ status }: { status?: string }) {
@@ -46,7 +47,7 @@ function relativeTime(d: string | undefined) {
 }
 
 const PER_PAGE = 20;
-type SortField = "number" | "driver_name" | "vehicle_number" | "date_to" | "total_expenses" | "driver_accruals" | "mileage";
+type SortField = "number" | "driver_name" | "vehicle_number" | "date_to" | "total_expenses" | "driver_accruals" | "mileage" | "updated_at";
 type SortDir = "asc" | "desc";
 
 export default function ReportsPage() {
@@ -65,6 +66,7 @@ export default function ReportsPage() {
   const [showDeleted, setShowDeleted] = useState(false);
   const [dateFrom, setDateFrom] = useState(searchParams?.get("from") || "");
   const [dateTo, setDateTo] = useState(searchParams?.get("to") || "");
+  const [employeeFilter, setEmployeeFilter] = useState<string>("all");
   const [showRecalc, setShowRecalc] = useState(false);
   const [recalcMonth, setRecalcMonth] = useState("");
   const [recalcLoading, setRecalcLoading] = useState(false);
@@ -77,7 +79,7 @@ export default function ReportsPage() {
   }, [search]);
 
   // Reset page on filter change
-  useEffect(() => { setPage(1); }, [searchDebounced, monthFilter, ownershipFilter, showDeleted, sortField, sortDir, dateFrom, dateTo]);
+  useEffect(() => { setPage(1); }, [searchDebounced, monthFilter, ownershipFilter, showDeleted, sortField, sortDir, dateFrom, dateTo, employeeFilter]);
 
   // Sync dateFrom/dateTo to URL
   useEffect(() => {
@@ -130,6 +132,12 @@ export default function ReportsPage() {
     return Array.from(set.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   }, [reports]);
 
+  const availableEmployees = useMemo(() => {
+    const names = new Set<string>();
+    reports.forEach(r => { if (r.updated_by) names.add(r.updated_by); });
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'ru'));
+  }, [reports]);
+
   // Filter + sort
   const filteredReports = useMemo(() => {
     const q = searchDebounced.toLowerCase();
@@ -138,6 +146,7 @@ export default function ReportsPage() {
         if (!showDeleted && r.status === 'deleted') return false;
         if (ownershipFilter === "own" && isHired(r.vehicle_number)) return false;
         if (ownershipFilter === "hired" && !isHired(r.vehicle_number)) return false;
+        if (employeeFilter !== "all" && r.updated_by !== employeeFilter) return false;
         if (monthFilter !== "all") {
           const d = r.date_to || r.date_from || '';
           if (!d.startsWith(monthFilter)) return false;
@@ -164,13 +173,13 @@ export default function ReportsPage() {
       })
       .sort((a, b) => {
         let av: any = a[sortField], bv: any = b[sortField];
-        if (sortField === "date_to" || sortField === "number") { av = av || ""; bv = bv || ""; }
+        if (sortField === "date_to" || sortField === "number" || sortField === "updated_at") { av = av || ""; bv = bv || ""; }
         else { av = av || 0; bv = bv || 0; }
         if (av < bv) return sortDir === "asc" ? -1 : 1;
         if (av > bv) return sortDir === "asc" ? 1 : -1;
         return 0;
       });
-  }, [reports, searchDebounced, monthFilter, ownershipFilter, showDeleted, sortField, sortDir, isHired, dateFrom, dateTo]);
+  }, [reports, searchDebounced, monthFilter, ownershipFilter, showDeleted, sortField, sortDir, isHired, dateFrom, dateTo, employeeFilter]);
 
   const totalPages = Math.ceil(filteredReports.length / PER_PAGE);
   const pagedReports = filteredReports.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -187,8 +196,15 @@ export default function ReportsPage() {
   const ConsumptionCell = ({ r }: { r: DriverReport }) => {
     const mileage = r.total_mileage || r.mileage || 0;
     const fuel = r.fuel_quantity || 0;
-    if (!mileage || !fuel) return <span className="text-slate-500">—</span>;
-    const c = fuel / mileage * 100;
+    const hasTank = Number(r.fuel_start) > 0 || Number(r.fuel_end) > 0;
+    if (!mileage) return <span className="text-slate-500">—</span>;
+    if (!hasTank && fuel > 0) return <span className="text-slate-500" title="Нет данных об остатках в баке">—</span>;
+    if (!hasTank) return <span className="text-slate-500">—</span>;
+    const consumed = fuel + (Number(r.fuel_start) || 0) - (Number(r.fuel_end) || 0);
+    if (consumed < 0) return <span className="text-amber-400" title="Бак вырос больше чем заправлено">⚠️</span>;
+    if (consumed === 0) return <span className="text-slate-500">0</span>;
+    const c = consumed / mileage * 100;
+    if (c > 50) return <span className="text-red-400 font-bold" title={`${consumed.toFixed(0)} л / ${mileage} км`}>🔴 {c.toFixed(1)}</span>;
     if (c > 40) return <span className="text-red-400 font-bold">🔴 {c.toFixed(1)}</span>;
     if (c > 35) return <span className="text-yellow-400 font-bold">⚠️ {c.toFixed(1)}</span>;
     return <span className="text-slate-300">{c.toFixed(1)}</span>;
@@ -228,6 +244,13 @@ export default function ReportsPage() {
             <button onClick={() => setOwnershipFilter("own")} className={`px-3 py-1 rounded text-sm transition ${ownershipFilter === "own" ? "bg-green-600 text-white" : "text-slate-400 hover:text-white"}`}>Свои</button>
             <button onClick={() => setOwnershipFilter("hired")} className={`px-3 py-1 rounded text-sm transition ${ownershipFilter === "hired" ? "bg-cyan-600 text-white" : "text-slate-400 hover:text-white"}`}>Наёмные</button>
           </div>
+          <select value={employeeFilter} onChange={e => setEmployeeFilter(e.target.value)}
+            className="text-sm bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-300 hover:border-slate-500 transition">
+            <option value="all">Все сотрудники</option>
+            {availableEmployees.map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
           <label className="flex items-center gap-1.5 text-sm text-slate-400 cursor-pointer select-none">
             <input type="checkbox" checked={showDeleted} onChange={e => setShowDeleted(e.target.checked)} className="accent-red-500" />
             🗑️
@@ -315,7 +338,7 @@ export default function ReportsPage() {
                 <th className="text-right p-3 cursor-pointer hover:bg-slate-700/50" onClick={() => handleSort("mileage")}>ПРОБЕГ <SortIcon field="mileage" /></th>
                 <th className="text-right p-3">РАСХОД</th>
                 <th className="text-center p-3">СТАТУС</th>
-                <th className="text-right p-3">ИЗМЕНЁН</th>
+                <th className="text-right p-3 cursor-pointer hover:bg-slate-700/50" onClick={() => handleSort("updated_at")}>ИЗМЕНЁН <SortIcon field="updated_at" /></th>
               </tr>
             </thead>
             <tbody>
