@@ -245,9 +245,29 @@ export function useRfContracts(params: {
     }
     if (reportRow.rf_periods && Array.isArray(reportRow.rf_periods) && reportRow.rf_periods.length > 0) {
       setRfPeriods(reportRow.rf_periods);
+      const validPeriods = reportRow.rf_periods.filter((p: any) => p.from && p.to);
+      // Restore rfDateFrom/rfDateTo from saved periods
+      if (validPeriods.length > 0) {
+        setRfDateFrom(validPeriods[0].from);
+        setRfDateTo(validPeriods[validPeriods.length - 1].to);
+      }
       const totalFromPeriods = reportRow.rf_periods.reduce((sum: number, p: any) => sum + (Number(p.mileage) || 0), 0);
       console.log('[LOAD] rf_periods total mileage:', totalFromPeriods);
-      if (totalFromPeriods > 0) setRfGpsMileage(totalFromPeriods);
+      if (totalFromPeriods > 0) {
+        setRfGpsMileage(totalFromPeriods);
+      } else if (validPeriods.length > 0 && reportRow.vehicle_number) {
+        // Mileage not calculated yet - fetch GPS for RF period
+        const from = validPeriods[0].from.slice(0, 10);
+        const to = validPeriods[validPeriods.length - 1].to.slice(0, 10);
+        try {
+          const res = await fetch(`/api/reports/telematics/mileage?vehicle=${encodeURIComponent(reportRow.vehicle_number)}&from=${from}&to=${to}`);
+          const data = await res.json();
+          if (data.mileage != null) {
+            setRfGpsMileage(data.mileage);
+            setRfPeriods(prev => prev.map((p, i) => i === 0 ? {...p, mileage: data.mileage} : p));
+          }
+        } catch (e) { console.error('[restoreRfData] RF GPS fetch error:', e); }
+      }
     }
     if (reportRow.vehicle_type) setSelectedVehicleType(reportRow.vehicle_type);
     if (reportRow.season) setSelectedSeason(reportRow.season);
@@ -255,7 +275,10 @@ export function useRfContracts(params: {
 
     if (details) {
       if (details.rf_rate) setRfRatePerKm(details.rf_rate);
-      if (details.rf_mileage) setRfGpsMileage(details.rf_mileage);
+      // Don't override fresh GPS calculation with stale rf_mileage if periods with dates exist
+      const hasSavedPeriodsWithDates = reportRow.rf_periods && Array.isArray(reportRow.rf_periods)
+        && reportRow.rf_periods.some((p: any) => p.from && p.to);
+      if (details.rf_mileage && !hasSavedPeriodsWithDates) setRfGpsMileage(details.rf_mileage);
       if (details.rf_days != null) { setRfDays(Number(details.rf_days)); setRfDaysManual(true); }
       if (details.rf_daily_rate != null) setRfDailyRate(Number(details.rf_daily_rate));
       // Fallback: if rf_days not saved but rf_periods exist, calculate
