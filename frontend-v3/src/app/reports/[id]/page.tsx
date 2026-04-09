@@ -263,7 +263,11 @@ export default function NewReportPage() {
               if (details.comment) setComment(details.comment);
               // Восстановление WB рейсов
               await restoreWbData(r, details);
-              await restoreRfData(r, details);
+              await restoreRfData(r, details, {
+                setVehicleData, setFuelRf, setHasFuelSensor,
+                setFuelStartTank, setFuelEndTank,
+                fuelStartTank, fuelEndTank,
+              });
               restoreFuelData(r, details);
               // Восстановление GPS/WB данных
               if (details.gps_mileage) setGpsMileage(details.gps_mileage);

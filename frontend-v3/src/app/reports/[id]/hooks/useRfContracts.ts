@@ -238,7 +238,7 @@ export function useRfContracts(params: {
   };
 
   /** Restore RF data from saved report */
-  const restoreRfData = async (reportRow: any, details: any) => {
+  const restoreRfData = async (reportRow: any, details: any, shared?: SharedSetters) => {
     // Only use total mileage as RF fallback when no RF periods are defined
     if (reportRow.mileage && (!reportRow.rf_periods || !Array.isArray(reportRow.rf_periods) || reportRow.rf_periods.length === 0)) {
       setRfGpsMileage(reportRow.mileage);
@@ -293,6 +293,13 @@ export function useRfContracts(params: {
       }
       if (details.rf_fuel_start) setRfFuelStartTank(details.rf_fuel_start);
       if (details.rf_fuel_end) setRfFuelEndTank(details.rf_fuel_end);
+      // Restore RF fuel from saved data
+      if (details.fuel_rf && shared?.setFuelRf) {
+        shared.setFuelRf({
+          liters: Number(details.fuel_rf.liters) || 0,
+          amount: Number(details.fuel_rf.amount) || 0,
+        });
+      }
       // RF contracts restore
       const hasSavedPeriods = reportRow.rf_periods && Array.isArray(reportRow.rf_periods) && reportRow.rf_periods.length > 0
         && reportRow.rf_periods.some((p: any) => p.from && p.to);
