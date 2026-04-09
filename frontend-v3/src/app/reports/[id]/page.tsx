@@ -139,7 +139,7 @@ export default function NewReportPage() {
     excludedIdles, setExcludedIdles,
     totalIdleData, fuelUsedWb, avgFuelConsumptionWb,
     loadWbTrips, restoreWbData, resetWb, getUniqueDays,
-  } = useWbTrips(fuelWb);
+  } = useWbTrips(fuelWb, !!isEditMode);
 
   const rf = useRfContracts({
     gpsMileage, wbGpsMileage, fuelRf, bonusEnabled, bonusRate,

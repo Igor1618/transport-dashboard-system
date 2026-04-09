@@ -15,7 +15,7 @@ function getUniqueDays(trips: WbTrip[]): string[] {
   return Array.from(days).sort();
 }
 
-export function useWbTrips(fuelWb: { liters: number; amount: number }) {
+export function useWbTrips(fuelWb: { liters: number; amount: number }, isEditMode?: boolean) {
   const [wbTrips, setWbTrips] = useState<WbTrip[]>([]);
   const [wbTotals, setWbTotals] = useState({ count: 0, driver_rate: 0 });
   const [wbGpsMileage, setWbGpsMileage] = useState(0);
@@ -52,6 +52,7 @@ export function useWbTrips(fuelWb: { liters: number; amount: number }) {
 
   /** Load WB trips from API (called from handleAutoFill) */
   const loadWbTrips = async (params: { driver: string; from: string; to: string; vehicle?: string }) => {
+    if (!isEditMode) setExcludedIdles(new Set()); // Only clear excluded idles on fresh load, preserve in edit mode
     const baseParams = new URLSearchParams({ driver: params.driver, from: params.from, to: params.to });
     if (params.vehicle) baseParams.append("vehicle", params.vehicle);
 
@@ -140,6 +141,7 @@ export function useWbTrips(fuelWb: { liters: number; amount: number }) {
     setWbTotals({ count: 0, driver_rate: 0 });
     setWbGpsMileage(0);
     setWbDays(0);
+    setExcludedIdles(new Set());
   };
 
   return {

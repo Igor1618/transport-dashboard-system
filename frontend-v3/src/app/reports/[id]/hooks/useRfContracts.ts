@@ -22,8 +22,9 @@ export function useRfContracts(params: {
   reportLoaded: boolean;
   reportLoadedRef: React.MutableRefObject<boolean>;
   isNew: boolean;
+  manualRecoveryKm?: number;
 }) {
-  const { gpsMileage, wbGpsMileage, fuelRf, bonusEnabled, bonusRate, reportLoaded, reportLoadedRef, isNew } = params;
+  const { gpsMileage, wbGpsMileage, fuelRf, bonusEnabled, bonusRate, reportLoaded, reportLoadedRef, isNew, manualRecoveryKm = 0 } = params;
 
   // RF state
   const [rfContracts, setRfContracts] = useState<RfContract[]>([]);
@@ -48,11 +49,13 @@ export function useRfContracts(params: {
 
   // Computed
   const hasRfPeriods = rfPeriods.some(p => p.from && p.to);
-  const hasRfData = hasRfPeriods || (gpsMileage > 0 && wbGpsMileage > 0 && gpsMileage > wbGpsMileage);
-  const effectiveRfMileage = hasRfData ? (rfGpsMileage || 0) : (gpsMileage > 0 && wbGpsMileage > 0 ? Math.max(gpsMileage - wbGpsMileage, 0) : 0);
-  const rfDriverPay = hasRfData ? Math.round(effectiveRfMileage * (rfRatePerKm || 0)) : 0;
+  const hasRfData = hasRfPeriods || (rfContracts.length > 0 && gpsMileage > 0 && wbGpsMileage > 0 && gpsMileage > wbGpsMileage);
+  const effectiveRfMileage = hasRfData
+    ? (rfGpsMileage || 0) + manualRecoveryKm
+    : (gpsMileage > 0 && wbGpsMileage > 0 ? Math.max(gpsMileage - wbGpsMileage, 0) + manualRecoveryKm : (manualRecoveryKm > 0 ? manualRecoveryKm : 0));
+  const rfDriverPay = hasRfData || manualRecoveryKm > 0 ? Math.round(effectiveRfMileage * (rfRatePerKm || 0)) : 0;
   const rfDailyPay = (hasRfData || rfDaysManual) ? (rfDays || 0) * (rfDailyRate || 0) : 0;
-  const rfBonus = hasRfData && bonusEnabled ? Math.round(effectiveRfMileage * (bonusRate || 0)) : 0;
+  const rfBonus = (hasRfData || manualRecoveryKm > 0) && bonusEnabled ? Math.round(effectiveRfMileage * (bonusRate || 0)) : 0;
   const fuelUsedRf = fuelRf.liters || 0;
   const avgFuelConsumption = effectiveRfMileage > 0 && fuelUsedRf > 0
     ? (fuelUsedRf / effectiveRfMileage * 100).toFixed(2)
@@ -212,8 +215,9 @@ export function useRfContracts(params: {
   /** Auto-fill RF period from contracts, clamped to report dates */
   const autoFillPeriodFromContracts = (contracts: any[], reportDateFrom: string, reportDateTo: string) => {
     if (!contracts.length || !reportDateFrom || !reportDateTo) return;
-    const allStarts = contracts.map((c: any) => new Date(c.loading_date));
-    const allEnds = contracts.map((c: any) => new Date(c.unloading_date));
+    const allStarts = contracts.map((c: any) => new Date(c.loading_date || c.start_date || c.date)).filter((d: Date) => !isNaN(d.getTime()));
+    const allEnds = contracts.map((c: any) => new Date(c.unloading_date || c.end_date || c.date)).filter((d: Date) => !isNaN(d.getTime()));
+    if (allStarts.length === 0 || allEnds.length === 0) return;
     const repFrom = new Date(reportDateFrom.split('T')[0] + 'T00:00:00');
     const repTo = new Date(reportDateTo.split('T')[0] + 'T23:59:00');
     const rfFrom = new Date(Math.max(Math.min(...allStarts.map((d: Date) => d.getTime())), repFrom.getTime()));
@@ -224,7 +228,10 @@ export function useRfContracts(params: {
     setRfDateFrom(fromStr);
     setRfDateTo(toStr);
     // Пересчитать суточные по авто-периоду (обрезанному по отчёту)
-    const days = Math.round((rfTo.getTime() - rfFrom.getTime()) / 86400000) + 1;
+    // Используем только даты без времени для корректного подсчёта календарных дней
+    const dayFrom = new Date(fromStr + 'T00:00:00');
+    const dayTo = new Date(toStr + 'T00:00:00');
+    const days = Math.round((dayTo.getTime() - dayFrom.getTime()) / 86400000) + 1;
     if (days > 0) { setRfDays(days); setRfDaysManual(true); }
     console.log('[autoFill] RF period from contracts:', fromStr, '→', toStr, 'days:', days);
     return { from: fromStr, to: toStr };
@@ -232,7 +239,10 @@ export function useRfContracts(params: {
 
   /** Restore RF data from saved report */
   const restoreRfData = async (reportRow: any, details: any) => {
-    if (reportRow.mileage) setRfGpsMileage(reportRow.mileage);
+    // Only use total mileage as RF fallback when no RF periods are defined
+    if (reportRow.mileage && (!reportRow.rf_periods || !Array.isArray(reportRow.rf_periods) || reportRow.rf_periods.length === 0)) {
+      setRfGpsMileage(reportRow.mileage);
+    }
     if (reportRow.rf_periods && Array.isArray(reportRow.rf_periods) && reportRow.rf_periods.length > 0) {
       setRfPeriods(reportRow.rf_periods);
       const totalFromPeriods = reportRow.rf_periods.reduce((sum: number, p: any) => sum + (Number(p.mileage) || 0), 0);
@@ -268,16 +278,25 @@ export function useRfContracts(params: {
         console.log('[LOAD] rf_contracts_data:', details.rf_contracts_data.length, 'contracts');
         // Авто-заполнение периода если не сохранён
         if (!hasSavedPeriods && reportRow.date_from && reportRow.date_to) {
-          autoFillPeriodFromContracts(details.rf_contracts_data, reportRow.date_from, reportRow.date_to);
+          const autoFilled = autoFillPeriodFromContracts(details.rf_contracts_data, reportRow.date_from, reportRow.date_to);
+          // Fetch GPS mileage for the RF period specifically (not total report mileage)
+          if (autoFilled && reportRow.vehicle_number) {
+            try {
+              const res = await fetch(`/api/reports/telematics/mileage?vehicle=${encodeURIComponent(reportRow.vehicle_number)}&from=${autoFilled.from}&to=${autoFilled.to}`);
+              const data = await res.json();
+              if (data.mileage != null) setRfGpsMileage(data.mileage);
+            } catch (e) { console.error('[restoreRfData] RF GPS fetch error:', e); }
+          }
         }
-      } else if (reportRow.vehicle_number && reportRow.date_from && reportRow.date_to) {
+      } else if ((reportRow.vehicle_number || reportRow.driver_name) && reportRow.date_from && reportRow.date_to) {
         console.log('[LOAD] No rf_contracts_data, fetching from API...');
         try {
           const tf2 = reportRow.time_from ? reportRow.time_from.slice(0, 5) : '00:00';
           const tt2 = reportRow.time_to ? reportRow.time_to.slice(0, 5) : '23:59';
           const rfFrom = reportRow.date_from + 'T' + tf2;
           const rfTo = reportRow.date_to + 'T' + tt2;
-          const rfBp = new URLSearchParams({ vehicle: reportRow.vehicle_number, from: rfFrom, to: rfTo });
+          const rfBp = new URLSearchParams({ from: rfFrom, to: rfTo });
+        if (reportRow.vehicle_number) rfBp.append('vehicle', reportRow.vehicle_number);
           if (reportRow.driver_name) rfBp.append('driver', reportRow.driver_name);
           const rfR = await fetch(`/api/reports/contracts-rf-v2?${rfBp}`);
           const rfD = await rfR.json();
@@ -286,7 +305,30 @@ export function useRfContracts(params: {
             console.log('[LOAD] Fetched', rfD.contracts.length, 'RF contracts from API');
             // Авто-заполнение периода если не сохранён
             if (!hasSavedPeriods) {
-              autoFillPeriodFromContracts(rfD.contracts, reportRow.date_from, reportRow.date_to);
+              const autoFilled = autoFillPeriodFromContracts(rfD.contracts, reportRow.date_from, reportRow.date_to);
+              // Fetch GPS mileage for the RF period specifically
+              if (autoFilled && reportRow.vehicle_number) {
+                try {
+                  const gpsRes = await fetch(`/api/reports/telematics/mileage?vehicle=${encodeURIComponent(reportRow.vehicle_number)}&from=${autoFilled.from}&to=${autoFilled.to}`);
+                  const gpsData = await gpsRes.json();
+                  if (gpsData.mileage != null) setRfGpsMileage(gpsData.mileage);
+                } catch (e) { console.error('[restoreRfData] RF GPS fetch error:', e); }
+              }
+              // Auto-save rf_periods + contracts + vehicle to DB (Bug 4.2 fix: persist on backend)
+              if (autoFilled && reportRow.id) {
+                const vehicleFromContracts = rfD.contracts[0]?.vehicle_number || '';
+                fetch('/api/reports/update', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    id: reportRow.id,
+                    rf_periods: [{ from: autoFilled.from, to: autoFilled.to, mileage: 0 }],
+                    rf_contracts_data: rfD.contracts,
+                    vehicle_number: reportRow.vehicle_number || vehicleFromContracts || undefined
+                  })
+                }).then(() => console.log('[autoSave] rf_periods + contracts saved to DB'))
+                  .catch(e => console.warn('[autoSave] Failed:', e));
+              }
             }
           }
         } catch (e) { console.warn('[LOAD] RF fetch error:', e); }
