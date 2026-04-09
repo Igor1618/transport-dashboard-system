@@ -18,9 +18,10 @@ export function useFuel(gpsMileage: number) {
 
   // Computed
   const fuelUsed = fuelTotal.liters + (Number(fuelStartTank) || 0) - (Number(fuelEndTank) || 0);
-  const avgFuelConsumptionTotal = gpsMileage > 0 && fuelTotal.liters > 0
-    ? (fuelTotal.liters / gpsMileage * 100).toFixed(2)
-    : gpsMileage === 0 && fuelTotal.liters > 0 ? "—" : "0";
+  const hasTankData = Number(fuelStartTank) > 0 || Number(fuelEndTank) > 0;
+  const avgFuelConsumptionTotal = hasTankData && gpsMileage > 0
+    ? (fuelUsed > 0 ? (fuelUsed / gpsMileage * 100).toFixed(2) : fuelUsed < 0 ? "⚠️" : "0")
+    : (gpsMileage > 0 && fuelTotal.liters > 0 && !hasTankData) ? "—" : gpsMileage === 0 ? "—" : "0";
 
   /** Load fuel data from API */
   const loadFuel = async (params: {
@@ -52,21 +53,7 @@ export function useFuel(gpsMileage: number) {
       setFuelTotal({ liters: 0, amount: 0, count: 0 });
       setFuelTransactions([]);
     }
-    // Auto-update DB if editing existing report
-    if (params.isEditMode && params.fullReportId && detailData?.total) {
-      try {
-        await fetch('/api/reports/update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: params.fullReportId,
-            fuel_quantity: Number(detailData.total.liters) || 0,
-            fuel_amount: Number(detailData.total.amount) || 0,
-            user_name: params.userName || 'auto',
-          })
-        });
-      } catch (e) { console.warn('[fuel] auto-save error:', e); }
-    }
+    // Auto-save removed: fuel data should only be saved explicitly via "Сохранить" button
     setFuelLoading(false);
   };
 

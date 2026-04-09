@@ -314,21 +314,7 @@ export function useRfContracts(params: {
                   if (gpsData.mileage != null) setRfGpsMileage(gpsData.mileage);
                 } catch (e) { console.error('[restoreRfData] RF GPS fetch error:', e); }
               }
-              // Auto-save rf_periods + contracts + vehicle to DB (Bug 4.2 fix: persist on backend)
-              if (autoFilled && reportRow.id) {
-                const vehicleFromContracts = rfD.contracts[0]?.vehicle_number || '';
-                fetch('/api/reports/update', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    id: reportRow.id,
-                    rf_periods: [{ from: autoFilled.from, to: autoFilled.to, mileage: 0 }],
-                    rf_contracts_data: rfD.contracts,
-                    vehicle_number: reportRow.vehicle_number || vehicleFromContracts || undefined
-                  })
-                }).then(() => console.log('[autoSave] rf_periods + contracts saved to DB'))
-                  .catch(e => console.warn('[autoSave] Failed:', e));
-              }
+              // Auto-save removed: data should only be saved explicitly via "Сохранить" button
             }
           }
         } catch (e) { console.warn('[LOAD] RF fetch error:', e); }
