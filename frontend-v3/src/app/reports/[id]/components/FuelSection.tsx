@@ -19,6 +19,7 @@ interface FuelTransaction {
   amount: number;
   card_number?: string;
   station_name?: string;
+  is_return?: boolean;
 }
 
 interface FuelSectionProps {
@@ -263,25 +264,46 @@ export function FuelSection({
                 <span>📋 Детализация по дням ({fuelTransactions.length} записей)</span>
                 <span>{showFuelDetails ? '▲' : '▼'}</span>
               </button>
-              {showFuelDetails && (
-                <div className="mt-2 max-h-60 overflow-y-auto overflow-x-auto">
-                  <div className="min-w-[400px]">
-                    <div className="grid grid-cols-6 gap-1 text-xs text-slate-500 px-2 py-1 border-b border-slate-700 mb-1 sticky top-0 bg-slate-800">
-                      <span>Дата</span><span>Источник</span><span>АЗС</span><span>Карта</span><span className="text-right">Литры</span><span className="text-right">Сумма</span>
-                    </div>
-                    {fuelTransactions.map((t: any) => (
-                      <div key={t.id || `${t.date}-${t.time}-${t.card_number}-${t.liters}`} className="grid grid-cols-6 gap-1 bg-slate-900/50 rounded px-2 py-1 text-xs">
-                        <span className="text-slate-400">{t.date}</span>
-                        <span className="text-slate-500">{t.source}</span>
-                        <span className="text-slate-500 truncate" title={t.station_name}>{t.station_name || '—'}</span>
-                        <span className="text-slate-600 truncate" title={t.card_number}>{t.card_number || '—'}</span>
-                        <span className="text-cyan-400 text-right">{Number(t.liters).toLocaleString()} л</span>
-                        <span className="text-slate-300 text-right">{Number(t.amount).toLocaleString()} ₽</span>
+              {showFuelDetails && (() => {
+                const fills = fuelTransactions.filter(t => !t.is_return);
+                const returns = fuelTransactions.filter(t => t.is_return);
+                return (
+                  <div className="mt-2 max-h-60 overflow-y-auto overflow-x-auto">
+                    <div className="min-w-[400px]">
+                      <div className="grid grid-cols-6 gap-1 text-xs text-slate-500 px-2 py-1 border-b border-slate-700 mb-1 sticky top-0 bg-slate-800">
+                        <span>Дата</span><span>Источник</span><span>АЗС</span><span>Карта</span><span className="text-right">Литры</span><span className="text-right">Сумма</span>
                       </div>
-                    ))}
+                      {fills.map((t: any) => (
+                        <div key={t.id || `${t.date}-${t.time}-${t.card_number}-${t.liters}`} className="grid grid-cols-6 gap-1 bg-slate-900/50 rounded px-2 py-1 text-xs">
+                          <span className="text-slate-400">{t.date}</span>
+                          <span className="text-slate-500">{t.source}</span>
+                          <span className="text-slate-500 truncate" title={t.station_name}>{t.station_name || '—'}</span>
+                          <span className="text-slate-600 truncate" title={t.card_number}>{t.card_number || '—'}</span>
+                          <span className="text-cyan-400 text-right">{Number(t.liters).toLocaleString()} л</span>
+                          <span className="text-slate-300 text-right">{Number(t.amount).toLocaleString()} ₽</span>
+                        </div>
+                      ))}
+                      {returns.length > 0 && (
+                        <>
+                          <div className="text-xs text-red-400 px-2 py-1 mt-2 border-t border-red-900/30 bg-red-950/20 rounded">
+                            ↩ Возвраты ({returns.length})
+                          </div>
+                          {returns.map((t: any) => (
+                            <div key={t.id || `ret-${t.date}-${t.liters}`} className="grid grid-cols-6 gap-1 bg-red-950/30 border border-red-900/20 rounded px-2 py-1 text-xs">
+                              <span className="text-red-400">{t.date}</span>
+                              <span className="text-red-500">{t.source}</span>
+                              <span className="text-red-600 truncate" title={t.station_name}>{t.station_name || '—'}</span>
+                              <span className="text-red-700 truncate" title={t.card_number}>{t.card_number || '—'}</span>
+                              <span className="text-red-400 text-right">{Number(t.liters).toLocaleString()} л</span>
+                              <span className="text-red-500 text-right">{Number(t.amount).toLocaleString()} ₽</span>
+                            </div>
+                          ))}
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
 
