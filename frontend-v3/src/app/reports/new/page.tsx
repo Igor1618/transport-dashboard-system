@@ -7,7 +7,7 @@ import { ArrowLeft, Truck, User, Save, Loader2, Zap, Plus, Trash2, RefreshCw, Fu
 
 interface Driver { name: string; }
 interface Vehicle { number: string; trips?: number; vehicle_type?: string; }
-interface WbTrip { loading_date: string; loading_time?: string; unloading_date?: string; unloading_time?: string; route_name: string; driver_rate: number; }
+interface WbTrip { loading_date: string; loading_time?: string; unloading_date?: string; unloading_time?: string; route_name: string; driver_rate: number; rate_source?: string; is_closed?: boolean; }
 interface RfContract { number: string; date: string; route: string; loading_date?: string; unloading_date?: string; amount?: string; }
 interface FuelBySource { source: string; liters: number; amount: number; count: number; }
 interface Expense { name: string; amount: number; }
@@ -1145,9 +1145,18 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
                             →{shortDate(t.unloading_date || t.loading_date)}{t.unloading_time ? ` ${t.unloading_time.slice(0,5)}` : ''}
                             {tripHours > 0 && <span className="text-slate-500"> ({tripHours}ч)</span>}
                           </span>
-                          <span className="text-green-400 text-sm shrink-0 ml-2">{Number(t.driver_rate).toLocaleString()}</span>
+                          {t.rate_source === 'unclosed' ? (
+                            <span className="text-yellow-500 text-xs shrink-0 ml-2" title="Рейс не завершён в WB">⚠️ 0₽</span>
+                          ) : t.rate_source === 'tonnage_override' ? (
+                            <span className="text-orange-400 text-sm shrink-0 ml-2" title={`5т на маршруте *90→*45`}>⚠️ {Number(t.driver_rate).toLocaleString()}</span>
+                          ) : (
+                            <span className="text-green-400 text-sm shrink-0 ml-2">{Number(t.driver_rate).toLocaleString()}</span>
+                          )}
                         </div>
-                        <div className="text-slate-300 text-xs truncate mt-0.5">{t.route_name}</div>
+                        <div className="text-slate-300 text-xs truncate mt-0.5">
+                          {t.route_name}
+                          {t.rate_source === 'tonnage_override' && <span className="text-orange-400 ml-1">🔄 *90→*45</span>}
+                        </div>
                       </div>
                     </div>
                   );
@@ -1531,8 +1540,10 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
                     <div key={i} className="flex justify-between bg-slate-700/50 rounded px-3 py-2">
                       <div>
                         <div className="text-slate-300">{f.source || "Неизвестно"}</div>
-                        {cardNumber && <div className="text-xs text-slate-500">💳 {cardNumber}</div>}
-                        {transactionCards.length > 1 && <div className="text-xs text-slate-600">+ ещё {transactionCards.length - 1} карт</div>}
+                        {transactionCards.map((cn: string) => (
+                          <div key={cn} className="text-xs text-slate-500">💳 {cn}</div>
+                        ))}
+                        {!transactionCards.length && cardNumber && <div className="text-xs text-slate-500">💳 {cardNumber}</div>}
                         {!cardNumber && editingCards && (
                           <input 
                             type="text" 

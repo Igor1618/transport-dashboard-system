@@ -53,6 +53,7 @@ interface FuelSectionProps {
   avgFuelConsumptionTotal: string;
   autoRate: number | null;
   vehicleModel: string;
+  manualRecoveryKm?: number;
 }
 
 export function FuelSection({
@@ -64,8 +65,10 @@ export function FuelSection({
   hasFuelSensor, sensorLoading,
   fuelStartTank, setFuelStartTank, fuelEndTank, setFuelEndTank,
   fuelUsed, showFuelDetails, setShowFuelDetails,
-  avgFuelConsumptionTotal, autoRate, vehicleModel
+  avgFuelConsumptionTotal, autoRate, vehicleModel,
+  manualRecoveryKm = 0
 }: FuelSectionProps) {
+  const totalMileage = gpsMileage + manualRecoveryKm;
   return (
     <div className="bg-slate-800 rounded-xl p-4 border border-cyan-500/30">
       <div className="flex justify-between items-center mb-3">
@@ -86,8 +89,10 @@ export function FuelSection({
                 <div key={i} className="flex justify-between bg-slate-700/50 rounded px-3 py-2">
                   <div>
                     <div className="text-slate-300">{f.source || "Неизвестно"}</div>
-                    {cardNumber && <div className="text-xs text-slate-500">💳 {cardNumber}</div>}
-                    {transactionCards.length > 1 && <div className="text-xs text-slate-600">+ ещё {transactionCards.length - 1} карт</div>}
+                    {transactionCards.map((cn: string) => (
+                      <div key={cn} className="text-xs text-slate-500">💳 {cn}</div>
+                    ))}
+                    {!transactionCards.length && cardNumber && <div className="text-xs text-slate-500">💳 {cardNumber}</div>}
                     {!cardNumber && editingCards && (
                       <input
                         type="text"
@@ -138,16 +143,27 @@ export function FuelSection({
           </div>
 
           {/* Разбивка по периодам WB и РФ — таблица */}
-          {gpsMileage > 0 && (
+          {totalMileage > 0 && (
             <div className="mt-3 pt-3 border-t border-slate-700">
               <div className="text-sm text-slate-400 mb-2">📊 Расход по периодам:</div>
               {(() => {
+                const hasTankData = Number(fuelStartTank) > 0 || Number(fuelEndTank) > 0;
                 const wbMileage = wbGpsMileage > 0 ? wbGpsMileage : Math.max(0, gpsMileage - effectiveRfMileage);
                 const wbFuel = fuelWb.liters;
                 const rfFuel = fuelRf.liters;
-                const wbConsumption = wbMileage > 0 && wbFuel > 0 ? (wbFuel / wbMileage * 100) : 0;
-                const rfConsumptionVal = effectiveRfMileage > 0 && rfFuel > 0 ? (rfFuel / effectiveRfMileage * 100) : 0;
-                const totalConsumption = gpsMileage > 0 && fuelTotal.liters > 0 ? (fuelTotal.liters / gpsMileage * 100) : 0;
+                // When tank data available: distribute actual consumption proportionally
+                const totalFuelRefueled = fuelTotal.liters || 1;
+                const wbConsumed = hasTankData && fuelUsed > 0 ? fuelUsed * (wbFuel / totalFuelRefueled) : 0;
+                const rfConsumed = hasTankData && fuelUsed > 0 ? fuelUsed * (rfFuel / totalFuelRefueled) : 0;
+                const wbConsumption = hasTankData
+                  ? (wbMileage > 0 && wbConsumed > 0 ? (wbConsumed / wbMileage * 100) : 0)
+                  : 0; // no tank = show —
+                const rfConsumptionVal = hasTankData
+                  ? (effectiveRfMileage > 0 && rfConsumed > 0 ? (rfConsumed / effectiveRfMileage * 100) : 0)
+                  : 0;
+                const totalConsumption = hasTankData
+                  ? (totalMileage > 0 && fuelUsed > 0 ? (fuelUsed / totalMileage * 100) : (fuelUsed < 0 ? -1 : 0))
+                  : 0; // no tank = show —
                 const normKey = selectedSeason === 'Зима' ? 'fuel_norm_winter' : selectedSeason === 'Осень' ? 'fuel_norm_autumn' : 'fuel_norm_summer';
                 const norm = vehicleData?.[normKey as keyof typeof vehicleData] as number || 0;
                 const overThreshold = norm > 0 ? norm * 1.3 : 999;
@@ -168,7 +184,7 @@ export function FuelSection({
                           <td className="py-1 text-right text-slate-300">{wbMileage.toLocaleString()} км</td>
                           <td className="py-1 text-right text-slate-300">{Math.round(wbFuel).toLocaleString()} л</td>
                           <td className={`py-1 text-right font-bold ${wbConsumption > overThreshold ? 'text-red-400' : wbConsumption > 0 ? 'text-purple-400' : 'text-slate-500'}`}>
-                            {wbConsumption > 0 ? wbConsumption.toFixed(1) : '—'} {wbConsumption > overThreshold ? '⚠️' : ''}
+                            {!hasTankData ? '—' : wbConsumption > 0 ? wbConsumption.toFixed(1) : '—'} {hasTankData && wbConsumption > overThreshold ? '⚠️' : ''}
                           </td>
                         </tr>
                       )}
@@ -178,16 +194,24 @@ export function FuelSection({
                           <td className="py-1 text-right text-slate-300">{effectiveRfMileage.toLocaleString()} км</td>
                           <td className="py-1 text-right text-slate-300">{Math.round(rfFuel).toLocaleString()} л</td>
                           <td className={`py-1 text-right font-bold ${rfConsumptionVal > overThreshold ? 'text-red-400' : rfConsumptionVal > 0 ? 'text-orange-400' : 'text-slate-500'}`}>
-                            {rfConsumptionVal > 0 ? rfConsumptionVal.toFixed(1) : '—'} {rfConsumptionVal > overThreshold ? '⚠️' : ''}
+                            {!hasTankData ? '—' : rfConsumptionVal > 0 ? rfConsumptionVal.toFixed(1) : '—'} {hasTankData && rfConsumptionVal > overThreshold ? '⚠️' : ''}
                           </td>
+                        </tr>
+                      )}
+                      {manualRecoveryKm > 0 && (
+                        <tr className="border-t border-slate-700/50">
+                          <td className="py-1 text-fuchsia-400">🟣 Ручной</td>
+                          <td className="py-1 text-right text-slate-300">{manualRecoveryKm.toLocaleString()} км</td>
+                          <td className="py-1 text-right text-slate-500">—</td>
+                          <td className="py-1 text-right text-slate-500">—</td>
                         </tr>
                       )}
                       <tr className="border-t border-slate-600 font-bold">
                         <td className="py-1 text-white">ИТОГО</td>
-                        <td className="py-1 text-right text-white">{gpsMileage.toLocaleString()} км</td>
-                        <td className="py-1 text-right text-white">{Math.round(fuelTotal.liters).toLocaleString()} л</td>
-                        <td className={`py-1 text-right ${totalConsumption > overThreshold ? 'text-red-400' : 'text-yellow-400'}`}>
-                          {totalConsumption > 0 ? totalConsumption.toFixed(1) : '—'} {totalConsumption > overThreshold ? '⚠️' : ''}
+                        <td className="py-1 text-right text-white">{totalMileage.toLocaleString()} км</td>
+                        <td className="py-1 text-right text-white">{hasTankData ? `${Math.round(fuelUsed)} л` : `${Math.round(fuelTotal.liters).toLocaleString()} л`}{hasTankData && <span className="text-xs text-slate-500 ml-1" title="бак нач. + заправлено − бак кон.">факт</span>}</td>
+                        <td className={`py-1 text-right ${!hasTankData ? 'text-slate-500' : totalConsumption < 0 ? 'text-amber-400' : totalConsumption > overThreshold ? 'text-red-400' : totalConsumption > 50 ? 'text-yellow-400' : 'text-yellow-400'}`}>
+                          {!hasTankData ? '—' : totalConsumption < 0 ? <span title="Бак вырос больше чем заправлено. Проверьте остатки.">⚠️ Проверьте</span> : totalConsumption > 0 ? totalConsumption.toFixed(1) : '—'} {hasTankData && totalConsumption > overThreshold ? '⚠️' : ''}
                         </td>
                       </tr>
                       {norm > 0 && (
@@ -261,12 +285,13 @@ export function FuelSection({
             </div>
           )}
 
-          {gpsMileage > 0 && (
+          {totalMileage > 0 && (
             <div className="mt-3 pt-3 border-t border-slate-700">
               <div className="grid grid-cols-3 gap-2 text-center text-sm">
                 <div>
                   <div className="text-slate-400 text-xs">Пробег</div>
-                  <div className="font-semibold">{gpsMileage.toLocaleString()} км</div>
+                  <div className="font-semibold">{totalMileage.toLocaleString()} км</div>
+                  {manualRecoveryKm > 0 && <div className="text-xs text-fuchsia-400">+{manualRecoveryKm.toLocaleString()} ручной</div>}
                 </div>
                 <div>
                   <div className="text-slate-400 text-xs">Расход общий</div>

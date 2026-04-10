@@ -1525,8 +1525,10 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
                     <div key={i} className="flex justify-between bg-slate-700/50 rounded px-3 py-2">
                       <div>
                         <div className="text-slate-300">{f.source || "Неизвестно"}</div>
-                        {cardNumber && <div className="text-xs text-slate-500">💳 {cardNumber}</div>}
-                        {transactionCards.length > 1 && <div className="text-xs text-slate-600">+ ещё {transactionCards.length - 1} карт</div>}
+                        {transactionCards.map((cn: string) => (
+                          <div key={cn} className="text-xs text-slate-500">💳 {cn}</div>
+                        ))}
+                        {!transactionCards.length && cardNumber && <div className="text-xs text-slate-500">💳 {cardNumber}</div>}
                         {!cardNumber && editingCards && (
                           <input 
                             type="text" 
