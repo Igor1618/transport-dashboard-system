@@ -269,6 +269,23 @@ export default function NewReportPage() {
                 fuelStartTank, fuelEndTank,
               });
               restoreFuelData(r, details);
+              // Авто-загружаем живые транзакции чтобы не показывалась устаревшая детализация
+              const vehicleNum = r.vehicle_number || "";
+              const dfromAuto = r.date_from ? `${r.date_from}T${tf}` : "";
+              const dtoAuto = r.date_to ? `${r.date_to}T${tt}` : "";
+              if (vehicleNum && dfromAuto && dtoAuto) {
+                loadFuelHook({
+                  vehicleNumber: vehicleNum,
+                  dateFrom: dfromAuto,
+                  dateTo: dtoAuto,
+                  isDeleted: false,
+                  isEditMode: false,
+                  fullReportId: r.id,
+                  userName: undefined,
+                  rfPeriodsLength: 0,
+                  setFuelRf: undefined,
+                });
+              }
               // Восстановление GPS/WB данных
               if (details.gps_mileage) setGpsMileage(details.gps_mileage);
             }
