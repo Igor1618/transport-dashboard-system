@@ -1096,7 +1096,7 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
                 }}
                 placeholder="Номер машины..." className="flex-1 bg-slate-700 text-white rounded-lg px-3 py-2 border border-slate-600" />
               {vehicleNumber && (
-                <a href={`/vehicles?search=${encodeURIComponent(vehicleNumber)}`} target="_blank" rel="noopener noreferrer"
+                <a href={vehicleData?.id ? `/vehicles/${vehicleData.id}` : `/vehicles?search=${encodeURIComponent(vehicleNumber)}`} target="_blank" rel="noopener noreferrer"
                   className="text-cyan-400 hover:text-cyan-300 text-xl shrink-0" title="Карточка ТС">🚛</a>
               )}
             </div>
