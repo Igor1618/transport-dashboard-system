@@ -949,8 +949,10 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
           {isEditMode && reportStatus !== 'deleted' && (
             <>
               <button onClick={async () => {
-                if (!confirm("Пересчитать топливо и пробег из первичных данных?")) return;
+                if (!confirm("Сохранить текущие изменения и пересчитать топливо/пробег из первичных данных?")) return;
                 try {
+                  // Сначала сохраняем текущее состояние формы чтобы не потерять удалённые простои и пр.
+                  await handleSave();
                   const res = await fetch(`/api/reports/${fullReportId}/recalc`, { method: "POST" });
                   const data = await res.json();
                   if (data.changes) {
@@ -1448,7 +1450,7 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
                 <div key={p.id || i} className="flex items-center justify-between text-sm border-b border-slate-700/50 py-1.5">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     {(() => { const d = p.register_date?.slice(0,10); const inPeriod = d >= (dateFrom?.slice(0,10)||'') && d <= (dateTo?.slice(0,10)||''); return p.linked_to_this ? (inPeriod ? <span className="text-emerald-400 text-xs" title="Привязан к отчёту">✓</span> : <span className="text-amber-400 text-xs" title="Вне периода отчёта — проверьте привязку">⚠️</span>) : null; })()}
-                    <a href={"/salary/registers/" + p.register_id} className="text-blue-400 hover:underline truncate">Реестр №{p.register_number || p.tl_number}</a>
+                    <a href={"/salary/registers/" + p.register_id} target="_blank" className="text-blue-400 hover:underline">Р-{p.register_number || p.tl_number}</a>
                     <span className="text-slate-500 text-xs shrink-0">{p.register_date?.slice(0, 10)}</span>
                     {p.register_type && <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${(p.register_type || '').toLowerCase().includes('суточн') ? 'bg-yellow-600/20 text-yellow-400' : 'bg-blue-600/20 text-blue-400'}`}>{p.register_type}</span>}
                     <span className="text-slate-500 text-xs shrink-0">{p.organization === 'tl' ? 'ООО ТЛ' : p.organization === 'gp' ? 'ООО ГП' : p.organization || ''}</span>
