@@ -51,16 +51,18 @@ export function useWbTrips(fuelWb: { liters: number; amount: number }, isEditMod
     : "0";
 
   /** Load WB trips from API (called from handleAutoFill) */
-  const loadWbTrips = async (params: { driver: string; from: string; to: string; vehicle?: string }) => {
+  const loadWbTrips = async (params: { driver: string; from: string; to: string; vehicle?: string; report_id?: string }) => {
     if (!isEditMode) setExcludedIdles(new Set()); // Only clear excluded idles on fresh load, preserve in edit mode
     const baseParams = new URLSearchParams({ driver: params.driver, from: params.from, to: params.to });
     if (params.vehicle) baseParams.append("vehicle", params.vehicle);
+    if (params.report_id) baseParams.append("report_id", params.report_id);
 
     const wbRes = await fetch(`/api/reports/trips-detail-v2?${baseParams}`);
     let wbData = await wbRes.json();
     // Vehicle fallback: if no trips with vehicle, retry by driver only
     if ((!wbData.trips || wbData.trips.length === 0) && params.vehicle && params.driver) {
       const fallbackParams = new URLSearchParams({ driver: params.driver, from: params.from, to: params.to });
+      if (params.report_id) fallbackParams.append("report_id", params.report_id);
       const wbRes2 = await fetch(`/api/reports/trips-detail-v2?${fallbackParams}`);
       const wbData2 = await wbRes2.json();
       if (wbData2.trips?.length > 0) {

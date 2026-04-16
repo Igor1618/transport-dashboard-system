@@ -462,7 +462,7 @@ export default function NewReportPage() {
       if (vehicleNumber) baseParams.append("vehicle", vehicleNumber);
       
       // WB
-      const wbResult = await loadWbTrips({ driver: driverName, from: dateFrom, to: dateTo, vehicle: vehicleNumber || undefined });
+      const wbResult = await loadWbTrips({ driver: driverName, from: dateFrom, to: dateTo, vehicle: vehicleNumber || undefined, report_id: fullReportId });
       const fetchedWbGps = wbResult?.wbGpsMileage || 0;
 
       // Общий GPS (загружаем ДО RF, чтобы потом скорректировать RF = Total - WB)

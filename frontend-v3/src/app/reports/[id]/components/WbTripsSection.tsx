@@ -37,6 +37,11 @@ export function WbTripsSection({
       </div>
       {wbTrips.length > 0 ? (
         <>
+          {wbTrips.some(t => t.already_in_report) && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded p-2 mb-3 text-xs text-red-400">
+              ⚠️ {wbTrips.filter(t => t.already_in_report).length} рейс(ов) уже в другом отчёте
+            </div>
+          )}
           <div className="space-y-1 mb-3 text-sm">
             {wbTrips.map((t, i) => {
               let idleHours = 0;
@@ -58,10 +63,12 @@ export function WbTripsSection({
                       <span>⏸️ Простой: 8+{idleHours - 8} ч. (+{(idleHours - 8) * 100} ₽){excludedIdles.has(i) && ' (исключён)'}</span>
                       <button
                         onClick={() => {
-                          const newSet = new Set(excludedIdles);
-                          if (newSet.has(i)) newSet.delete(i);
-                          else newSet.add(i);
-                          setExcludedIdles(newSet);
+                          setExcludedIdles(prev => {
+                            const newSet = new Set(prev);
+                            if (newSet.has(i)) newSet.delete(i);
+                            else newSet.add(i);
+                            return newSet;
+                          });
                         }}
                         className={`ml-2 px-1 rounded ${excludedIdles.has(i) ? 'text-green-400 hover:text-green-300' : 'text-red-400 hover:text-red-300'}`}
                       >
@@ -79,13 +86,22 @@ export function WbTripsSection({
                         →{shortDate(t.unloading_date || t.loading_date)}{t.unloading_time ? ` ${t.unloading_time.slice(0,5)}` : ''}
                         {tripHours > 0 && <span className="text-slate-500"> ({tripHours}ч)</span>}
                       </span>
-                      <span className="text-green-400 text-sm shrink-0 ml-2">{Number(t.driver_rate).toLocaleString()}</span>
+                      {t.rate_source === 'unclosed' ? (
+                        <span className="text-yellow-500 text-xs shrink-0 ml-2" title="Рейс не завершён в WB, сумма не начисляется">⚠️ 0₽</span>
+                      ) : t.rate_source === 'tonnage_override' ? (
+                        <span className="text-orange-400 text-sm shrink-0 ml-2" title={`Пятитонка на маршруте *90. Тариф: ${t.original_rate?.toLocaleString()}→${Number(t.driver_rate).toLocaleString()} (маршрут ${t.override_to})`}>⚠️ {Number(t.driver_rate).toLocaleString()}</span>
+                      ) : (
+                        <span className="text-green-400 text-sm shrink-0 ml-2">{Number(t.driver_rate).toLocaleString()}</span>
+                      )}
                     </div>
                     <div className="text-slate-300 text-xs truncate mt-0.5">
                       {t.tender_id ? <span className="text-slate-500">[{t.tender_id}] </span> : null}
                       {t.route_name}
+                      {t.rate_source === 'tonnage_override' && <span className="text-orange-400 ml-1" title={`Маршрут *90→*45 (5т на маршруте 20т)`}>🔄 *90→*45</span>}
+                      {t.rate_source === 'unclosed' && <span className="text-yellow-500 ml-1" title="Рейс не завершён в WB (isClosed=0, totalPrice=null)">⏳ не завершён</span>}
                       {t.rate_source === 'fallback' && <span className="text-yellow-500 ml-1" title="Тариф по названию маршрута (fallback)">⚠️</span>}
                       {t.rate_source === 'none' && <span className="text-red-500 ml-1" title="Тариф не найден">❌</span>}
+                      {t.already_in_report && <span className="text-red-400 ml-1 bg-red-500/15 px-1 rounded" title={`Этот рейс уже сохранён в отчёте №${t.already_in_report}`}>📋 №{t.already_in_report}</span>}
                     </div>
                     {t.log_route && <div className="text-slate-500 text-[10px] truncate">{t.log_route}</div>}
                   </div>
@@ -134,23 +150,7 @@ export function WbTripsSection({
               )}
             </div>
           )}
-          {/* Топливные карты */}
-          {vehicleCards.length > 0 && (
-            <div className="bg-slate-700/30 rounded p-2 mb-2 text-xs">
-              <div className="text-slate-400 mb-1">Топливные карты:</div>
-              <div className="flex flex-wrap gap-1">
-                {vehicleCards.map((c: any, i: number) => (
-                  <span key={i} className="bg-slate-700/50 px-2 py-0.5 rounded cursor-pointer hover:bg-slate-600/50 inline-flex items-center gap-1"
-                    onClick={() => loadCardTransactions(c.card_number, c.source)}
-                    title={`${c.tx_count} запр., ${Number(c.total_liters||0).toFixed(0)} л`}>
-                    🔋 {c.source} ****{c.card_number.slice(-4)} ({Number(c.total_liters||0).toFixed(0)}л)
-                    <button onClick={(e) => {e.stopPropagation(); unbindFuelCard(c.card_number, c.source);}} className="ml-1 text-red-400 hover:text-red-300 text-[10px]">×</button>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          <button onClick={() => setShowCardModal(true)} className="text-xs text-cyan-400 hover:text-cyan-300 mb-2">+ Добавить карту</button>
+
           <div className="flex justify-between border-t border-slate-700 pt-2 font-bold">
             <span className="text-purple-400">{wbDays} дн. → {wbGpsMileage.toLocaleString()} км</span>
             <span className="text-green-400">{wbTotals.driver_rate.toLocaleString()} ₽</span>

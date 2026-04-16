@@ -22,6 +22,7 @@ export interface WbTrip {
   rate_source?: string;
   wb_id?: number;
   log_route?: string;
+  already_in_report?: string;
 }
 
 export interface RfContract {
