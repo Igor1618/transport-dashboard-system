@@ -90,10 +90,13 @@ export function useWbTrips(fuelWb: { liters: number; amount: number }, isEditMod
             body: JSON.stringify({ vehicle: params.vehicle, dates: uniqueDays })
           });
           const wbGpsData = await wbGpsRes.json();
-          setWbGpsMileage(wbGpsData.total || 0);
+          const wbGps = wbGpsData.total || 0;
+          setWbGpsMileage(wbGps);
+          return { wbGpsMileage: wbGps };
         }
       }
     }
+    return { wbGpsMileage: 0 };
   };
 
   /** Restore WB data from saved report */

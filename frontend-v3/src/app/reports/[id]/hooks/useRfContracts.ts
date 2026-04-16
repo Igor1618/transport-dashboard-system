@@ -167,6 +167,20 @@ export function useRfContracts(params: {
       }
     }
 
+    // Коррекция: Locarus не разделяет пробег внутри дня, поэтому RF GPS может включать WB-пробег
+    // Формула: RF = min(rfFromLocarus, totalGPS - wbGPS)
+    if (gpsMileage > 0 && wbGpsMileage > 0 && totalMileage > 0) {
+      const rfBySubtraction = Math.max(gpsMileage - wbGpsMileage, 0);
+      if (totalMileage > rfBySubtraction && rfBySubtraction > 0) {
+        console.log(`[loadRfGps] Correcting RF mileage: ${totalMileage} -> ${rfBySubtraction} (total=${gpsMileage} - wb=${wbGpsMileage})`);
+        totalMileage = rfBySubtraction;
+        // Для одного периода - ставим скорректированное значение
+        if (newPeriods.length === 1 && newPeriods[0].from) {
+          newPeriods[0] = { ...newPeriods[0], mileage: rfBySubtraction };
+        }
+      }
+    }
+
     setRfPeriods(newPeriods);
     setRfGpsMileage(totalMileage);
     console.log('[loadRfGps] TOTAL fuelRf:', totalFuelLiters, 'L', totalFuelAmount, '₽');

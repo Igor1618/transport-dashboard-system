@@ -460,7 +460,17 @@ export default function NewReportPage() {
       if (vehicleNumber) baseParams.append("vehicle", vehicleNumber);
       
       // WB
-      await loadWbTrips({ driver: driverName, from: dateFrom, to: dateTo, vehicle: vehicleNumber || undefined });
+      const wbResult = await loadWbTrips({ driver: driverName, from: dateFrom, to: dateTo, vehicle: vehicleNumber || undefined });
+      const fetchedWbGps = wbResult?.wbGpsMileage || 0;
+
+      // Общий GPS (загружаем ДО RF, чтобы потом скорректировать RF = Total - WB)
+      let fetchedTotalGps = 0;
+      if (vehicleNumber) {
+        const mileageRes = await fetch(`/api/reports/telematics/mileage?vehicle=${encodeURIComponent(vehicleNumber)}&from=${dateFrom.split('T')[0]}&to=${dateTo.split('T')[0]}`);
+        const mileageData = await mileageRes.json();
+        fetchedTotalGps = mileageData.mileage || 0;
+        setGpsMileage(fetchedTotalGps);
+      }
 
       // РФ
       const rfRes = await fetch(`/api/reports/contracts-rf-v2?${baseParams}`);
@@ -485,7 +495,15 @@ export default function NewReportPage() {
           try {
             const rfMileageRes = await fetch(`/api/reports/telematics/mileage?vehicle=${encodeURIComponent(vehicleNumber)}&from=${rfFromStr}&to=${rfToStr}`);
             const rfMileageData = await rfMileageRes.json();
-            const rfMil = rfMileageData.mileage || 0;
+            let rfMil = rfMileageData.mileage || 0;
+            // Коррекция: Locarus не разделяет пробег внутри дня, RF может включать WB-пробег
+            if (fetchedTotalGps > 0 && fetchedWbGps > 0 && rfMil > 0) {
+              const rfBySubtraction = Math.max(fetchedTotalGps - fetchedWbGps, 0);
+              if (rfMil > rfBySubtraction && rfBySubtraction > 0) {
+                console.log(`[autoFill] Correcting RF mileage: ${rfMil} -> ${rfBySubtraction} (total=${fetchedTotalGps} - wb=${fetchedWbGps})`);
+                rfMil = rfBySubtraction;
+              }
+            }
             setRfPeriods([{ from: rfFromStr, to: rfToStr, mileage: rfMil }]);
             setRfGpsMileage(rfMil);
             setRfDateFrom(rfFromStr);
@@ -505,11 +523,13 @@ export default function NewReportPage() {
       }
 
       if (vehicleNumber) {
-        // Общий GPS
-        const mileageRes = await fetch(`/api/reports/telematics/mileage?vehicle=${encodeURIComponent(vehicleNumber)}&from=${dateFrom.split('T')[0]}&to=${dateTo.split('T')[0]}`);
-        const mileageData = await mileageRes.json();
-        if (mileageData.mileage) setGpsMileage(mileageData.mileage);
-        
+        // Общий GPS уже загружен выше (fetchedTotalGps), но setGpsMileage мог быть вызван с 0 если vehicleNumber был пуст
+        if (!fetchedTotalGps) {
+          const mileageRes = await fetch(`/api/reports/telematics/mileage?vehicle=${encodeURIComponent(vehicleNumber)}&from=${dateFrom.split('T')[0]}&to=${dateTo.split('T')[0]}`);
+          const mileageData = await mileageRes.json();
+          if (mileageData.mileage) setGpsMileage(mileageData.mileage);
+        }
+
         // GPS по дням
         const gpsByDayRes = await fetch(`/api/reports/telematics/mileage-by-day?vehicle=${encodeURIComponent(vehicleNumber)}&from=${dateFrom.split('T')[0]}&to=${dateTo.split('T')[0]}`);
         const gpsByDayData = await gpsByDayRes.json();
