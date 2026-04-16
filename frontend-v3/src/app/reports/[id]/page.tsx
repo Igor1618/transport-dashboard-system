@@ -73,6 +73,7 @@ export default function NewReportPage() {
   const [vehicleSuggestions, setVehicleSuggestions] = useState<{vehicle_number: string; trips: number}[]>([]);
   // Порожний перегон
   const [relocations, setRelocations] = useState<{from: string; to: string; mileage: number; date: string}[]>([]);
+  const [relocationRate, setRelocationRate] = useState<number>(7); // Ставка порожнего ₽/км (дефолт 7)
   // Штрафы WB
   const [wbPenalties, setWbPenalties] = useState<{wb_trip_number: string; loading_date: string; route_name: string; has_penalty: boolean; penalty_pending: boolean; penalty_amount: number}[]>([]);
   // Popup прочий пробег
@@ -258,6 +259,7 @@ export default function NewReportPage() {
               if (details.deductions) setDeductions(details.deductions);
               if (details.fines) setFines(details.fines);
               if (details.relocations) setRelocations(details.relocations);
+              if (details.relocation_rate != null) setRelocationRate(Number(details.relocation_rate));
               if (details.wb_penalties) setWbPenalties(details.wb_penalties);
               if (details.payments) setPayments(details.payments);
               if (details.comment) setComment(details.comment);
@@ -608,7 +610,7 @@ export default function NewReportPage() {
   const totalDeductions = deductions.reduce((sum, d) => sum + (Number(d.amount) || 0), 0); // Удержания (−)
   const totalFines = fines.reduce((sum, f) => sum + (Number(f.amount) || 0), 0); // Штрафы (−)
   const relocationMileage = relocations.reduce((sum, r) => sum + (Number(r.mileage) || 0), 0);
-  const relocationPay = Math.round(relocationMileage * (rfRatePerKm || 0)); // Порожний по тарифу РФ
+  const relocationPay = Math.round(relocationMileage * (relocationRate || 0)); // Порожний по своей ставке
   const totalDriverPay = (Number(wbTotals.driver_rate) || 0) + rfDriverPay + rfDailyPay + rfBonus + (totalIdleData.amount || 0) + relocationPay;
   const dailyVedTotal = (salaryData?.payments || []).filter((p: any) => (p.register_type || '').toLowerCase().includes('суточн')).reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
   const totalToPay = totalDriverPay + totalExpenses + totalExtraWorks - totalPayments - totalDeductions - totalFines - dailyVedTotal;
@@ -701,7 +703,7 @@ export default function NewReportPage() {
 Тариф: *${rfRatePerKm}* ₽/км
 -------------
 *Начислено:*
-${rfDriverPay > 0 ? `Начисление за км: ${rfDriverPay.toLocaleString("ru-RU")} ₽\n` : ""}${rfBonus > 0 ? `Премия ТК (${effectiveRfMileage}×${bonusRate}): ${rfBonus.toLocaleString("ru-RU")} ₽\n` : ""}${rfDailyPay > 0 ? `Суточные (${rfDays} дн × ${rfDailyRate}): ${rfDailyPay.toLocaleString("ru-RU")} ₽\n` : ""}${wbTotals.driver_rate > 0 ? `WB рейсы: ${wbTotals.driver_rate.toLocaleString("ru-RU")} ₽\n` : ""}${totalIdleData.amount > 0 ? `Простой (${totalIdleData.paidHours} ч.): ${totalIdleData.amount.toLocaleString("ru-RU")} ₽\n` : ""}${wbPenalties.length > 0 ? `🚨 Штрафы WB (инфо):\n${wbPenalties.map(p => `  #${p.wb_trip_number} ${p.loading_date?.slice(0,10)}: ${(Number(p.penalty_amount)||0).toLocaleString("ru-RU")} ₽${p.penalty_pending ? ' (на рассм.)' : ''}`).join("\n")}\n  Итого: ${wbPenalties.reduce((s,p)=>s+(Number(p.penalty_amount)||0),0).toLocaleString("ru-RU")} ₽\n` : ""}${relocations.length > 0 ? `🚛 Порожний перегон:\n${relocations.map(r => `  ${r.from} → ${r.to}: ${r.mileage} км (${r.date})`).join("\n")}\n  Итого: ${relocationMileage} км × ${rfRatePerKm} = ${relocationPay.toLocaleString("ru-RU")} ₽\n` : ""}${extraWorks.map(w => `${w.name} (${w.count}×${w.rate}): ${(w.count*w.rate).toLocaleString("ru-RU")} ₽`).join("\n")}${extraWorks.length > 0 ? "\n" : ""}${expenses.map(e => `${e.name}: +${(Number(e.amount) || 0).toLocaleString("ru-RU")} ₽`).join("\n")}${expenses.length > 0 ? "\n" : ""}${deductions.map(d => `💸 Удержание "${d.name}": -${(Number(d.amount) || 0).toLocaleString("ru-RU")} ₽`).join("\n")}${deductions.length > 0 ? "\n" : ""}${fines.map(f => `⚠️ Штраф "${f.name}": -${(Number(f.amount) || 0).toLocaleString("ru-RU")} ₽`).join("\n")}${fines.length > 0 ? "\n" : ""}${payments.map(p => `${p.type === "advance" ? "Аванс" : p.type === "daily" ? "Суточные выданные" : p.description || "Выдано"}: -${(Number(p.amount) || 0).toLocaleString("ru-RU")} ₽`).join("\n")}${payments.length > 0 ? "\n" : ""}-------------
+${rfDriverPay > 0 ? `Начисление за км: ${rfDriverPay.toLocaleString("ru-RU")} ₽\n` : ""}${rfBonus > 0 ? `Премия ТК (${effectiveRfMileage}×${bonusRate}): ${rfBonus.toLocaleString("ru-RU")} ₽\n` : ""}${rfDailyPay > 0 ? `Суточные (${rfDays} дн × ${rfDailyRate}): ${rfDailyPay.toLocaleString("ru-RU")} ₽\n` : ""}${wbTotals.driver_rate > 0 ? `WB рейсы: ${wbTotals.driver_rate.toLocaleString("ru-RU")} ₽\n` : ""}${totalIdleData.amount > 0 ? `Простой (${totalIdleData.paidHours} ч.): ${totalIdleData.amount.toLocaleString("ru-RU")} ₽\n` : ""}${wbPenalties.length > 0 ? `🚨 Штрафы WB (инфо):\n${wbPenalties.map(p => `  #${p.wb_trip_number} ${p.loading_date?.slice(0,10)}: ${(Number(p.penalty_amount)||0).toLocaleString("ru-RU")} ₽${p.penalty_pending ? ' (на рассм.)' : ''}`).join("\n")}\n  Итого: ${wbPenalties.reduce((s,p)=>s+(Number(p.penalty_amount)||0),0).toLocaleString("ru-RU")} ₽\n` : ""}${relocations.length > 0 ? `🚛 Порожний перегон:\n${relocations.map(r => `  ${r.from} → ${r.to}: ${r.mileage} км (${r.date})`).join("\n")}\n  Итого: ${relocationMileage} км × ${relocationRate} = ${relocationPay.toLocaleString("ru-RU")} ₽\n` : ""}${extraWorks.map(w => `${w.name} (${w.count}×${w.rate}): ${(w.count*w.rate).toLocaleString("ru-RU")} ₽`).join("\n")}${extraWorks.length > 0 ? "\n" : ""}${expenses.map(e => `${e.name}: +${(Number(e.amount) || 0).toLocaleString("ru-RU")} ₽`).join("\n")}${expenses.length > 0 ? "\n" : ""}${deductions.map(d => `💸 Удержание "${d.name}": -${(Number(d.amount) || 0).toLocaleString("ru-RU")} ₽`).join("\n")}${deductions.length > 0 ? "\n" : ""}${fines.map(f => `⚠️ Штраф "${f.name}": -${(Number(f.amount) || 0).toLocaleString("ru-RU")} ₽`).join("\n")}${fines.length > 0 ? "\n" : ""}${payments.map(p => `${p.type === "advance" ? "Аванс" : p.type === "daily" ? "Суточные выданные" : p.description || "Выдано"}: -${(Number(p.amount) || 0).toLocaleString("ru-RU")} ₽`).join("\n")}${payments.length > 0 ? "\n" : ""}-------------
 *Всего начислено: ${totalToPay.toLocaleString("ru-RU")} ₽*
 *Заработок за км: ${earnPerKm} ₽/км*
 ${comment ? `Комментарий: ${comment}` : ""}`;
@@ -886,6 +888,7 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
             extra_work: totalExtraWorks || 0,
             compensation: totalExpenses || 0,
             relocation: relocationPay || 0,
+            relocation_rate: relocationRate,
             deductions: totalDeductions || 0,
             fines: totalFines || 0,
             daily_ved: -dailyVedTotal,
@@ -1522,6 +1525,8 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
           relocations={relocations}
           setRelocations={setRelocations}
           rfRatePerKm={rfRatePerKm}
+          relocationRate={relocationRate}
+          setRelocationRate={setRelocationRate}
           relocationMileage={relocationMileage}
           relocationPay={relocationPay}
         />
@@ -1557,7 +1562,7 @@ ${comment ? `Комментарий: ${comment}` : ""}`;
             { label: 'РФ', amount: rfDriverPay, color: 'text-blue-400', prefix: '+', detail: `${effectiveRfMileage.toLocaleString()}×${rfRatePerKm}` },
             { label: 'Премия ТК', amount: rfBonus, color: 'text-emerald-400', prefix: '+' },
             { label: 'Суточные', amount: rfDailyPay, color: 'text-yellow-400', prefix: '+', detail: `${rfDays}×${rfDailyRate}` },
-            { label: '🚛 Порожний', amount: relocationPay, color: 'text-orange-300', prefix: '+', detail: `${relocationMileage}×${rfRatePerKm}` },
+            { label: '🚛 Порожний', amount: relocationPay, color: 'text-orange-300', prefix: '+', detail: `${relocationMileage}×${relocationRate}` },
             { label: 'Доп. работы', amount: totalExtraWorks, color: 'text-green-400', prefix: '+' },
             { label: 'Компенсация', amount: totalExpenses, color: 'text-cyan-400', prefix: '+' },
             { label: '💸 Удержания', amount: totalDeductions, color: 'text-red-400', prefix: '−' },
