@@ -17,7 +17,7 @@ interface Register {
   id: number; register_number: string; register_date: string; organization: string;
   inn: string; total_amount: number; employees_count: number; file_name: string;
   uploaded_at: string; tl_number: number; records_count: number;
-  matched_count: number; register_type: string; comment: string;
+  matched_count: number; register_type: string; comment: string; period: string | null;
 }
 
 interface PreviewEmployee {
@@ -45,13 +45,29 @@ function typeLabel(t: string) {
   if (!t) return "—";
   if (t === "суточные") return "🌙 Суточные";
   if (t === "зарплата") return "💰 Зарплата";
+  if (t === "возмещение") return "🔄 Возмещение";
+  if (t === "исключить" || t === "исключен") return "🚫 Исключён";
+  if (t === "больничный") return "🏥 Больничный";
+  if (t === "увольнение") return "📤 Увольнение";
   return t;
 }
 function typeBadge(t: string) {
   if (!t) return "text-slate-500";
   if (t === "суточные") return "text-blue-400";
+  if (t === "возмещение") return "text-orange-400";
+  if (t === "исключить" || t === "исключен") return "text-red-400";
+  if (t === "больничный") return "text-teal-400";
+  if (t === "увольнение") return "text-pink-400";
   return "text-green-400";
 }
+const ALL_TYPES = [
+  { value: "зарплата", label: "💰 Зарплата" },
+  { value: "суточные", label: "🌙 Суточные" },
+  { value: "возмещение", label: "🔄 Возмещение" },
+  { value: "больничный", label: "🏥 Больничный" },
+  { value: "увольнение", label: "📤 Увольнение" },
+  { value: "исключить", label: "🚫 Исключить" },
+];
 
 export default function SalaryRegistersPage() {
   const [registers, setRegisters] = useState<Register[]>([]);
@@ -168,10 +184,57 @@ export default function SalaryRegistersPage() {
     load();
   };
 
+  // Generate period options: last 6 months + current
+  const periodOptions = (() => {
+    const opts: { value: string; label: string }[] = [];
+    const now = new Date();
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const v = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const months = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"];
+      opts.push({ value: v, label: `${months[d.getMonth()]} ${d.getFullYear()}` });
+    }
+    return opts;
+  })();
+
+  const handlePeriodChange = async (id: number, newPeriod: string, e: React.MouseEvent | React.ChangeEvent) => {
+    e.stopPropagation();
+    try {
+      const r = await fetch(`/api/salary/registers/${id}`, {
+        method: "PATCH",
+        headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify({ period: newPeriod || null }),
+      });
+      if (!r.ok) throw new Error("Failed to update");
+      setRegisters(prev => prev.map(reg => reg.id === id ? { ...reg, period: newPeriod || null } : reg));
+    } catch (err) {
+      alert("Ошибка при смене периода");
+    }
+  };
+
+  const handleTypeChange = async (id: number, newType: string, e: React.MouseEvent | React.ChangeEvent) => {
+    e.stopPropagation();
+    try {
+      const r = await fetch(`/api/salary/registers/${id}`, {
+        method: "PATCH",
+        headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify({ register_type: newType }),
+      });
+      if (!r.ok) throw new Error("Failed to update");
+      setRegisters(prev => prev.map(reg => reg.id === id ? { ...reg, register_type: newType } : reg));
+    } catch (err) {
+      alert("Ошибка при смене типа");
+    }
+  };
+
   const stats = {
     total: registers.length,
     salary: registers.filter(r => r.register_type === "зарплата").length,
     daily: registers.filter(r => r.register_type === "суточные").length,
+    reimbursement: registers.filter(r => r.register_type === "возмещение").length,
+    sick: registers.filter(r => r.register_type === "больничный").length,
+    dismissal: registers.filter(r => r.register_type === "увольнение").length,
+    excluded: registers.filter(r => r.register_type === "исключить" || r.register_type === "исключен").length,
     totalSum: registers.reduce((s, r) => s + Number(r.total_amount || 0), 0),
   };
 
@@ -202,11 +265,15 @@ export default function SalaryRegistersPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
           {[
             { v: stats.total, l: "Всего реестров", c: "text-white" },
             { v: stats.salary, l: "💰 Зарплата", c: "text-green-400" },
             { v: stats.daily, l: "🌙 Суточные", c: "text-blue-400" },
+            { v: stats.reimbursement, l: "🔄 Возмещение", c: "text-orange-400" },
+            { v: stats.sick, l: "🏥 Больничный", c: "text-teal-400" },
+            { v: stats.dismissal, l: "📤 Увольнение", c: "text-pink-400" },
+            { v: stats.excluded, l: "🚫 Исключён", c: "text-red-400" },
             { v: fmtMoney(stats.totalSum), l: "Сумма всего", c: "text-yellow-400" },
           ].map((s, i) => (
             <div key={i} className="bg-slate-800 rounded-xl p-3 border border-slate-700 text-center">
@@ -218,7 +285,7 @@ export default function SalaryRegistersPage() {
 
         {/* Type filter */}
         <div className="flex gap-2">
-          {[{ v: "all", l: "Все" }, { v: "зарплата", l: "💰 Зарплата" }, { v: "суточные", l: "🌙 Суточные" }].map(f => (
+          {[{ v: "all", l: "Все" }, { v: "зарплата", l: "💰 Зарплата" }, { v: "суточные", l: "🌙 Суточные" }, { v: "возмещение", l: "🔄 Возмещение" }, { v: "больничный", l: "🏥 Больничный" }, { v: "увольнение", l: "📤 Увольнение" }, { v: "исключить", l: "🚫 Исключён" }].map(f => (
             <button key={f.v} onClick={() => setTypeFilter(f.v)}
               className={`px-3 py-1.5 rounded text-sm ${typeFilter === f.v ? "bg-blue-600 text-white" : "bg-slate-800 border border-slate-700 text-slate-400 hover:text-white"}`}>
               {f.l}
@@ -245,12 +312,11 @@ export default function SalaryRegistersPage() {
                   <th className="px-4 py-3 text-left">Реестр №</th>
                   <th className="px-4 py-3 text-left">Дата</th>
                   <th className="px-4 py-3 text-left">Тип</th>
+                  <th className="px-4 py-3 text-left">Период</th>
                   <th className="px-4 py-3 text-left">Фирма</th>
-                  <th className="px-4 py-3 text-left">Организация</th>
                   <th className="px-4 py-3 text-right">Сумма</th>
                   <th className="px-4 py-3 text-right">Записей</th>
                   <th className="px-4 py-3 text-center">Сопост.</th>
-                  <th className="px-4 py-3 text-left">Файл</th>
                   <th className="px-4 py-3 text-center">Действие</th>
                 </tr>
               </thead>
@@ -265,9 +331,30 @@ export default function SalaryRegistersPage() {
                       <td className="px-4 py-3 font-mono text-slate-400">{reg.tl_number ?? "—"}</td>
                       <td className="px-4 py-3 font-bold text-white">{reg.register_number || "—"}</td>
                       <td className="px-4 py-3 text-slate-300">{fmtDate(reg.register_date)}</td>
-                      <td className={`px-4 py-3 text-xs font-semibold ${typeBadge(reg.register_type)}`}>{typeLabel(reg.register_type)}</td>
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <select
+                          value={reg.register_type || ""}
+                          onChange={e => handleTypeChange(reg.id, e.target.value, e)}
+                          className={`bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs font-semibold cursor-pointer hover:border-blue-500 ${typeBadge(reg.register_type)}`}
+                        >
+                          {ALL_TYPES.map(t => (
+                            <option key={t.value} value={t.value}>{t.label}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <select
+                          value={reg.period || ""}
+                          onChange={e => handlePeriodChange(reg.id, e.target.value, e)}
+                          className="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-xs cursor-pointer hover:border-blue-500 text-slate-300"
+                        >
+                          <option value="">— авто —</option>
+                          {periodOptions.map(p => (
+                            <option key={p.value} value={p.value}>{p.label}</option>
+                          ))}
+                        </select>
+                      </td>
                       <td className="px-4 py-3 text-xs text-purple-300 font-medium">{orgLabel(reg.organization)}</td>
-                      <td className="px-4 py-3 text-slate-300 text-xs">{shortOrg(reg.inn ? (reg.inn === "6679185730" ? "ООО ТРАНСПОРТНАЯ ЛОГИСТИКА" : reg.inn === "4345525302" ? "ООО ГРУЗОВЫЕ ПЕРЕВОЗКИ" : reg.organization) : reg.organization)}</td>
                       <td className="px-4 py-3 text-right font-mono text-yellow-300">{fmtMoney(reg.total_amount)}</td>
                       <td className="px-4 py-3 text-right text-slate-400">{total || "—"}</td>
                       <td className="px-4 py-3 text-center text-xs">
@@ -277,7 +364,6 @@ export default function SalaryRegistersPage() {
                           </span>
                         ) : "—"}
                       </td>
-                      <td className="px-4 py-3 text-slate-500 text-xs">{reg.file_name}</td>
                       <td className="px-4 py-3 text-center">
                         <button onClick={e => { e.stopPropagation(); handleDelete(reg.id); }}
                           className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded hover:bg-red-900/30">✕</button>
@@ -315,7 +401,7 @@ export default function SalaryRegistersPage() {
                     <td className="px-3 py-2 text-right font-mono text-yellow-300">{Number(r.amount||0).toLocaleString('ru-RU')} ₽</td>
                     <td className="px-3 py-2 text-blue-400">№{r.tl_number || r.register_number}</td>
                     <td className="px-3 py-2 text-xs">{r.register_date ? new Date(r.register_date).toLocaleDateString('ru-RU') : '—'}</td>
-                    <td className="px-3 py-2 text-xs">{r.register_type === 'суточные' ? '🌙 Суточные' : '💰 Зарплата'}</td>
+                    <td className={`px-3 py-2 text-xs ${typeBadge(r.register_type)}`}>{typeLabel(r.register_type)}</td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -443,8 +529,9 @@ export default function SalaryRegistersPage() {
                       <label className="text-xs text-slate-400 mb-1 block">📋 Тип ведомости</label>
                       <select value={modalType} onChange={e => setModalType(e.target.value)}
                         className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm">
-                        <option value="суточные">🌙 Суточные</option>
-                        <option value="зарплата">💰 Зарплата</option>
+                        {ALL_TYPES.map(t => (
+                          <option key={t.value} value={t.value}>{t.label}</option>
+                        ))}
                       </select>
                       {previewData.auto_type !== modalType && (
                         <div className="text-xs text-yellow-400 mt-1">⚠️ Авто: {previewData.auto_type} (изменено вручную)</div>
