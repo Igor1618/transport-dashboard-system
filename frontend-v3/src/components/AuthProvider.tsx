@@ -43,26 +43,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
-      const u = JSON.parse(storedUser);
-      setUser(u);
-      if (u.role === 'superadmin') {
-        const saved = localStorage.getItem('emulated_role');
-        if (saved && saved !== 'superadmin') setEmulatedRole(saved);
-      }
-      // Check PIN status
-      fetch('/api/auth/pin-status?user_id=' + u.id)
-        .then(r => r.json())
-        .then(d => {
-          if (d.needs_setup) { setPinNeeded(true); setPinSetup(true); }
-          else if (d.pin_required) { setPinNeeded(true); setPinSetup(false); }
-          else { setPinVerified(true); }
+      // Verify session is still valid on the server before trusting localStorage
+      fetch('/api/auth/me', { credentials: 'include' })
+        .then(r => {
+          if (r.ok) return r.json();
+          throw new Error('Session invalid');
+        })
+        .then(data => {
+          if (!data.user) throw new Error('No user');
+          const u = data.user;
+          setUser(u);
+          localStorage.setItem('user', JSON.stringify(u));
+          if (u.role === 'superadmin') {
+            const saved = localStorage.getItem('emulated_role');
+            if (saved && saved !== 'superadmin') setEmulatedRole(saved);
+          }
+          // Check PIN status
+          return fetch('/api/auth/pin-status?user_id=' + u.id)
+            .then(r => r.json())
+            .then(d => {
+              if (d.needs_setup) { setPinNeeded(true); setPinSetup(true); }
+              else if (d.pin_required) { setPinNeeded(true); setPinSetup(false); }
+              else { setPinVerified(true); }
+              setPinChecked(true);
+            })
+            .catch(() => { setPinVerified(true); setPinChecked(true); });
+        })
+        .catch(() => {
+          // Session expired or invalid — force re-login
+          localStorage.removeItem('user');
+          localStorage.removeItem('userRole');
+          localStorage.removeItem('emulated_role');
+          setUser(null);
           setPinChecked(true);
         })
-        .catch(() => { setPinVerified(true); setPinChecked(true); });
+        .finally(() => setLoading(false));
     } else {
       setPinChecked(true);
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   // Activity tracker — update last_activity_at every 5 min

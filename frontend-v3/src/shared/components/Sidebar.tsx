@@ -4,11 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { 
-  LayoutDashboard, Truck, Users, FileText, Upload, 
+  LayoutDashboard, Truck, Users, FileText, Upload,
   BarChart3, TrendingUp, Menu, X, LogOut, DollarSign, Fuel, Wallet, MapPin, Wrench, Bug, Brain,
-  Navigation,
+  Navigation, AlertTriangle,
   Package,
-  Calendar, Activity,
+  Calendar, Activity, Award,
 } from "lucide-react";
 import { useHotkeys } from "@/shared/hooks/useHotkeys";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -33,12 +33,15 @@ const menuItems = [
   { href: "/tenders", label: "Тендеры WB", icon: BarChart3, roles: ["director", "manager", "logist"] },
   { href: "/logistics/planning", label: "Планирование", icon: Calendar, roles: ["director", "logist", "dispatcher"] },
   { href: "/pnl", label: "P&L", icon: DollarSign, roles: ["director"] },
+  { href: "/pnl/vehicles", label: "P&L Машины", icon: TrendingUp, roles: ["director"] },
+  { href: "/pnl/settings", label: "P&L Расходы", icon: DollarSign, roles: ["director"] },
+  { href: "/pnl/alerts", label: "P&L Алерты", icon: AlertTriangle, roles: ["director"] },
   { href: "/analytics", label: "AI-аналитика", icon: Brain, roles: ["director"] },
   { href: "/analytics/utilization", label: "Утилизация парка", icon: Activity, roles: ["director", "manager"] },
   { href: "/ati/loads", label: "ATI Грузы", icon: Truck, roles: ["director", "logist", "dispatcher"] },
   { href: "/geofences", label: "Геозоны", icon: MapPin, roles: ["director", "logist", "dispatcher"] },
   { href: "/parts", label: "Склад запчастей", icon: Package, roles: ["director", "mechanic"] },
-  { href: "/analytics/drivers", label: "Рейтинг водителей", icon: Users, roles: ["director", "accountant"] },
+  { href: "/analytics/rating", label: "Рейтинг", icon: Award, roles: ["director", "accountant"] },
   { href: "/admin/errors", label: "Ошибки", icon: Bug, roles: ["director"] },
   { href: "/users", label: "Пользователи", icon: Users, roles: ["director"] },
 ];

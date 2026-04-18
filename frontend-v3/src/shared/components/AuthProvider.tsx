@@ -34,9 +34,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+      // Verify session is still valid on the server
+      fetch('/api/auth/me', { credentials: 'include' })
+        .then(r => {
+          if (r.ok) return r.json();
+          throw new Error('Session invalid');
+        })
+        .then(data => {
+          if (data.user) {
+            setUser(data.user);
+            localStorage.setItem('user', JSON.stringify(data.user));
+          } else {
+            throw new Error('No user in response');
+          }
+        })
+        .catch(() => {
+          localStorage.removeItem('user');
+          localStorage.removeItem('userRole');
+          setUser(null);
+        })
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {

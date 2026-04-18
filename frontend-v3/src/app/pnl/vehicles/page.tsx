@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown,
-  ChevronDown, Truck, TrendingUp, TrendingDown, ExternalLink, Fuel
+  ChevronDown, Truck, TrendingUp, TrendingDown, ExternalLink, Fuel, FileText
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
@@ -109,15 +109,15 @@ const fmtK = (n: number) => {
 };
 const fmtMoney = (n: number) => Number(n).toLocaleString('ru-RU', { maximumFractionDigits: 0 });
 const shortMonth = (key: string) => {
-  const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const months = ['', 'Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
   const m = parseInt(key.split('-')[1]);
   return months[m] || key;
 };
 
 const classColors: Record<string, { bg: string; text: string; label: string; emoji: string }> = {
-  cash_cow: { bg: 'bg-green-900/50', text: 'text-green-400', label: 'Cash Cow', emoji: '\uD83D\uDFE2' },
-  low_margin: { bg: 'bg-yellow-900/50', text: 'text-yellow-400', label: 'Low Margin', emoji: '\uD83D\uDFE1' },
-  loss_maker: { bg: 'bg-red-900/50', text: 'text-red-400', label: 'Loss Maker', emoji: '\uD83D\uDD34' },
+  cash_cow: { bg: 'bg-green-900/50', text: 'text-green-400', label: 'Прибыльные', emoji: '\uD83D\uDFE2' },
+  low_margin: { bg: 'bg-yellow-900/50', text: 'text-yellow-400', label: 'Низкая маржа', emoji: '\uD83D\uDFE1' },
+  loss_maker: { bg: 'bg-red-900/50', text: 'text-red-400', label: 'Убыточные', emoji: '\uD83D\uDD34' },
 };
 
 type SortKey = 'fleet_contribution' | 'net_revenue' | 'fuel_liters_per_100km' | 'commercial_utilization' | 'empty_pct' | 'vehicle_plate' | 'trip_contribution';
@@ -137,10 +137,10 @@ function VehicleExpanded({ plate, monthKey }: { plate: string; monthKey: string 
 
   if (loading) return (
     <tr><td colSpan={10} className="p-6 text-center text-slate-500">
-      <RefreshCw size={18} className="animate-spin inline mr-2" /> Loading...
+      <RefreshCw size={18} className="animate-spin inline mr-2" /> Загрузка...
     </td></tr>
   );
-  if (!detail) return <tr><td colSpan={10} className="p-4 text-center text-red-400">Error loading detail</td></tr>;
+  if (!detail) return <tr><td colSpan={10} className="p-4 text-center text-red-400">Ошибка загрузки деталей</td></tr>;
 
   const s = detail.summary;
 
@@ -186,33 +186,49 @@ function VehicleExpanded({ plate, monthKey }: { plate: string; monthKey: string 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Summary metrics */}
             <div className="bg-slate-800/50 rounded-lg p-3">
-              <h4 className="text-sm font-bold text-white mb-2">Summary</h4>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-bold text-white">Итоги</h4>
+                {s.driver_report_id && (
+                  <a href={`/reports/${encodeURIComponent(s.driver_report_id)}`}
+                    className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                    onClick={(e) => e.stopPropagation()}>
+                    <FileText size={12} /> Отчёт водителя
+                    <ExternalLink size={10} />
+                  </a>
+                )}
+              </div>
               <div className="grid grid-cols-3 gap-2 text-xs">
-                <div><span className="text-slate-500">Net Revenue</span><div className="text-blue-400 font-bold">{fmtMoney(s.net_revenue)} \u20BD</div></div>
-                <div><span className="text-slate-500">Trip Contr.</span><div className="text-purple-400 font-bold">{fmtMoney(s.trip_contribution)} \u20BD</div></div>
-                <div><span className="text-slate-500">Fleet Contr.</span><div className={`font-bold ${s.fleet_contribution >= 0 ? 'text-green-400' : 'text-red-400'}`}>{fmtMoney(s.fleet_contribution)} \u20BD</div></div>
-                <div><span className="text-slate-500">Fuel</span><div className="text-orange-400">{fmtMoney(s.fuel_cost)} \u20BD ({s.fuel_liters_per_100km} l/100)</div></div>
-                <div><span className="text-slate-500">Salary</span><div className="text-blue-400">{fmtMoney(s.driver_salary)} \u20BD</div></div>
-                <div><span className="text-slate-500">Platon</span><div className="text-cyan-400">{fmtMoney(s.platon_cost)} \u20BD</div></div>
-                <div><span className="text-slate-500">Repair</span><div className="text-red-400">{fmtMoney(s.repair_cost)} \u20BD</div></div>
-                <div><span className="text-slate-500">KM</span><div className="text-white">{fmtMoney(s.total_actual_km)} km</div></div>
-                <div><span className="text-slate-500">Utilization</span><div className="text-white">{s.commercial_utilization?.toFixed(0)}% ({s.days_working}d / {s.days_working + s.days_idle}d)</div></div>
-                <div><span className="text-slate-500">\u20BD/km revenue</span><div className="text-green-400">{s.revenue_per_km?.toFixed(1)}</div></div>
-                <div><span className="text-slate-500">\u20BD/km cost</span><div className="text-red-400">{s.cost_per_km?.toFixed(1)}</div></div>
-                <div><span className="text-slate-500">\u20BD/km profit</span><div className={s.profit_per_km >= 0 ? 'text-green-400' : 'text-red-400'}>{s.profit_per_km?.toFixed(1)}</div></div>
+                <div><span className="text-slate-500">Выручка (без НДС)</span><div className="text-blue-400 font-bold">{fmtMoney(s.net_revenue)} ₽</div></div>
+                <div><span className="text-slate-500">Маржа рейсов</span><div className="text-purple-400 font-bold">{fmtMoney(s.trip_contribution)} ₽</div></div>
+                <div><span className="text-slate-500">Маржа автопарка</span><div className={`font-bold ${s.fleet_contribution >= 0 ? 'text-green-400' : 'text-red-400'}`}>{fmtMoney(s.fleet_contribution)} ₽</div></div>
+                <div><span className="text-slate-500">Топливо</span><div className="text-orange-400">{fmtMoney(s.fuel_cost)} ₽ ({s.fuel_liters_per_100km} л/100)</div></div>
+                <div><span className="text-slate-500">ЗП водителя</span><div className="text-blue-400">{fmtMoney(s.driver_salary)} ₽</div></div>
+                <div><span className="text-slate-500">Платон</span><div className="text-cyan-400">{fmtMoney(s.platon_cost)} ₽</div></div>
+                {s.fines_amount > 0 && <div><span className="text-slate-500">Штрафы ГИБДД</span><div className="text-amber-400">{fmtMoney(s.fines_amount)} ₽</div></div>}
+                {s.road_expenses > 0 && <div><span className="text-slate-500">Расходы в дороге</span><div className="text-amber-400">{fmtMoney(s.road_expenses)} ₽</div></div>}
+                {s.extra_works_amount > 0 && <div><span className="text-slate-500">Допработы</span><div className="text-amber-400">{fmtMoney(s.extra_works_amount)} ₽</div></div>}
+                {s.relocations_amount > 0 && <div><span className="text-slate-500">Перегоны</span><div className="text-amber-400">{fmtMoney(s.relocations_amount)} ₽</div></div>}
+                {s.payments_amount > 0 && <div><span className="text-slate-500">Авансы/суточные</span><div className="text-amber-400">{fmtMoney(s.payments_amount)} ₽</div></div>}
+                {s.deductions_amount > 0 && <div><span className="text-slate-500">Удержания</span><div className="text-emerald-400">-{fmtMoney(s.deductions_amount)} ₽</div></div>}
+                <div><span className="text-slate-500">Ремонт</span><div className="text-red-400">{fmtMoney(s.repair_cost)} ₽</div></div>
+                <div><span className="text-slate-500">Пробег</span><div className="text-white">{fmtMoney(s.total_actual_km)} км</div></div>
+                <div><span className="text-slate-500">Загрузка</span><div className="text-white">{s.commercial_utilization?.toFixed(0)}% ({s.days_working}д / {s.days_working + s.days_idle}д)</div></div>
+                <div><span className="text-slate-500">₽/км выручка</span><div className="text-green-400">{s.revenue_per_km?.toFixed(1)}</div></div>
+                <div><span className="text-slate-500">₽/км расход</span><div className="text-red-400">{s.cost_per_km?.toFixed(1)}</div></div>
+                <div><span className="text-slate-500">₽/км прибыль</span><div className={s.profit_per_km >= 0 ? 'text-green-400' : 'text-red-400'}>{s.profit_per_km?.toFixed(1)}</div></div>
               </div>
             </div>
 
             {/* Mini waterfall */}
             {wfData.length > 0 && (
               <div className="bg-slate-800/50 rounded-lg p-3">
-                <h4 className="text-sm font-bold text-white mb-2">P&L Waterfall</h4>
+                <h4 className="text-sm font-bold text-white mb-2">P&L — Каскадная диаграмма</h4>
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={wfData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
                     <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 9 }} angle={-25} textAnchor="end" height={50} />
                     <YAxis tick={{ fill: '#94a3b8', fontSize: 9 }} tickFormatter={(v: number) => fmtK(v)} />
                     <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
-                      formatter={(value: number, name: string) => name === 'base' ? [null, null] : [`${fmtMoney(value)} \u20BD`, '']} />
+                      formatter={(value: number, name: string) => name === 'base' ? [null, null] : [`${fmtMoney(value)} ₽`, '']} />
                     <Bar dataKey="base" stackId="a" fill="transparent" />
                     <Bar dataKey="value" stackId="a" radius={[3, 3, 0, 0]}>
                       {wfData.map((e, i) => <Cell key={i} fill={e.fill} />)}
@@ -226,16 +242,16 @@ function VehicleExpanded({ plate, monthKey }: { plate: string; monthKey: string 
           {/* Trend */}
           {trendData.length > 1 && (
             <div className="bg-slate-800/50 rounded-lg p-3">
-              <h4 className="text-sm font-bold text-white mb-2">6-Month Trend</h4>
+              <h4 className="text-sm font-bold text-white mb-2">Тренд за 6 месяцев</h4>
               <ResponsiveContainer width="100%" height={150}>
                 <LineChart data={trendData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                   <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 11 }} />
                   <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} tickFormatter={(v: number) => `${v}K`} />
                   <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
-                    formatter={(value: number, name: string) => [`${value}K \u20BD`, name]} />
-                  <Line type="monotone" dataKey="revenue" name="Revenue" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="contribution" name="Fleet Contr." stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} />
+                    formatter={(value: number, name: string) => [`${value}K ₽`, name]} />
+                  <Line type="monotone" dataKey="revenue" name="Выручка" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="contribution" name="Маржа парка" stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -243,20 +259,20 @@ function VehicleExpanded({ plate, monthKey }: { plate: string; monthKey: string 
 
           {/* Trips table */}
           <div className="bg-slate-800/50 rounded-lg p-3">
-            <h4 className="text-sm font-bold text-white mb-2">Trips ({detail.trips.length})</h4>
+            <h4 className="text-sm font-bold text-white mb-2">Рейсы ({detail.trips.length})</h4>
             {detail.trips.length > 0 ? (
               <div className="overflow-x-auto max-h-80">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="text-slate-500 border-b border-slate-700">
-                      <th className="text-left p-1.5">Date</th>
-                      <th className="text-left p-1.5">Route</th>
-                      <th className="text-left p-1.5">Driver</th>
-                      <th className="text-right p-1.5">KM</th>
-                      <th className="text-right p-1.5">Revenue</th>
-                      <th className="text-right p-1.5">Fuel</th>
-                      <th className="text-right p-1.5">Contr.</th>
-                      <th className="text-right p-1.5">\u20BD/km</th>
+                      <th className="text-left p-1.5">Дата</th>
+                      <th className="text-left p-1.5">Маршрут</th>
+                      <th className="text-left p-1.5">Водитель</th>
+                      <th className="text-right p-1.5">КМ</th>
+                      <th className="text-right p-1.5">Выручка</th>
+                      <th className="text-right p-1.5">Топливо</th>
+                      <th className="text-right p-1.5">Маржа</th>
+                      <th className="text-right p-1.5">руб/км</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -280,7 +296,7 @@ function VehicleExpanded({ plate, monthKey }: { plate: string; monthKey: string 
                 </table>
               </div>
             ) : (
-              <div className="text-slate-500 text-center py-3">No trips</div>
+              <div className="text-slate-500 text-center py-3">Нет рейсов</div>
             )}
           </div>
         </div>
@@ -354,14 +370,14 @@ export default function PnlVehiclesPage() {
               <ChevronLeft className="w-5 h-5" />
             </button>
             <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              <Truck className="w-6 h-6 text-purple-400" /> Fleet P&L
+              <Truck className="w-6 h-6 text-purple-400" /> P&L — Автопарк
             </h1>
           </div>
           {data?.totals && (
             <p className="text-slate-400 text-sm mt-1 ml-8">
-              {data.totals.count} vehicles | Net Revenue: {fmtMoney(data.totals.net_revenue)} \u20BD |
-              Fleet Contr: <span className={data.totals.fleet_contribution >= 0 ? 'text-green-400' : 'text-red-400'}>
-                {fmtMoney(data.totals.fleet_contribution)} \u20BD
+              {data.totals.count} машин | Выручка: {fmtMoney(data.totals.net_revenue)} ₽ |
+              Маржа парка: <span className={data.totals.fleet_contribution >= 0 ? 'text-green-400' : 'text-red-400'}>
+                {fmtMoney(data.totals.fleet_contribution)} ₽
               </span>
             </p>
           )}
@@ -380,7 +396,7 @@ export default function PnlVehiclesPage() {
           {/* Class filter */}
           <div className="flex gap-1 bg-slate-800 rounded-lg p-1 border border-slate-700">
             <button onClick={() => setClassFilter(null)}
-              className={`px-2 py-1 rounded text-xs ${!classFilter ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>All</button>
+              className={`px-2 py-1 rounded text-xs ${!classFilter ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>Все</button>
             {Object.entries(classColors).map(([key, c]) => (
               <button key={key} onClick={() => setClassFilter(classFilter === key ? null : key)}
                 className={`px-2 py-1 rounded text-xs ${classFilter === key ? `${c.bg} ${c.text}` : 'text-slate-400 hover:text-white'}`}>
@@ -395,27 +411,27 @@ export default function PnlVehiclesPage() {
       {data?.totals && (
         <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-xs">
           <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
-            <span className="text-slate-400">Vehicles</span>
+            <span className="text-slate-400">Машины</span>
             <div className="text-lg font-bold text-white">{data.totals.count}</div>
           </div>
           <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
-            <span className="text-slate-400">Net Revenue</span>
+            <span className="text-slate-400">Выручка</span>
             <div className="text-lg font-bold text-blue-400">{fmtK(data.totals.net_revenue)}</div>
           </div>
           <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
-            <span className="text-slate-400">Trip Contr.</span>
+            <span className="text-slate-400">Маржа рейсов</span>
             <div className="text-lg font-bold text-purple-400">{fmtK(data.totals.trip_contribution)}</div>
           </div>
           <div className="bg-slate-800 rounded-lg p-3 border border-green-500/30">
-            <span className="text-green-400">\uD83D\uDFE2 Cash Cow</span>
+            <span className="text-green-400">{'\uD83D\uDFE2'} Прибыльные</span>
             <div className="text-lg font-bold text-green-400">{data.totals.cash_cows}</div>
           </div>
           <div className="bg-slate-800 rounded-lg p-3 border border-yellow-500/30">
-            <span className="text-yellow-400">\uD83D\uDFE1 Low Margin</span>
+            <span className="text-yellow-400">{'\uD83D\uDFE1'} Низкая маржа</span>
             <div className="text-lg font-bold text-yellow-400">{data.totals.low_margin}</div>
           </div>
           <div className="bg-slate-800 rounded-lg p-3 border border-red-500/30">
-            <span className="text-red-400">\uD83D\uDD34 Loss Maker</span>
+            <span className="text-red-400">{'\uD83D\uDD34'} Убыточные</span>
             <div className="text-lg font-bold text-red-400">{data.totals.loss_makers}</div>
           </div>
         </div>
@@ -424,7 +440,7 @@ export default function PnlVehiclesPage() {
       {/* Loading / Table */}
       {loading ? (
         <div className="text-center py-10 text-slate-400">
-          <RefreshCw className="w-5 h-5 animate-spin inline mr-2" /> Loading fleet data...
+          <RefreshCw className="w-5 h-5 animate-spin inline mr-2" /> Загрузка данных автопарка...
         </div>
       ) : (
         <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
@@ -432,28 +448,28 @@ export default function PnlVehiclesPage() {
             <thead>
               <tr className="border-b border-slate-700 text-slate-400">
                 <th className="text-left p-3 cursor-pointer" onClick={() => toggleSort('vehicle_plate')}>
-                  Vehicle <SortIcon col="vehicle_plate" />
+                  Машина <SortIcon col="vehicle_plate" />
                 </th>
-                <th className="text-center p-3">Class</th>
+                <th className="text-center p-3">Класс</th>
                 <th className="text-right p-3 cursor-pointer" onClick={() => toggleSort('net_revenue')}>
-                  Revenue <SortIcon col="net_revenue" />
+                  Выручка <SortIcon col="net_revenue" />
                 </th>
                 <th className="text-right p-3 cursor-pointer" onClick={() => toggleSort('trip_contribution')}>
-                  Trip C. <SortIcon col="trip_contribution" />
+                  Маржа рейсов <SortIcon col="trip_contribution" />
                 </th>
                 <th className="text-right p-3 cursor-pointer" onClick={() => toggleSort('fleet_contribution')}>
-                  Fleet C. <SortIcon col="fleet_contribution" />
+                  Маржа парка <SortIcon col="fleet_contribution" />
                 </th>
                 <th className="text-right p-3 cursor-pointer" onClick={() => toggleSort('commercial_utilization')}>
-                  Util % <SortIcon col="commercial_utilization" />
+                  Загрузка % <SortIcon col="commercial_utilization" />
                 </th>
                 <th className="text-right p-3 cursor-pointer" onClick={() => toggleSort('fuel_liters_per_100km')}>
-                  L/100 <SortIcon col="fuel_liters_per_100km" />
+                  Л/100 <SortIcon col="fuel_liters_per_100km" />
                 </th>
                 <th className="text-right p-3 cursor-pointer" onClick={() => toggleSort('empty_pct')}>
-                  Empty % <SortIcon col="empty_pct" />
+                  Порожний % <SortIcon col="empty_pct" />
                 </th>
-                <th className="text-right p-3">Trips</th>
+                <th className="text-right p-3">Рейсы</th>
                 <th className="w-8 p-3"></th>
               </tr>
             </thead>
@@ -488,7 +504,7 @@ export default function PnlVehiclesPage() {
                     <td className={`p-3 text-right tabular-nums ${v.empty_pct > 25 ? 'text-red-400' : v.empty_pct > 15 ? 'text-yellow-400' : 'text-slate-300'}`}>
                       {v.empty_pct > 0 ? v.empty_pct.toFixed(0) + '%' : '---'}
                     </td>
-                    <td className="p-3 text-right text-slate-300 tabular-nums">{v.own_trips + v.hired_trips}</td>
+                    <td className="p-3 text-right text-slate-300 tabular-nums">{v.own_trips}</td>
                     <td className="p-3">
                       <ChevronDown size={14} className={`text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                     </td>
@@ -498,7 +514,7 @@ export default function PnlVehiclesPage() {
                 );
               })}
               {vehicles.length === 0 && (
-                <tr><td colSpan={10} className="p-6 text-center text-slate-500">No vehicles found</td></tr>
+                <tr><td colSpan={10} className="p-6 text-center text-slate-500">Машины не найдены</td></tr>
               )}
             </tbody>
           </table>
