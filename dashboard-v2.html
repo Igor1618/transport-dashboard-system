@@ -488,6 +488,8 @@
                 
                 this.broadcastToServices({
                     type: 'filters_changed',
+                    month: newPeriod,
+                    periodName: this.formatPeriodName(newPeriod),
                     payload: {
                         month: newPeriod,
                         apiFormat: newPeriod,
@@ -508,6 +510,8 @@
                 
                 this.broadcastToServices({
                     type: 'filters_changed',
+                    month: this.currentPeriod,
+                    periodName: this.formatPeriodName(this.currentPeriod),
                     payload: {
                         month: this.currentPeriod,
                         apiFormat: this.currentPeriod,

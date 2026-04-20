@@ -162,8 +162,7 @@
         <div class="kpi-header">
             <div class="kpi-title">💰 Ключевые показатели</div>
             <div class="export-buttons">
-                <a href="#" class="export-btn" id="csvExport">📄 CSV</a>
-                <a href="#" class="export-btn" id="xlsxExport">📊 XLSX</a>
+                <a href="#" class="export-btn" id="csvExport">📄 CSV (Excel)</a>
             </div>
         </div>
 
@@ -190,18 +189,27 @@
                 // Export buttons
                 document.getElementById('csvExport').addEventListener('click', (e) => {
                     e.preventDefault();
-                    this.exportData('csv');
-                });
-
-                document.getElementById('xlsxExport').addEventListener('click', (e) => {
-                    e.preventDefault();
-                    this.exportData('xlsx');
+                    this.exportData();
                 });
 
                 // Listen for period changes
                 window.addEventListener('message', (event) => {
-                    if (event.data.type === 'PERIOD_CHANGED') {
-                        this.currentMonth = event.data.month;
+                    if (!event.data || typeof event.data !== 'object') {
+                        return;
+                    }
+
+                    const supportedTypes = ['PERIOD_CHANGED', 'filters_changed'];
+
+                    if (!supportedTypes.includes(event.data.type)) {
+                        return;
+                    }
+
+                    const newMonth = event.data.month
+                        || (event.data.payload && (event.data.payload.month || event.data.payload.apiFormat))
+                        || (event.data.filters && event.data.filters.month);
+
+                    if (newMonth && newMonth !== this.currentMonth) {
+                        this.currentMonth = newMonth;
                         this.loadData();
                     }
                 });
@@ -328,8 +336,8 @@
                 }).format(amount);
             }
 
-            exportData(format) {
-                const url = `export-csv.php?type=kpi&month=${this.currentMonth}&format=${format}`;
+            exportData() {
+                const url = `export-csv.php?type=kpi&month=${encodeURIComponent(this.currentMonth)}`;
                 window.open(url, '_blank');
             }
         }
