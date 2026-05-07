@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback } from "react";
 import { 
   LayoutDashboard, Truck as TruckIcon, Users, FileText, Upload, 
   BarChart3, Menu, X, LogOut, DollarSign, Fuel, Wallet, MapPin, Wrench, Bug, Brain,
-  Navigation, Package, Calendar, Target, Activity, Bell, ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
+  Navigation, Package, Calendar, Target, Activity, Bell, ChevronDown, ChevronRight, RefreshCw, Banknote } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { useHotkeys } from "@/shared/hooks/useHotkeys";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -20,12 +20,14 @@ const ROLE_MENUS: Record<string, { href: string; label: string; icon: any }[]> =
   director: [
     { href: "/command", label: "🎯 Командный центр", icon: Target },
     { href: "/pnl", label: "📊 P&L", icon: DollarSign },
+    { href: "/finance", label: "💰 Финансы", icon: Banknote },
     { href: "/tenders", label: "📦 Тендеры WB", icon: BarChart3 },
     { href: "/vehicles", label: "🚗 Машины", icon: TruckIcon },
     { href: "/reports", label: "📋 Отчёты", icon: FileText },
     { href: "/fuel", label: "⛽ Топливо", icon: Fuel },
     { href: "/fuel/cards", label: "🔗 Карты", icon: Fuel },
     { href: "/drivers", label: "👨‍✈️ Водители", icon: Users },
+    { href: "/maintenance/health", label: "🛠️ Здоровье парка", icon: Wrench },
     { href: "/maintenance", label: "🔧 ТО и ремонт", icon: Wrench },
     { href: "/geofences", label: "📍 Геозоны", icon: MapPin },
     { href: "/parts", label: "📦 Запчасти", icon: Package },
@@ -36,18 +38,19 @@ const ROLE_MENUS: Record<string, { href: string; label: string; icon: any }[]> =
     { href: "/salary/registers", label: "📋 Реестры ЗП", icon: Wallet },
     { href: "/salary/enforcement", label: "⚖️ Исп. листы", icon: Wallet },
     { href: "/hired", label: "🚛 Наёмный транспорт", icon: TruckIcon },
+    { href: "/contracts-rf", label: "📄 Заявки РФ", icon: FileText },
     { href: "/notifications", label: "🔔 Уведомления", icon: Target },
   ],
   logist: [
     { href: "/hired", label: "🚛 Наёмный транспорт", icon: TruckIcon },
-    { href: "/dispatch/new", label: "📡 Мониторинг GPS", icon: Navigation },
+    { href: "/dispatch/wb", label: "📡 Мониторинг GPS", icon: Navigation },
     { href: "/dispatch/track", label: "🗺️ GPS-треки", icon: MapPin },
     { href: "/dispatch/wb", label: "🚛 Диспетчерская WB", icon: TruckIcon },
     { href: "/logistics/workplace", label: "🚛 Рабочее место", icon: Package },
     { href: "/rates", label: "💰 Тарифы", icon: DollarSign },
   ],
   dispatcher: [
-    { href: "/dispatch/new", label: "📡 Диспетчерская", icon: Navigation },
+    { href: "/dispatch/wb", label: "📡 Диспетчерская", icon: Navigation },
     { label: "Диспетчерская", href: "/dispatch/wb", icon: "🚛" },
     { label: "Автозагрузка WB", href: "/settings/wb-import", icon: "📥" },
     { href: "/dispatch/track", label: "🗺️ GPS-треки", icon: MapPin },
@@ -59,6 +62,7 @@ const ROLE_MENUS: Record<string, { href: string; label: string; icon: any }[]> =
     { href: "/planning", label: "📅 Планирование", icon: Wallet },
   ],
   mechanic: [
+    { href: "/maintenance/health", label: "🛠️ Здоровье парка", icon: Wrench },
     { href: "/maintenance", label: "🔧 ТО и ремонт", icon: Wrench },
     { href: "/vehicles", label: "🚗 Машины", icon: TruckIcon },
     { href: "/parts", label: "📦 Запчасти", icon: Package },
@@ -70,11 +74,13 @@ const ROLE_MENUS: Record<string, { href: string; label: string; icon: any }[]> =
   ],
   mechanic_senior: [
     { href: "/dashboard/mechanic", label: "🏠 Дашборд механика", icon: Wrench },
-    { href: "/maintenance", label: "🔧 ТО и ремонт", icon: Wrench },    { href: "/vehicles", label: "🚗 Машины", icon: TruckIcon },    { href: "/parts", label: "📦 Запчасти", icon: Package },    { href: "/drivers", label: "👨‍✈️ Водители", icon: Users },    { href: "/reports", label: "📋 Отчёты", icon: FileText },    { href: "/dispatch/wb", label: "🚛 Диспетчерская WB", icon: TruckIcon },    { href: "/dispatch/new", label: "📡 Мониторинг GPS", icon: MapPin },    { href: "/logistics/workplace", label: "📍 GPS / Карта", icon: MapPin },
+    { href: "/maintenance/health", label: "🛠️ Здоровье парка", icon: Wrench },
+    { href: "/maintenance", label: "🔧 ТО и ремонт", icon: Wrench },    { href: "/vehicles", label: "🚗 Машины", icon: TruckIcon },    { href: "/parts", label: "📦 Запчасти", icon: Package },    { href: "/drivers", label: "👨‍✈️ Водители", icon: Users },    { href: "/reports", label: "📋 Отчёты", icon: FileText },    { href: "/dispatch/wb", label: "🚛 Диспетчерская WB", icon: TruckIcon },    { href: "/dispatch/wb", label: "📡 Мониторинг GPS", icon: MapPin },    { href: "/logistics/workplace", label: "📍 GPS / Карта", icon: MapPin },
     { href: "/planning", label: "📅 Планирование", icon: Wallet },
   ],
   accountant: [
     { href: "/hired/accounting", label: "📊 Учёт наёмных", icon: TruckIcon },
+    { href: "/finance", label: "💰 Финансы", icon: Banknote },
     { href: "/reports", label: "📋 Отчёты", icon: FileText },
     { href: "/fuel", label: "⛽ Топливо", icon: Fuel },
     { href: "/fuel/cards", label: "🔗 Карты", icon: Fuel },
@@ -83,6 +89,7 @@ const ROLE_MENUS: Record<string, { href: string; label: string; icon: any }[]> =
     { href: "/salary/enforcement", label: "⚖️ Исп. листы", icon: Wallet },
     { href: "/import-wb", label: "📦 Загрузка WB", icon: Upload },
     { href: "/hired", label: "🚛 Наёмный транспорт", icon: TruckIcon },
+    { href: "/contracts-rf", label: "📄 Заявки РФ", icon: FileText },
     { href: "/vehicles", label: "🚗 Машины", icon: TruckIcon },
     { href: "/drivers", label: "👨‍✈️ Водители", icon: Users },
   ],
@@ -105,9 +112,11 @@ const FULL_MENU: MenuItem[] = [
   // 📊 УПРАВЛЕНИЕ
   { href: "/command", label: "🎯 Командный центр", icon: Target, group: "📊 УПРАВЛЕНИЕ" },
   { href: "/pnl", label: "📊 P&L", icon: DollarSign, group: "📊 УПРАВЛЕНИЕ" },
+  { href: "/finance", label: "💰 Финансы", icon: Banknote, group: "📊 УПРАВЛЕНИЕ" },
   { href: "/tenders", label: "📦 Тендеры WB", icon: BarChart3, group: "📊 УПРАВЛЕНИЕ" },
   // 🚛 ЛОГИСТИКА
-  { href: "/dispatch/new", label: "📡 Мониторинг GPS", icon: Navigation, group: "🚛 ЛОГИСТИКА" },
+  { href: "/tms/trips", label: "🗂️ Рейсы TMS", icon: FileText, group: "🚛 ЛОГИСТИКА" },
+  { href: "/dispatch/wb", label: "📡 Мониторинг GPS", icon: Navigation, group: "🚛 ЛОГИСТИКА" },
   { href: "/dispatch/track", label: "🗺️ GPS-треки", icon: Navigation, group: "🚛 ЛОГИСТИКА" },
   { href: "/dispatch/wb", label: "🚛 Диспетчерская", icon: Navigation, group: "🚛 ЛОГИСТИКА" },
   { href: "/logistics/workplace", label: "🚛 Рабочее место", icon: Package, group: "🚛 ЛОГИСТИКА" },
@@ -115,10 +124,12 @@ const FULL_MENU: MenuItem[] = [
   { href: "/trips", label: "🛣️ Рейсы", icon: FileText, group: "🚛 ЛОГИСТИКА" },
   { href: "/rates", label: "💰 Тарифы", icon: DollarSign, group: "🚛 ЛОГИСТИКА" },
   { href: "/geofences", label: "📍 Геозоны", icon: MapPin, group: "🚛 ЛОГИСТИКА" },
+  { href: "/dispatch/wb-matching", label: "🔍 Матчинг ТС", icon: TruckIcon, group: "🚛 ЛОГИСТИКА" },
   // 🚗 ПАРК
   { href: "/vehicles", label: "🚗 Машины", icon: TruckIcon, group: "🚗 ПАРК" },
   { href: "/vehicles/unknown-plates", label: "⚠️ Неопознанные", icon: TruckIcon, group: "🚗 ПАРК" },
   { href: "/drivers", label: "👨‍✈️ Водители", icon: Users, group: "🚗 ПАРК" },
+  { href: "/maintenance/health", label: "🛠️ Здоровье парка", icon: Wrench, group: "🚗 ПАРК" },
   { href: "/maintenance", label: "🔧 ТО и ремонт", icon: Wrench, group: "🚗 ПАРК" },
   { href: "/parts", label: "📦 Запчасти", icon: Package, group: "🚗 ПАРК" },
   // 📋 УЧЁТ
@@ -131,12 +142,13 @@ const FULL_MENU: MenuItem[] = [
   { href: "/salary/registers", label: "📋 Реестры ЗП", icon: Wallet, group: "📋 УЧЁТ" },
     { href: "/salary/enforcement", label: "⚖️ Исп. листы", icon: Wallet },
   { href: "/revenue/registries", label: "💳 Реестры WB", icon: DollarSign, group: "📋 УЧЁТ" },
-  
+  { href: "/contracts-rf", label: "📄 Заявки РФ", icon: FileText, group: "📋 УЧЁТ" },
   { href: "/import-wb", label: "📤 Загрузка WB", icon: Upload, group: "📋 УЧЁТ" },
   // 📈 АНАЛИТИКА
   { href: "/analytics/drivers", label: "👷 Рейтинг водителей", icon: Users, group: "📈 АНАЛИТИКА" },
   { href: "/hired", label: "🚛 Наёмный транспорт", icon: TruckIcon, group: "📋 УЧЁТ" },
   { href: "/hired/accounting", label: "📊 Учёт наёмных", icon: TruckIcon, group: "📋 УЧЁТ" },
+  { href: "/hired/routes", label: "🗺 Маршруты", icon: TruckIcon, group: "📋 УЧЁТ" },
   
   
   { href: "/analytics/utilization", label: "📊 Утилизация", icon: Activity, group: "📈 АНАЛИТИКА" },
