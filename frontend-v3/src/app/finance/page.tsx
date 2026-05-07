@@ -182,7 +182,11 @@ export default function FinancePage() {
       {/* Quick links */}
       <section>
         <h2 className="text-xl font-semibold text-slate-100 mb-3">Действия</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <Link href="/finance/cashflow" className="p-4 rounded border bg-emerald-900/20 border-emerald-700/50 hover:bg-emerald-900/40">
+            <div className="text-slate-100 font-medium">📅 Когда деньги</div>
+            <div className="text-xs text-slate-400 mt-1">Прогноз поступлений + расходы · вероятностная модель</div>
+          </Link>
           <Link href="/finance/contractors" className="p-4 rounded border bg-slate-900/50 border-slate-700 hover:bg-slate-800/50">
             <div className="text-slate-100 font-medium">Рейтинг клиентов</div>
             <div className="text-xs text-slate-400 mt-1">Кому верить · кто платит вовремя</div>
@@ -193,7 +197,7 @@ export default function FinancePage() {
           </Link>
           <Link href="/finance/not-invoiced" className="p-4 rounded border bg-blue-900/20 border-blue-700/50 hover:bg-blue-900/40">
             <div className="text-slate-100 font-medium">К выставлению</div>
-            <div className="text-xs text-slate-400 mt-1">{not_invoiced.trips} рейсов · приоритет по сумме × возрасту × клиенту</div>
+            <div className="text-xs text-slate-400 mt-1">{not_invoiced.trips} рейсов · приоритет</div>
           </Link>
         </div>
       </section>
