@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 type ClassItem = { debt_class: string; invoices: number; sum_unpaid: string; contractors: number };
 type Classes = {
-  live: ClassItem; risky: ClassItem; problem: ClassItem; legal: ClassItem; dead: ClassItem;
+  live: ClassItem; risky: ClassItem; legal: ClassItem; dead: ClassItem;
 };
 
 type NotInvoiced = { trips: number; sum_amount: string; older_14d: number; older_30d: number };
@@ -22,9 +22,8 @@ type Overview = { classes: Classes; not_invoiced: NotInvoiced; by_organization: 
 
 const CLASS_META: Record<string, { label: string; sub: string; color: string; bg: string }> = {
   live:    { label: 'Живые ожидаемые', sub: 'срок ещё не наступил',           color: 'text-emerald-200', bg: 'bg-emerald-900/30 border-emerald-700' },
-  risky:   { label: 'Рискованные',     sub: 'просрочка 0–30 дней',            color: 'text-amber-200',   bg: 'bg-amber-900/30 border-amber-700'    },
-  problem: { label: 'Проблемные',      sub: 'просрочка 30–60 дней',           color: 'text-orange-200',  bg: 'bg-orange-900/30 border-orange-700'  },
-  legal:   { label: 'Юристам',         sub: 'просрочка 60–90 дней',           color: 'text-rose-200',    bg: 'bg-rose-900/30 border-rose-700'      },
+  risky:   { label: 'Рискованные',     sub: 'просрочка 0–14 дней',            color: 'text-amber-200',   bg: 'bg-amber-900/30 border-amber-700'    },
+  legal:   { label: 'Юристам',         sub: 'просрочка 14–90 дней',           color: 'text-rose-200',    bg: 'bg-rose-900/30 border-rose-700'      },
   dead:    { label: 'Сомнительные',    sub: '> 90 дней без платежей',         color: 'text-red-200',     bg: 'bg-red-900/40 border-red-700'        },
 };
 
@@ -64,13 +63,12 @@ export default function FinancePage() {
   const { classes, not_invoiced, by_organization } = data;
   const sumLive    = parseFloat(classes.live.sum_unpaid);
   const sumRisky   = parseFloat(classes.risky.sum_unpaid);
-  const sumProblem = parseFloat(classes.problem.sum_unpaid);
   const sumLegal   = parseFloat(classes.legal.sum_unpaid);
   const sumDead    = parseFloat(classes.dead.sum_unpaid);
   const sumNotInvoiced = parseFloat(not_invoiced.sum_amount);
 
-  const sumLiveMoney = sumLive + sumRisky;        // что реально ждём
-  const sumNotMoney  = sumProblem + sumLegal + sumDead; // что нельзя считать живыми деньгами
+  const sumLiveMoney = sumLive + sumRisky;     // что реально ждём
+  const sumNotMoney  = sumLegal + sumDead;     // что нельзя считать живыми деньгами
 
   return (
     <div className="p-6 space-y-6">
@@ -103,8 +101,8 @@ export default function FinancePage() {
       {/* 5 classes */}
       <section>
         <h2 className="text-xl font-semibold text-slate-100 mb-3">Классы реальности денег</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          {(['live','risky','problem','legal','dead'] as const).map(k => {
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          {(['live','risky','legal','dead'] as const).map(k => {
             const c = classes[k];
             const m = CLASS_META[k];
             return (
@@ -154,7 +152,7 @@ export default function FinancePage() {
                 <th className="text-left px-4 py-2">Юрлицо</th>
                 <th className="text-right px-4 py-2">Живые</th>
                 <th className="text-right px-4 py-2">Рискованные</th>
-                <th className="text-right px-4 py-2">Проблемные</th>
+                <th className="text-right px-4 py-2">Юристам/&gt;90д</th>
                 <th className="text-right px-4 py-2">Всего открыто</th>
               </tr>
             </thead>

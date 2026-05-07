@@ -18,23 +18,21 @@ type Item = {
   organization_name: string | null;
   age_days: number;
   overdue_days: number;
-  debt_class: 'live' | 'risky' | 'problem' | 'legal' | 'dead';
+  debt_class: 'live' | 'risky' | 'legal' | 'dead';
   has_partial_payment: boolean;
 };
 
 const CLASS_LABEL: Record<string, string> = {
   all: 'Все открытые',
   live: 'Живые ожидаемые',
-  risky: 'Рискованные (0–30 дн)',
-  problem: 'Проблемные (30–60 дн)',
-  legal: 'Юристам (60–90 дн)',
+  risky: 'Рискованные (0–14 дн)',
+  legal: 'Юристам (14–90 дн)',
   dead: 'Сомнительные (>90 дн)',
 };
 
 const CLASS_COLOR: Record<string, string> = {
   live: 'text-emerald-300',
   risky: 'text-amber-300',
-  problem: 'text-orange-300',
   legal: 'text-rose-300',
   dead: 'text-red-300',
 };
@@ -75,7 +73,7 @@ function ReceivablesContent() {
 
       {/* Filter tabs */}
       <div className="flex flex-wrap gap-2">
-        {(['all','live','risky','problem','legal','dead'] as const).map(k => (
+        {(['all','live','risky','legal','dead'] as const).map(k => (
           <button
             key={k}
             onClick={() => setCls(k)}

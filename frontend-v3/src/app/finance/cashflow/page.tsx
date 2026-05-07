@@ -83,7 +83,7 @@ const CAT_LABEL: Record<string, string> = {
 };
 
 const CLASS_LABEL: Record<string, string> = {
-  live: 'живой', risky: 'риск', problem: 'проблем.', legal: 'юристам', dead: 'сомнит.',
+  live: 'живой', risky: 'риск', legal: 'юристам', dead: 'сомнит.',
 };
 
 function DayRow({
