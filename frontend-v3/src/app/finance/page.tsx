@@ -180,7 +180,11 @@ export default function FinancePage() {
       {/* Quick links */}
       <section>
         <h2 className="text-xl font-semibold text-slate-100 mb-3">Действия</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <Link href="/finance/fleet" className="p-4 rounded border bg-purple-900/20 border-purple-700/50 hover:bg-purple-900/40">
+            <div className="text-slate-100 font-medium">🚛 Эффективность парка</div>
+            <div className="text-xs text-slate-400 mt-1">Кто зарабатывает, кто тянет, и почему</div>
+          </Link>
           <Link href="/finance/cashflow" className="p-4 rounded border bg-emerald-900/20 border-emerald-700/50 hover:bg-emerald-900/40">
             <div className="text-slate-100 font-medium">📅 Когда деньги</div>
             <div className="text-xs text-slate-400 mt-1">Прогноз поступлений + расходы · вероятностная модель</div>
