@@ -24,6 +24,8 @@ type Item = {
 
 const CLASS_LABEL: Record<string, string> = {
   all: 'Все открытые',
+  alive: 'Живые ожидаемые (live + risky)',
+  expired: 'Не считать живыми (legal + dead)',
   live: 'Живые ожидаемые',
   risky: 'Рискованные (0–14 дн)',
   legal: 'Юристам (14–90 дн)',

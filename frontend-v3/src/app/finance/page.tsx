@@ -79,18 +79,18 @@ export default function FinancePage() {
         </p>
       </div>
 
-      {/* Summary banner */}
+      {/* Summary banner — все 3 плашки кликабельные */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="p-5 rounded border bg-emerald-900/20 border-emerald-700/50">
+        <Link href="/finance/receivables?class=alive" className="p-5 rounded border bg-emerald-900/20 border-emerald-700/50 hover:bg-emerald-900/40 transition">
           <div className="text-xs uppercase text-emerald-300">Живые ожидаемые деньги</div>
           <div className="text-3xl font-semibold text-slate-100 mt-2">{fmtMoney(sumLiveMoney)}</div>
-          <div className="text-xs text-slate-400 mt-1">live + risky · что реально ждём</div>
-        </div>
-        <div className="p-5 rounded border bg-orange-900/20 border-orange-700/50">
+          <div className="text-xs text-slate-400 mt-1">live + risky · что реально ждём →</div>
+        </Link>
+        <Link href="/finance/receivables?class=expired" className="p-5 rounded border bg-orange-900/20 border-orange-700/50 hover:bg-orange-900/40 transition">
           <div className="text-xs uppercase text-orange-300">Не считать живыми</div>
           <div className="text-3xl font-semibold text-slate-100 mt-2">{fmtMoney(sumNotMoney)}</div>
-          <div className="text-xs text-slate-400 mt-1">problem + legal + dead</div>
-        </div>
+          <div className="text-xs text-slate-400 mt-1">legal + dead · юристам или сомнительные →</div>
+        </Link>
         <Link href="/finance/not-invoiced" className="p-5 rounded border bg-blue-900/20 border-blue-700/50 hover:bg-blue-900/40 transition">
           <div className="text-xs uppercase text-blue-300">К выставлению</div>
           <div className="text-3xl font-semibold text-slate-100 mt-2">{fmtMoney(sumNotInvoiced)}</div>
