@@ -116,6 +116,7 @@ const FULL_MENU: MenuItem[] = [
   { href: "/tenders", label: "📦 Тендеры WB", icon: BarChart3, group: "📊 УПРАВЛЕНИЕ" },
   // 🚛 ЛОГИСТИКА
   { href: "/tms/trips", label: "🗂️ Рейсы TMS", icon: FileText, group: "🚛 ЛОГИСТИКА" },
+  { href: "/tms/queue", label: "📋 Очередь задач", icon: FileText, group: "🚛 ЛОГИСТИКА" },
   { href: "/dispatch/wb", label: "📡 Мониторинг GPS", icon: Navigation, group: "🚛 ЛОГИСТИКА" },
   { href: "/dispatch/track", label: "🗺️ GPS-треки", icon: Navigation, group: "🚛 ЛОГИСТИКА" },
   { href: "/dispatch/wb", label: "🚛 Диспетчерская", icon: Navigation, group: "🚛 ЛОГИСТИКА" },
