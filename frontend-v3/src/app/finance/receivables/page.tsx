@@ -39,9 +39,10 @@ const CLASS_COLOR: Record<string, string> = {
   dead: 'text-red-300',
 };
 
-const fmtMoney = (n: string | number) => {
+const fmtMoney = (n: string | number | null | undefined) => {
+  if (n === null || n === undefined) return '—';
   const num = typeof n === 'string' ? parseFloat(n) : n;
-  if (!isFinite(num)) return '—';
+  if (typeof num !== 'number' || !isFinite(num)) return '—';
   return num.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₽';
 };
 

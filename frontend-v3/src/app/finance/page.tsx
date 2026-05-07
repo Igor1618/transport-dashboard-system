@@ -28,15 +28,17 @@ const CLASS_META: Record<string, { label: string; sub: string; color: string; bg
   dead:    { label: 'Сомнительные',    sub: '> 90 дней без платежей',         color: 'text-red-200',     bg: 'bg-red-900/40 border-red-700'        },
 };
 
-const fmtMoney = (n: string | number) => {
+const fmtMoney = (n: string | number | null | undefined) => {
+  if (n === null || n === undefined) return '—';
   const num = typeof n === 'string' ? parseFloat(n) : n;
-  if (!isFinite(num)) return '—';
+  if (typeof num !== 'number' || !isFinite(num)) return '—';
   return num.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₽';
 };
 
-const fmtMln = (n: string | number) => {
+const fmtMln = (n: string | number | null | undefined) => {
+  if (n === null || n === undefined) return '—';
   const num = typeof n === 'string' ? parseFloat(n) : n;
-  if (!isFinite(num) || num === 0) return '—';
+  if (typeof num !== 'number' || !isFinite(num) || num === 0) return '—';
   if (Math.abs(num) >= 1e6) return (num / 1e6).toFixed(2) + ' млн';
   if (Math.abs(num) >= 1e3) return (num / 1e3).toFixed(0) + ' тыс';
   return num.toFixed(0) + ' ₽';

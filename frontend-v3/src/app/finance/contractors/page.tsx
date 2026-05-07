@@ -38,9 +38,10 @@ const GRADE_RECOMMEND: Record<string, string> = {
   '?': 'мало истории',
 };
 
-const fmtMoney = (n: string | number) => {
+const fmtMoney = (n: string | number | null | undefined) => {
+  if (n === null || n === undefined) return '—';
   const num = typeof n === 'string' ? parseFloat(n) : n;
-  if (!isFinite(num)) return '—';
+  if (typeof num !== 'number' || !isFinite(num)) return '—';
   return num.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₽';
 };
 

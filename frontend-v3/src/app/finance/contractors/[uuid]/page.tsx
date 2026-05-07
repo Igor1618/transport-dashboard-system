@@ -51,9 +51,10 @@ const STATUS_COLOR: Record<Invoice['status'], string> = {
   pending: 'bg-blue-900/30 text-blue-300 border-blue-700',
 };
 
-const fmtMoney = (n: string | number) => {
+const fmtMoney = (n: string | number | null | undefined) => {
+  if (n === null || n === undefined) return '—';
   const num = typeof n === 'string' ? parseFloat(n) : n;
-  if (!isFinite(num)) return '—';
+  if (typeof num !== 'number' || !isFinite(num)) return '—';
   return num.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₽';
 };
 
