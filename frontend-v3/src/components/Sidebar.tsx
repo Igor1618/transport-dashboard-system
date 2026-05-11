@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback } from "react";
 import { 
   LayoutDashboard, Truck as TruckIcon, Users, FileText, Upload, 
   BarChart3, Menu, X, LogOut, DollarSign, Fuel, Wallet, MapPin, Wrench, Bug, Brain,
-  Navigation, Package, Calendar, Target, Activity, Bell, ChevronDown, ChevronRight, RefreshCw, Banknote } from "lucide-react";
+  Navigation, Package, Calendar, Target, Activity, Bell, ChevronDown, ChevronRight, RefreshCw, Banknote, UserCheck } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { useHotkeys } from "@/shared/hooks/useHotkeys";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -74,6 +74,8 @@ const ROLE_MENUS: Record<string, { href: string; label: string; icon: any }[]> =
   ],
   mechanic_senior: [
     { href: "/dashboard/mechanic", label: "🏠 Дашборд механика", icon: Wrench },
+    { href: "/hr/avito", label: "HR Авито", icon: UserCheck },
+    { href: "/hr/driver-resource", label: "Водительский ресурс", icon: Users },
     { href: "/maintenance/health", label: "🛠️ Здоровье парка", icon: Wrench },
     { href: "/maintenance", label: "🔧 ТО и ремонт", icon: Wrench },    { href: "/vehicles", label: "🚗 Машины", icon: TruckIcon },    { href: "/parts", label: "📦 Запчасти", icon: Package },    { href: "/drivers", label: "👨‍✈️ Водители", icon: Users },    { href: "/reports", label: "📋 Отчёты", icon: FileText },    { href: "/dispatch/wb", label: "🚛 Диспетчерская WB", icon: TruckIcon },    { href: "/dispatch/wb", label: "📡 Мониторинг GPS", icon: MapPin },    { href: "/logistics/workplace", label: "📍 GPS / Карта", icon: MapPin },
     { href: "/planning", label: "📅 Планирование", icon: Wallet },
@@ -130,6 +132,8 @@ const FULL_MENU: MenuItem[] = [
   { href: "/vehicles", label: "🚗 Машины", icon: TruckIcon, group: "🚗 ПАРК" },
   { href: "/vehicles/unknown-plates", label: "⚠️ Неопознанные", icon: TruckIcon, group: "🚗 ПАРК" },
   { href: "/drivers", label: "👨‍✈️ Водители", icon: Users, group: "🚗 ПАРК" },
+  { href: "/hr/avito", label: "HR Авито", icon: UserCheck, group: "🚗 ПАРК" },
+  { href: "/hr/driver-resource", label: "Водительский ресурс", icon: Users, group: "🚗 ПАРК" },
   { href: "/maintenance/health", label: "🛠️ Здоровье парка", icon: Wrench, group: "🚗 ПАРК" },
   { href: "/maintenance", label: "🔧 ТО и ремонт", icon: Wrench, group: "🚗 ПАРК" },
   { href: "/parts", label: "📦 Запчасти", icon: Package, group: "🚗 ПАРК" },
@@ -144,6 +148,7 @@ const FULL_MENU: MenuItem[] = [
     { href: "/salary/enforcement", label: "⚖️ Исп. листы", icon: Wallet },
   { href: "/revenue/registries", label: "💳 Реестры WB", icon: DollarSign, group: "📋 УЧЁТ" },
   { href: "/contracts-rf", label: "📄 Заявки РФ", icon: FileText, group: "📋 УЧЁТ" },
+  { href: "/tms/contract-applications", label: "📦 Договор-заявки 1С", icon: FileText, group: "📋 УЧЁТ" },
   { href: "/import-wb", label: "📤 Загрузка WB", icon: Upload, group: "📋 УЧЁТ" },
   // 📈 АНАЛИТИКА
   { href: "/analytics/drivers", label: "👷 Рейтинг водителей", icon: Users, group: "📈 АНАЛИТИКА" },
