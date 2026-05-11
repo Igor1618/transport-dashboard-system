@@ -131,14 +131,35 @@ export default function ContractApplicationsPage() {
     try {
       const r = await fetch(`/api/contracts-1c/files/${fileUuid}`);
       if (r.status === 200) {
-        // File suddenly available — open it
         window.open(`/api/contracts-1c/files/${fileUuid}`, '_blank');
+        return;
       }
-      // status 202 = queued — user sees "Запрошен" badge
+      // status 202 = queued — poll the files endpoint every 5s until synced
+      const parentUuid = expanded;
+      if (!parentUuid) return;
+      let tries = 0;
+      const poll = setInterval(async () => {
+        tries++;
+        try {
+          const res = await fetch(`/api/contracts-1c/${parentUuid}/files`);
+          const d = await res.json();
+          const found = (d.files || []).find((x: AttachedFile) => x.uuid_1c === fileUuid);
+          if (found && found.synced_file) {
+            setFilesCache(prev => ({ ...prev, [parentUuid]: d.files || [] }));
+            setRequestedFiles(prev => {
+              const n = { ...prev };
+              delete n[fileUuid];
+              return n;
+            });
+            clearInterval(poll);
+          }
+        } catch { /* keep polling */ }
+        if (tries >= 24) clearInterval(poll); // 24 × 5s = 2 minutes max
+      }, 5000);
     } catch {
       // silent
     }
-  }, [requestedFiles]);
+  }, [requestedFiles, expanded]);
 
   // ─── Fetch files for expanded row ───────────────────────────────────────────
 
