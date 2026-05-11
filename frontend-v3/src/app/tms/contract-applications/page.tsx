@@ -110,6 +110,8 @@ export default function ContractApplicationsPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filesCache, setFilesCache] = useState<Record<string, AttachedFile[]>>({});
   const [filesLoading, setFilesLoading] = useState<string | null>(null);
+  // Tracks file UUIDs that were requested (202 queued) by the user
+  const [requestedFiles, setRequestedFiles] = useState<Record<string, boolean>>({});
 
   // Filters
   const [search, setSearch]     = useState('');
@@ -120,6 +122,23 @@ export default function ContractApplicationsPage() {
   const LIMIT = 50;
 
   const debouncedSearch = useDebounce(search, 350);
+
+  // ─── Request file delivery ──────────────────────────────────────────────────
+
+  const requestFile = useCallback(async (fileUuid: string) => {
+    if (requestedFiles[fileUuid]) return; // already requested
+    setRequestedFiles(prev => ({ ...prev, [fileUuid]: true }));
+    try {
+      const r = await fetch(`/api/contracts-1c/files/${fileUuid}`);
+      if (r.status === 200) {
+        // File suddenly available — open it
+        window.open(`/api/contracts-1c/files/${fileUuid}`, '_blank');
+      }
+      // status 202 = queued — user sees "Запрошен" badge
+    } catch {
+      // silent
+    }
+  }, [requestedFiles]);
 
   // ─── Fetch files for expanded row ───────────────────────────────────────────
 
@@ -448,34 +467,56 @@ export default function ContractApplicationsPage() {
                             <span className="text-slate-600 text-xs">Файлов нет</span>
                           ) : (
                             <div className="flex flex-wrap gap-2">
-                              {(filesCache[item.uuid_1c] || []).map(f => (
-                                <a
-                                  key={f.uuid_1c}
-                                  href={`/api/contracts-1c/files/${f.uuid_1c}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition ${
-                                    f.synced_file
-                                      ? 'bg-cyan-950/40 border-cyan-800 text-cyan-300 hover:bg-cyan-900/60'
-                                      : 'bg-slate-800/60 border-slate-700 text-slate-400 cursor-default pointer-events-none'
-                                  }`}
-                                  onClick={e => !f.synced_file && e.preventDefault()}
-                                  title={f.synced_file ? 'Скачать' : (f.sync_error || 'Файл ещё не синхронизирован')}
-                                >
-                                  <span>{_fileIcon(f.extension)}</span>
-                                  <span className="max-w-[140px] truncate">{f.name}.{f.extension}</span>
-                                  {f.size_bytes && (
-                                    <span className="text-slate-500">
-                                      {f.size_bytes > 1048576
-                                        ? `${(f.size_bytes/1048576).toFixed(1)}МБ`
-                                        : `${Math.round(f.size_bytes/1024)}КБ`}
-                                    </span>
-                                  )}
-                                  {!f.synced_file && (
-                                    <span className="text-slate-600 text-xs">⏳</span>
-                                  )}
-                                </a>
-                              ))}
+                              {(filesCache[item.uuid_1c] || []).map(f => {
+                                const isQueued = requestedFiles[f.uuid_1c];
+                                if (f.synced_file) {
+                                  return (
+                                    <a
+                                      key={f.uuid_1c}
+                                      href={`/api/contracts-1c/files/${f.uuid_1c}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition bg-cyan-950/40 border-cyan-800 text-cyan-300 hover:bg-cyan-900/60"
+                                      title="Скачать"
+                                    >
+                                      <span>{_fileIcon(f.extension)}</span>
+                                      <span className="max-w-[140px] truncate">{f.name}.{f.extension}</span>
+                                      {f.size_bytes && (
+                                        <span className="text-slate-500">
+                                          {f.size_bytes > 1048576
+                                            ? `${(f.size_bytes/1048576).toFixed(1)}МБ`
+                                            : `${Math.round(f.size_bytes/1024)}КБ`}
+                                        </span>
+                                      )}
+                                    </a>
+                                  );
+                                }
+                                // Not synced — show request button
+                                return (
+                                  <button
+                                    key={f.uuid_1c}
+                                    onClick={() => requestFile(f.uuid_1c)}
+                                    disabled={isQueued}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition ${
+                                      isQueued
+                                        ? 'bg-yellow-950/40 border-yellow-800 text-yellow-400 cursor-default'
+                                        : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:bg-slate-700/60 hover:text-slate-200 hover:border-slate-500'
+                                    }`}
+                                    title={isQueued ? 'Файл запрошен, агент доставит через несколько секунд' : 'Нажмите, чтобы запросить доставку файла'}
+                                  >
+                                    <span>{_fileIcon(f.extension)}</span>
+                                    <span className="max-w-[140px] truncate">{f.name}.{f.extension}</span>
+                                    {f.size_bytes && (
+                                      <span className="text-slate-500">
+                                        {f.size_bytes > 1048576
+                                          ? `${(f.size_bytes/1048576).toFixed(1)}МБ`
+                                          : `${Math.round(f.size_bytes/1024)}КБ`}
+                                      </span>
+                                    )}
+                                    <span className="text-xs">{isQueued ? '⏳ запрошен' : '↓ запросить'}</span>
+                                  </button>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
