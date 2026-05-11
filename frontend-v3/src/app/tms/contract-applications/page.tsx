@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -55,6 +55,18 @@ interface Stats {
   last_synced_at: string | null;
 }
 
+interface AttachedFile {
+  uuid_1c: string;
+  name: string;
+  extension: string | null;
+  size_bytes: number | null;
+  created_at_1c: string | null;
+  synced_file: boolean;
+  sync_error: string | null;
+  parsed: boolean;
+  ai_fields: Record<string, unknown> | null;
+}
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function fmtDate(s: string | null): string {
@@ -65,6 +77,17 @@ function fmtDate(s: string | null): string {
 function fmtMoney(s: string | null): string {
   if (!s || s === '0') return '—';
   return Number(s).toLocaleString('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 });
+}
+
+function _fileIcon(ext: string | null): string {
+  switch ((ext || '').toLowerCase()) {
+    case 'pdf':  return '📄';
+    case 'docx': case 'doc': return '📝';
+    case 'xlsx': case 'xls': return '📊';
+    case 'jpg':  case 'jpeg': case 'png': case 'tiff': return '🖼️';
+    case 'zip':  case 'rar': return '🗜️';
+    default: return '📎';
+  }
 }
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -85,6 +108,8 @@ export default function ContractApplicationsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [filesCache, setFilesCache] = useState<Record<string, AttachedFile[]>>({});
+  const [filesLoading, setFilesLoading] = useState<string | null>(null);
 
   // Filters
   const [search, setSearch]     = useState('');
@@ -95,6 +120,27 @@ export default function ContractApplicationsPage() {
   const LIMIT = 50;
 
   const debouncedSearch = useDebounce(search, 350);
+
+  // ─── Fetch files for expanded row ───────────────────────────────────────────
+
+  const fetchFiles = useCallback(async (uuid: string) => {
+    if (filesCache[uuid] !== undefined) return;
+    setFilesLoading(uuid);
+    try {
+      const r = await fetch(`/api/contracts-1c/${uuid}/files`);
+      const d = await r.json();
+      setFilesCache(prev => ({ ...prev, [uuid]: d.files || [] }));
+    } catch {
+      setFilesCache(prev => ({ ...prev, [uuid]: [] }));
+    } finally {
+      setFilesLoading(null);
+    }
+  }, [filesCache]);
+
+  // Fetch files when a row expands
+  useEffect(() => {
+    if (expanded) fetchFiles(expanded);
+  }, [expanded, fetchFiles]);
 
   // ─── Fetch stats ────────────────────────────────────────────────────────────
 
@@ -386,6 +432,52 @@ export default function ContractApplicationsPage() {
                         {/* UUID */}
                         <div className="col-span-full text-xs text-slate-600 mt-1">
                           UUID: {item.uuid_1c} · Синхронизировано: {fmtDate(item.synced_at)}
+                        </div>
+
+                        {/* Attached files */}
+                        <div className="col-span-full mt-3 pt-3 border-t border-slate-800">
+                          <div className="text-xs text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-2">
+                            📎 Прикреплённые файлы
+                            {filesLoading === item.uuid_1c && (
+                              <span className="text-slate-600">загрузка...</span>
+                            )}
+                          </div>
+                          {filesCache[item.uuid_1c] === undefined && filesLoading !== item.uuid_1c ? (
+                            <span className="text-slate-600 text-xs">—</span>
+                          ) : filesCache[item.uuid_1c]?.length === 0 ? (
+                            <span className="text-slate-600 text-xs">Файлов нет</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              {(filesCache[item.uuid_1c] || []).map(f => (
+                                <a
+                                  key={f.uuid_1c}
+                                  href={`/api/contracts-1c/files/${f.uuid_1c}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition ${
+                                    f.synced_file
+                                      ? 'bg-cyan-950/40 border-cyan-800 text-cyan-300 hover:bg-cyan-900/60'
+                                      : 'bg-slate-800/60 border-slate-700 text-slate-400 cursor-default pointer-events-none'
+                                  }`}
+                                  onClick={e => !f.synced_file && e.preventDefault()}
+                                  title={f.synced_file ? 'Скачать' : (f.sync_error || 'Файл ещё не синхронизирован')}
+                                >
+                                  <span>{_fileIcon(f.extension)}</span>
+                                  <span className="max-w-[140px] truncate">{f.name}.{f.extension}</span>
+                                  {f.size_bytes && (
+                                    <span className="text-slate-500">
+                                      {f.size_bytes > 1048576
+                                        ? `${(f.size_bytes/1048576).toFixed(1)}МБ`
+                                        : `${Math.round(f.size_bytes/1024)}КБ`}
+                                    </span>
+                                  )}
+                                  {!f.synced_file && (
+                                    <span className="text-slate-600 text-xs">⏳</span>
+                                  )}
+                                </a>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>
