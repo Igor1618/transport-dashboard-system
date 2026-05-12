@@ -40,6 +40,22 @@ type AvitoLiveAd = {
   url?: string;
   address?: string;
   updated_at?: string | null;
+  ai_audit?: {
+    score: number;
+    headline_quality?: number;
+    headline_issues: string[];
+    body_quality?: number | null;
+    body_issues: string[];
+    missing_facts: string[];
+    recommended_action: "keep" | "rewrite" | "promote" | "unpublish" | "duplicate";
+    rationale: string;
+    suggested_title: string | null;
+    suggested_first_screen: string | null;
+    suggested_full_text: string | null;
+    audited_at: string;
+    model: string;
+    provider?: string;
+  } | null;
 };
 
 type RouteNeed = {
@@ -123,6 +139,7 @@ type Detail = {
 };
 
 type QuickAction = "need" | "quality_problem" | "stop";
+type AuditState = "idle" | "loading" | "error";
 type TextCheck = {
   label: string;
   ok: boolean;
@@ -295,6 +312,145 @@ function avitoStatusClass(status: string | null | undefined) {
   if (["blocked", "rejected"].includes(value)) return "border-red-500/30 bg-red-500/10 text-red-100";
   if (["moderation", "moderating"].includes(value)) return "border-amber-500/30 bg-amber-500/10 text-amber-100";
   return "border-slate-700 bg-slate-900 text-slate-300";
+}
+
+const auditActionLabel: Record<NonNullable<AvitoLiveAd["ai_audit"]>["recommended_action"], string> = {
+  keep: "Оставить",
+  rewrite: "Переписать",
+  promote: "Продвинуть",
+  unpublish: "Снять",
+  duplicate: "Дублировать",
+};
+
+function auditActionClass(action: NonNullable<AvitoLiveAd["ai_audit"]>["recommended_action"]) {
+  if (action === "rewrite") return "border-amber-500/30 bg-amber-500/10 text-amber-100";
+  if (action === "promote") return "border-blue-500/30 bg-blue-500/10 text-blue-100";
+  if (action === "unpublish") return "border-red-500/30 bg-red-500/10 text-red-100";
+  if (action === "duplicate") return "border-violet-500/30 bg-violet-500/10 text-violet-100";
+  return "border-emerald-500/30 bg-emerald-500/10 text-emerald-100";
+}
+
+function auditScoreClass(score: number) {
+  if (score >= 80) return "border-emerald-500/30 bg-emerald-500/10 text-emerald-100";
+  if (score >= 60) return "border-amber-500/30 bg-amber-500/10 text-amber-100";
+  return "border-red-500/30 bg-red-500/10 text-red-100";
+}
+
+function isAuditStale(audit: AvitoLiveAd["ai_audit"]) {
+  if (!audit?.audited_at) return false;
+  return Date.now() - new Date(audit.audited_at).getTime() > 24 * 60 * 60 * 1000;
+}
+
+function AiAuditControl({
+  ad,
+  state = "idle",
+  compact = false,
+  onAudit,
+}: {
+  ad: AvitoLiveAd;
+  state?: AuditState;
+  compact?: boolean;
+  onAudit: (itemId: string, force?: boolean) => void;
+}) {
+  const audit = ad.ai_audit || null;
+  const stale = isAuditStale(audit);
+  const loading = state === "loading";
+
+  if (!audit) {
+    return (
+      <button
+        data-testid="ai-audit-btn"
+        onClick={(event) => {
+          event.stopPropagation();
+          onAudit(ad.item_id, false);
+        }}
+        disabled={loading}
+        className="inline-flex min-h-9 items-center justify-center gap-1 rounded-md border border-blue-400/30 bg-blue-500/10 px-2 py-1 text-xs font-semibold text-blue-100 hover:bg-blue-500/20 disabled:opacity-60"
+      >
+        <Sparkles size={13} />
+        {loading ? "Проверяю..." : "Проверить ИИ"}
+      </button>
+    );
+  }
+
+  return (
+    <details
+      className="group"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2">
+        <span data-testid="ai-audit-score" className={`rounded border px-2 py-1 text-xs font-semibold ${auditScoreClass(audit.score)}`}>
+          ИИ {audit.score}/100
+        </span>
+        <span className={`rounded border px-2 py-1 text-xs font-semibold ${auditActionClass(audit.recommended_action)}`}>
+          {auditActionLabel[audit.recommended_action]}
+        </span>
+        {stale && (
+          <button
+            data-testid="ai-audit-recheck"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onAudit(ad.item_id, true);
+            }}
+            disabled={loading}
+            className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+          >
+            {loading ? "Обновляю..." : "Перепроверить"}
+          </button>
+        )}
+        {!compact && (
+          <span className="text-xs text-slate-500">
+            {fmtDateTime(audit.audited_at)}
+          </span>
+        )}
+      </summary>
+      <div className="mt-2 rounded border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-300">
+        <div className="font-medium text-slate-100">Почему: {audit.rationale}</div>
+        {audit.missing_facts?.length > 0 && (
+          <div className="mt-2">
+            <span className="text-slate-500">Не хватает: </span>
+            {audit.missing_facts.join(", ")}
+          </div>
+        )}
+        {audit.headline_issues?.length > 0 && (
+          <div className="mt-2">
+            <div className="text-slate-500">Заголовок:</div>
+            <ul className="mt-1 list-disc space-y-1 pl-4">
+              {audit.headline_issues.map(issue => <li key={issue}>{issue}</li>)}
+            </ul>
+          </div>
+        )}
+        {audit.body_issues?.length > 0 && (
+          <div className="mt-2">
+            <div className="text-slate-500">Текст:</div>
+            <ul className="mt-1 list-disc space-y-1 pl-4">
+              {audit.body_issues.map(issue => <li key={issue}>{issue}</li>)}
+            </ul>
+          </div>
+        )}
+        {(audit.suggested_title || audit.suggested_first_screen || audit.suggested_full_text) && (
+          <details className="mt-2">
+            <summary className="cursor-pointer text-blue-200">Показать вариант ИИ</summary>
+            {audit.suggested_title && (
+              <div className="mt-2 font-semibold text-white">{audit.suggested_title}</div>
+            )}
+            {audit.suggested_first_screen && (
+              <div className="mt-2 whitespace-pre-line text-slate-200">{audit.suggested_first_screen}</div>
+            )}
+            {audit.suggested_full_text && (
+              <div className="mt-2 max-h-52 overflow-auto whitespace-pre-line rounded border border-slate-800 bg-slate-900 p-2 text-slate-300">
+                {audit.suggested_full_text}
+              </div>
+            )}
+          </details>
+        )}
+        <div className="mt-2 text-slate-500">
+          Модель: {audit.provider === "fallback" ? "резервный парсер" : audit.model || "ИИ"}
+        </div>
+      </div>
+    </details>
+  );
 }
 
 function priorityClass(priority: RouteNeed["priority"]) {
@@ -495,11 +651,15 @@ function CommandReviewPanel({
   loading,
   onCopy,
   copiedCommandId,
+  auditStates,
+  onAudit,
 }: {
   detail: Detail | null;
   loading: boolean;
   onCopy: (commandId: number, title?: string, text?: string) => void;
   copiedCommandId: number | null;
+  auditStates: Record<string, AuditState>;
+  onAudit: (itemId: string, force?: boolean) => void;
 }) {
   const command = detail?.avito_commands?.find(item => ["queued", "needs_review"].includes(item.status))
     || detail?.avito_commands?.[0]
@@ -586,6 +746,13 @@ function CommandReviewPanel({
                           на Авито <ArrowUpRight size={12} />
                         </a>
                       )}
+                    </div>
+                    <div className="mt-3">
+                      <AiAuditControl
+                        ad={item}
+                        state={auditStates[String(item.item_id)] || "idle"}
+                        onAudit={onAudit}
+                      />
                     </div>
                   </div>
                 ))}
@@ -690,6 +857,7 @@ export default function DriverResourcePage() {
   const [quickSubmitting, setQuickSubmitting] = useState<string | null>(null);
   const [quickSuccess, setQuickSuccess] = useState<Record<string, any> | null>(null);
   const [reviewRouteCode, setReviewRouteCode] = useState<string>("");
+  const [auditStates, setAuditStates] = useState<Record<string, AuditState>>({});
   const [aiCommandText, setAiCommandText] = useState("");
   const [aiResult, setAiResult] = useState<Record<string, any> | null>(null);
   const [exitForm, setExitForm] = useState({
@@ -811,6 +979,56 @@ export default function DriverResourcePage() {
   const openCommandReview = async (routeCode: string) => {
     setReviewRouteCode(routeCode);
     await selectRoute(routeCode);
+  };
+
+  const updateAdAuditInDashboard = (itemId: string, aiAudit: NonNullable<AvitoLiveAd["ai_audit"]>) => {
+    const patchAds = (ads?: AvitoLiveAd[]) => (ads || []).map(ad => (
+      String(ad.item_id) === String(itemId) ? { ...ad, ai_audit: aiAudit } : ad
+    ));
+    const patchRoute = (route: RouteNeed): RouteNeed => ({
+      ...route,
+      avito: {
+        ...route.avito,
+        live_ads: patchAds(route.avito?.live_ads),
+        vacancy_stats: patchAds(route.avito?.vacancy_stats),
+      },
+    });
+
+    setData(prev => prev ? {
+      ...prev,
+      routes: (prev.routes || []).map(patchRoute),
+    } : prev);
+
+    setDetail(prev => prev ? {
+      ...prev,
+      need: patchRoute(prev.need),
+      avito: {
+        ...prev.avito,
+        live_ads: patchAds(prev.avito?.live_ads),
+        vacancy_stats: patchAds(prev.avito?.vacancy_stats),
+      },
+    } : prev);
+  };
+
+  const auditAvitoAd = async (itemId: string, force = false) => {
+    if (!itemId) return;
+    setAuditStates(prev => ({ ...prev, [itemId]: "loading" }));
+    setError(null);
+    try {
+      const res = await fetch("/api/hr/avito/audit-ad", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item_id: itemId, force }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Не удалось проверить объявление ИИ");
+      updateAdAuditInDashboard(itemId, json.ai_audit);
+      setAuditStates(prev => ({ ...prev, [itemId]: "idle" }));
+    } catch (err: any) {
+      setAuditStates(prev => ({ ...prev, [itemId]: "error" }));
+      setError(err.message || "Не удалось проверить объявление ИИ");
+    }
   };
 
   const submitQuickRequest = async (route: RouteNeed, action: QuickAction) => {
@@ -1242,6 +1460,14 @@ export default function DriverResourcePage() {
                                     открыть на Авито <ArrowUpRight size={12} />
                                   </a>
                                 )}
+                                <div className="mt-2">
+                                  <AiAuditControl
+                                    ad={ad}
+                                    state={auditStates[String(ad.item_id)] || "idle"}
+                                    compact
+                                    onAudit={auditAvitoAd}
+                                  />
+                                </div>
                               </div>
                             ))}
                             {(route.avito?.live_ads || []).length === 0 && (
@@ -1310,6 +1536,8 @@ export default function DriverResourcePage() {
             loading={detailLoading || detail?.route_code !== reviewRouteCode}
             onCopy={copyAdText}
             copiedCommandId={copiedCommandId}
+            auditStates={auditStates}
+            onAudit={auditAvitoAd}
           />
         )}
         </section>
