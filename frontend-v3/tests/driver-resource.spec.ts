@@ -55,6 +55,21 @@ test.describe('Штаб найма водителей', () => {
         }),
       });
     });
+    await page.route('**/api/hr/avito/prepare-command-from-audit', async (route) => {
+      const request = route.request();
+      const body = JSON.parse(request.postData() || '{}');
+      await route.continue({
+        headers: {
+          ...request.headers(),
+          'content-type': 'application/json',
+          'x-tl196-qa': '1',
+        },
+        postData: JSON.stringify({
+          ...body,
+          suppress_alert: true,
+        }),
+      });
+    });
 
     await page.goto('/hr/driver-resource', { waitUntil: 'networkidle' });
 
@@ -125,6 +140,21 @@ test.describe('Штаб найма водителей', () => {
       expect(['keep', 'rewrite', 'promote', 'unpublish', 'duplicate']).toContain(auditPayload.ai_audit.recommended_action);
     }
     await expect(reviewPanel.getByTestId('ai-audit-score').first()).toBeVisible();
+    await reviewPanel.getByTestId('ai-audit-score').first().click();
+    const prepareButton = reviewPanel.getByTestId('ai-prepare-command-btn').first();
+    await expect(prepareButton).toBeVisible();
+    const prepareResponsePromise = page.waitForResponse((response) =>
+      response.url().includes('/api/hr/avito/prepare-command-from-audit') &&
+      response.request().method() === 'POST'
+    );
+    await prepareButton.click();
+    const prepareResponse = await prepareResponsePromise;
+    expect(prepareResponse.ok()).toBeTruthy();
+    const preparePayload = await prepareResponse.json();
+    expect(preparePayload.ok).toBe(true);
+    expect(preparePayload.command.status).toBe('needs_review');
+    await expect(reviewPanel.getByTestId('ai-prepared-command').first()).toContainText(/команда #\d+/);
+    await expect(reviewPanel.getByTestId('avito-command-queue')).toContainText('Очередь действий');
     await reviewPanel.scrollIntoViewIfNeeded();
     await page.screenshot({ path: test.info().outputPath('driver-resource-review.png'), fullPage: false });
 

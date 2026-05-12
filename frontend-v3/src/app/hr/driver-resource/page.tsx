@@ -140,6 +140,7 @@ type Detail = {
 
 type QuickAction = "need" | "quality_problem" | "stop";
 type AuditState = "idle" | "loading" | "error";
+type AuditCommandType = "update_ad" | "promote_ads" | "unpublish_ads" | "duplicate_ad";
 type TextCheck = {
   label: string;
   ok: boolean;
@@ -199,6 +200,8 @@ const commandTypeLabel: Record<string, string> = {
   pause_ads: "поставить объявления на паузу",
   unpublish_ads: "снять объявления",
   sync_ads: "синхронизировать объявления",
+  update_ad: "переписать объявление",
+  duplicate_ad: "подготовить дубль",
 };
 
 const recommendationActionLabel: Record<string, string> = {
@@ -214,6 +217,8 @@ const commandStatusLabel: Record<string, string> = {
   executed: "выполнено",
   failed: "ошибка",
   cancelled: "отменено",
+  sent: "отправлено",
+  skipped: "пропущено",
 };
 
 const requestStatusLabel: Record<string, string> = {
@@ -322,6 +327,24 @@ const auditActionLabel: Record<NonNullable<AvitoLiveAd["ai_audit"]>["recommended
   duplicate: "Дублировать",
 };
 
+const auditCommandByAction: Partial<Record<NonNullable<AvitoLiveAd["ai_audit"]>["recommended_action"], AuditCommandType>> = {
+  rewrite: "update_ad",
+  promote: "promote_ads",
+  unpublish: "unpublish_ads",
+  duplicate: "duplicate_ad",
+};
+
+const prepareButtonLabel: Record<AuditCommandType, string> = {
+  update_ad: "Подготовить переписывание",
+  promote_ads: "Подготовить продвижение",
+  unpublish_ads: "Подготовить снятие",
+  duplicate_ad: "Подготовить дубль",
+};
+
+function commandHumanLabel(commandType: string | null | undefined) {
+  return commandTypeLabel[String(commandType || "")] || String(commandType || "команда");
+}
+
 function auditActionClass(action: NonNullable<AvitoLiveAd["ai_audit"]>["recommended_action"]) {
   if (action === "rewrite") return "border-amber-500/30 bg-amber-500/10 text-amber-100";
   if (action === "promote") return "border-blue-500/30 bg-blue-500/10 text-blue-100";
@@ -344,17 +367,27 @@ function isAuditStale(audit: AvitoLiveAd["ai_audit"]) {
 function AiAuditControl({
   ad,
   state = "idle",
+  prepareState = "idle",
+  preparedCommand,
   compact = false,
   onAudit,
+  onPrepare,
+  onOpenQueue,
 }: {
   ad: AvitoLiveAd;
   state?: AuditState;
+  prepareState?: AuditState;
+  preparedCommand?: Record<string, any> | null;
   compact?: boolean;
   onAudit: (itemId: string, force?: boolean) => void;
+  onPrepare?: (ad: AvitoLiveAd, commandType: AuditCommandType) => void;
+  onOpenQueue?: (routeCode?: string) => void;
 }) {
   const audit = ad.ai_audit || null;
   const stale = isAuditStale(audit);
   const loading = state === "loading";
+  const preparing = prepareState === "loading";
+  const commandType = audit ? auditCommandByAction[audit.recommended_action] : null;
 
   if (!audit) {
     return (
@@ -448,6 +481,46 @@ function AiAuditControl({
         <div className="mt-2 text-slate-500">
           Модель: {audit.provider === "fallback" ? "резервный парсер" : audit.model || "ИИ"}
         </div>
+        {preparedCommand ? (
+          <div data-testid="ai-prepared-command" className="mt-3 flex flex-wrap items-center gap-2 rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-2 text-emerald-100">
+            <CheckCircle2 size={14} />
+            <span>Подготовлено: команда #{preparedCommand.id}</span>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onOpenQueue?.(preparedCommand.route_code || preparedCommand.payload?.route_code);
+              }}
+              className="rounded border border-emerald-400/30 px-2 py-1 text-xs hover:bg-emerald-500/10"
+            >
+              Открыть очередь
+            </button>
+          </div>
+        ) : commandType ? (
+          <button
+            type="button"
+            data-testid="ai-prepare-command-btn"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onPrepare?.(ad, commandType);
+            }}
+            disabled={preparing}
+            className={`mt-3 inline-flex min-h-9 items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-semibold disabled:opacity-60 ${
+              commandType === "unpublish_ads"
+                ? "border border-red-500/40 bg-red-500/10 text-red-100 hover:bg-red-500/20"
+                : "border border-emerald-500/30 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/20"
+            }`}
+          >
+            <ClipboardList size={14} />
+            {preparing ? "Готовлю..." : prepareButtonLabel[commandType]}
+          </button>
+        ) : (
+          <div className="mt-3 rounded border border-emerald-500/20 bg-emerald-500/10 px-2 py-2 text-emerald-100">
+            ИИ предлагает оставить объявление как есть.
+          </div>
+        )}
       </div>
     </details>
   );
@@ -646,20 +719,155 @@ function BbipSuggestions({
   );
 }
 
+function AvitoCommandQueue({
+  commands,
+  states,
+  onApprove,
+  onDecline,
+}: {
+  commands: Array<Record<string, any>>;
+  states: Record<string, AuditState>;
+  onApprove: (commandId: number) => void;
+  onDecline: (commandId: number) => void;
+}) {
+  const active = (commands || []).filter(command => ["needs_review", "queued"].includes(command.status));
+
+  return (
+    <section data-testid="avito-command-queue" className="mt-4 rounded-lg border border-slate-700 bg-slate-950 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold text-white">Очередь действий по объявлениям</div>
+          <div className="mt-1 text-xs text-slate-500">
+            Здесь лежат подготовленные ИИ действия. Авито меняется только после отдельного запуска.
+          </div>
+        </div>
+        <span className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">
+          {fmt(active.length)} активн.
+        </span>
+      </div>
+
+      {active.length === 0 ? (
+        <div className="mt-3 rounded border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-300">
+          Пока нет подготовленных действий. Откройте ИИ-аудит объявления и нажмите «Подготовить...».
+        </div>
+      ) : (
+        <div className="mt-3 space-y-3">
+          {active.map(command => {
+            const payload = command.payload || {};
+            const proposed = payload.proposed || {};
+            const current = payload.current || {};
+            const audit = payload.ai_audit_snapshot || {};
+            const busy = states[String(command.id)] === "loading";
+            return (
+              <article key={command.id} className="rounded border border-slate-800 bg-slate-900 p-3">
+                <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-white">
+                        #{command.id} · {commandHumanLabel(command.command_type)}
+                      </span>
+                      <span className={`rounded border px-2 py-0.5 text-xs ${
+                        command.status === "queued"
+                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+                          : "border-amber-500/30 bg-amber-500/10 text-amber-100"
+                      }`}>
+                        {commandStatusLabel[command.status] || command.status}
+                      </span>
+                      {audit.score !== undefined && (
+                        <span className={`rounded border px-2 py-0.5 text-xs ${auditScoreClass(Number(audit.score || 0))}`}>
+                          ИИ {audit.score}/100
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      item_id: {payload.target_item_id || "—"} · создано {fmtDateTime(command.created_at)}
+                    </div>
+                    {current.title && (
+                      <div className="mt-2 text-sm text-slate-300">
+                        Сейчас: <span className="text-slate-100">{current.title}</span>
+                      </div>
+                    )}
+                    {proposed.title && (
+                      <div className="mt-1 text-sm text-emerald-100">
+                        Предлагаем: <span className="font-semibold">{proposed.title}</span>
+                      </div>
+                    )}
+                    {proposed.full_text && (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-xs text-blue-200">Показать предложенный текст</summary>
+                        <div className="mt-2 max-h-56 overflow-auto whitespace-pre-line rounded border border-slate-800 bg-slate-950 p-2 text-xs text-slate-300">
+                          {proposed.full_text}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    {command.status === "needs_review" ? (
+                      <>
+                        <button
+                          data-testid="avito-command-approve"
+                          onClick={() => onApprove(Number(command.id))}
+                          disabled={busy}
+                          className="inline-flex min-h-9 items-center gap-1 rounded-md bg-emerald-500 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+                        >
+                          <CheckCircle2 size={14} />
+                          {busy ? "Сохраняю..." : "Одобрить"}
+                        </button>
+                        <button
+                          data-testid="avito-command-decline"
+                          onClick={() => onDecline(Number(command.id))}
+                          disabled={busy}
+                          className="inline-flex min-h-9 items-center gap-1 rounded-md border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                        >
+                          <PauseCircle size={14} />
+                          Отклонить
+                        </button>
+                      </>
+                    ) : (
+                      <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+                        Одобрено, ждёт запуска
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function CommandReviewPanel({
   detail,
   loading,
   onCopy,
   copiedCommandId,
   auditStates,
+  prepareStates,
+  preparedCommands,
+  commandDecisionStates,
   onAudit,
+  onPrepare,
+  onOpenQueue,
+  onApproveCommand,
+  onDeclineCommand,
 }: {
   detail: Detail | null;
   loading: boolean;
   onCopy: (commandId: number, title?: string, text?: string) => void;
   copiedCommandId: number | null;
   auditStates: Record<string, AuditState>;
+  prepareStates: Record<string, AuditState>;
+  preparedCommands: Record<string, Record<string, any>>;
+  commandDecisionStates: Record<string, AuditState>;
   onAudit: (itemId: string, force?: boolean) => void;
+  onPrepare: (ad: AvitoLiveAd, commandType: AuditCommandType) => void;
+  onOpenQueue: (routeCode?: string) => void;
+  onApproveCommand: (commandId: number) => void;
+  onDeclineCommand: (commandId: number) => void;
 }) {
   const command = detail?.avito_commands?.find(item => ["queued", "needs_review"].includes(item.status))
     || detail?.avito_commands?.[0]
@@ -751,7 +959,11 @@ function CommandReviewPanel({
                       <AiAuditControl
                         ad={item}
                         state={auditStates[String(item.item_id)] || "idle"}
+                        prepareState={prepareStates[String(item.item_id)] || "idle"}
+                        preparedCommand={preparedCommands[String(item.item_id)] || null}
                         onAudit={onAudit}
+                        onPrepare={onPrepare}
+                        onOpenQueue={onOpenQueue}
                       />
                     </div>
                   </div>
@@ -831,6 +1043,15 @@ function CommandReviewPanel({
           </div>
         </div>
       )}
+
+      {!loading && detail && (
+        <AvitoCommandQueue
+          commands={detail.avito_commands || []}
+          states={commandDecisionStates}
+          onApprove={onApproveCommand}
+          onDecline={onDeclineCommand}
+        />
+      )}
     </section>
   );
 }
@@ -858,6 +1079,9 @@ export default function DriverResourcePage() {
   const [quickSuccess, setQuickSuccess] = useState<Record<string, any> | null>(null);
   const [reviewRouteCode, setReviewRouteCode] = useState<string>("");
   const [auditStates, setAuditStates] = useState<Record<string, AuditState>>({});
+  const [prepareStates, setPrepareStates] = useState<Record<string, AuditState>>({});
+  const [preparedCommands, setPreparedCommands] = useState<Record<string, Record<string, any>>>({});
+  const [commandDecisionStates, setCommandDecisionStates] = useState<Record<string, AuditState>>({});
   const [aiCommandText, setAiCommandText] = useState("");
   const [aiResult, setAiResult] = useState<Record<string, any> | null>(null);
   const [exitForm, setExitForm] = useState({
@@ -1028,6 +1252,99 @@ export default function DriverResourcePage() {
     } catch (err: any) {
       setAuditStates(prev => ({ ...prev, [itemId]: "error" }));
       setError(err.message || "Не удалось проверить объявление ИИ");
+    }
+  };
+
+  const upsertDetailCommand = (command: Record<string, any>) => {
+    if (!command?.id) return;
+    setDetail(prev => {
+      if (!prev) return prev;
+      const commands = prev.avito_commands || [];
+      const exists = commands.some(item => Number(item.id) === Number(command.id));
+      const nextCommands = exists
+        ? commands.map(item => Number(item.id) === Number(command.id) ? command : item)
+        : [command, ...commands];
+      return {
+        ...prev,
+        avito_commands: nextCommands,
+      };
+    });
+  };
+
+  const prepareCommandFromAudit = async (ad: AvitoLiveAd, commandType: AuditCommandType) => {
+    const itemId = String(ad.item_id || "");
+    if (!itemId) return;
+    setPrepareStates(prev => ({ ...prev, [itemId]: "loading" }));
+    setError(null);
+    try {
+      const res = await fetch("/api/hr/avito/prepare-command-from-audit", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          item_id: itemId,
+          command_type: commandType,
+          use_suggested: true,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Не удалось подготовить команду");
+      if (json.command) {
+        upsertDetailCommand(json.command);
+        setPreparedCommands(prev => ({ ...prev, [itemId]: json.command }));
+        if (json.command.route_code) setReviewRouteCode(json.command.route_code);
+      }
+      setPrepareStates(prev => ({ ...prev, [itemId]: "idle" }));
+    } catch (err: any) {
+      setPrepareStates(prev => ({ ...prev, [itemId]: "error" }));
+      setError(err.message || "Не удалось подготовить команду");
+    }
+  };
+
+  const openQueueForRoute = async (routeCode?: string) => {
+    const nextRouteCode = routeCode || reviewRouteCode || selected;
+    if (!nextRouteCode) return;
+    setReviewRouteCode(nextRouteCode);
+    await selectRoute(nextRouteCode);
+  };
+
+  const approveAvitoCommand = async (commandId: number) => {
+    setCommandDecisionStates(prev => ({ ...prev, [String(commandId)]: "loading" }));
+    setError(null);
+    try {
+      const res = await fetch(`/api/hr/driver-resource/avito-commands/${commandId}/approve`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Не удалось одобрить команду");
+      if (json.command) upsertDetailCommand(json.command);
+      setCommandDecisionStates(prev => ({ ...prev, [String(commandId)]: "idle" }));
+    } catch (err: any) {
+      setCommandDecisionStates(prev => ({ ...prev, [String(commandId)]: "error" }));
+      setError(err.message || "Не удалось одобрить команду");
+    }
+  };
+
+  const declineAvitoCommand = async (commandId: number) => {
+    setCommandDecisionStates(prev => ({ ...prev, [String(commandId)]: "loading" }));
+    setError(null);
+    try {
+      const res = await fetch(`/api/hr/driver-resource/avito-commands/${commandId}/decline`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "Отклонено из очереди найма" }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Не удалось отклонить команду");
+      if (json.command) upsertDetailCommand(json.command);
+      setCommandDecisionStates(prev => ({ ...prev, [String(commandId)]: "idle" }));
+    } catch (err: any) {
+      setCommandDecisionStates(prev => ({ ...prev, [String(commandId)]: "error" }));
+      setError(err.message || "Не удалось отклонить команду");
     }
   };
 
@@ -1464,8 +1781,12 @@ export default function DriverResourcePage() {
                                   <AiAuditControl
                                     ad={ad}
                                     state={auditStates[String(ad.item_id)] || "idle"}
+                                    prepareState={prepareStates[String(ad.item_id)] || "idle"}
+                                    preparedCommand={preparedCommands[String(ad.item_id)] || null}
                                     compact
                                     onAudit={auditAvitoAd}
+                                    onPrepare={prepareCommandFromAudit}
+                                    onOpenQueue={openQueueForRoute}
                                   />
                                 </div>
                               </div>
@@ -1537,7 +1858,14 @@ export default function DriverResourcePage() {
             onCopy={copyAdText}
             copiedCommandId={copiedCommandId}
             auditStates={auditStates}
+            prepareStates={prepareStates}
+            preparedCommands={preparedCommands}
+            commandDecisionStates={commandDecisionStates}
             onAudit={auditAvitoAd}
+            onPrepare={prepareCommandFromAudit}
+            onOpenQueue={openQueueForRoute}
+            onApproveCommand={approveAvitoCommand}
+            onDeclineCommand={declineAvitoCommand}
           />
         )}
         </section>
